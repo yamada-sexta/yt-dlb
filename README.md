@@ -1,39 +1,29 @@
 # ytdlb
 
-`ytdlb` is an in-progress Bun/TypeScript rewrite of the yt-dlp runtime. The original Python source remains in this repository as the porting reference; new TypeScript modules are colocated under `yt_dlp/` and the Bun entrypoint is `ytdlb.ts`.
+`ytdlb` is a Bun/TypeScript video downloader based on yt-dlp. It is early software and is not a drop-in replacement for yt-dlp yet.
 
-This is not a drop-in replacement for yt-dlp yet. The migration is layer-by-layer, and unsupported migrated behavior is expected to fail with explicit `NotImplementedError`-style errors instead of falling back to Python or silently pretending to work.
+YTDLB aims to be a more developer friendly version of YTDLP. Consider the fact that YTDLP is hard dependent on a JS runtime, a full JavaScript/TypeScript version is going to provide better DX/UX. But unfortunately I am unable to contribute to the upstream :(
 
-## Current CLI
+<img width="525" height="169" alt="image" src="https://github.com/user-attachments/assets/a6ca526d-4bce-4a8a-9912-c172f209ea0a" />
 
-The runnable CLI path is narrow:
+Use upstream yt-dlp for production downloads. Use `ytdlb` if you want to try the Bun runtime as it grows.
 
-- `bun run ./ytdlb.ts ...`
-- direct URL downloads through the migrated downloader registry
-- focused YouTube watch URL extraction for progressive HTTP formats
-- YouTube JS challenge support through the installed `yt-dlp/ejs` package
-- Netscape cookie file loading and partial browser cookie extraction
-- basic options from `yt_dlp/options.ts`: output templates, simulate/skip download, quiet/verbose, cookies, headers, proxy, cache removal, update check, plugin dirs, and remote component args
+## What Works
 
-The top-level CLI does not yet build postprocessor chains, perform full option validation, or use the async extractor registry for arbitrary sites.
-
-## Migrated Library Surfaces
-
-These TypeScript layers exist and typecheck, but many are still dependency subsets rather than full yt-dlp parity:
-
-- `yt_dlp/downloader`: HTTP/HTTPS, fragment handling, DASH, HLS, F4M, ISM, MHTML, RTMP/RTSP wrappers, WebSocket fragment sinks, YouTube live chat, Niconico/FC2/Soop/BunnyCDN, and external downloaders via Bun Shell.
-- `yt_dlp/networking`: Bun/Web `Request`/`Response` handlers, urllib-style handler, exceptions, proxy checks, impersonation target parsing, and explicit unsupported Python backend shims.
-- `yt_dlp/postprocessor`: exported postprocessor classes for ffmpeg probing/conversion/merge/fixups, metadata, subtitles, thumbnails, chapter splitting/modification, SponsorBlock metadata, exec, move-after-download, and xattrs. These are not wired into the CLI yet.
-- `yt_dlp/extractor`: async Bun Glob registry plus a small migrated extractor set, currently including YouTube watch URLs, common protocol/mistake handlers, unsupported-site handlers, AcademicEarth, AdobeConnect, Alibaba, AliExpress live, AtScaleConf, and Baidu.
-- YouTube JS challenge and PO token provider scaffolding under `yt_dlp/extractor/youtube`.
+- Bun CLI entrypoint: `bun ytdl ...`
+- YouTube watch URL downloads for currently supported progressive HTTP formats.
+- YouTube JS challenge solving through the `yt-dlp/ejs` package.
+- Direct HTTP/HTTPS downloads.
+- Some native downloader support for DASH, HLS, F4M, ISM, MHTML, RTMP/RTSP wrappers, WebSocket fragments, and selected live/site-specific flows.
+- Netscape cookie file loading and partial browser cookie extraction.
+- Basic options such as output templates, simulation, quiet/verbose mode, cookies, headers, proxy, cache removal, and plugin directories.
 
 ## Still In Progress
 
-- Full yt-dlp extractor coverage.
-- Full YouTube parity, including all clients, format selection, live streams, subtitles, playlists, and account-gated flows.
-- CLI integration for postprocessors and multi-format media merging.
-- Complete yt-dlp option parsing and validation.
-- Broader tests beyond the current typecheck and smoke checks.
+- Full yt-dlp site support.
+- Full YouTube parity, including all clients, live streams, subtitles, playlists, and account-gated flows.
+- Full format selection, postprocessing, and media merging from the CLI.
+- Complete yt-dlp option compatibility.
 
 See [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the migration inventory and current status.
 
@@ -53,25 +43,42 @@ bun install
 Download a currently supported YouTube progressive format:
 
 ```bash
-bun run ./ytdlb.ts 'https://www.youtube.com/watch?v=34618ZnE5HE'
+bun ytdl https://www.youtube.com/watch\?v\=jqM-wenNiFw
 ```
 
 Choose an output template:
 
 ```bash
-bun run ./ytdlb.ts -o '/tmp/%(id)s.%(ext)s' 'https://www.youtube.com/watch?v=34618ZnE5HE'
+bun ytdl -o '/tmp/%(id)s.%(ext)s' https://www.youtube.com/watch\?v\=jqM-wenNiFw
 ```
 
 Show the current TypeScript CLI help:
 
 ```bash
-bun run ./ytdlb.ts --help
+bun ytdl --help
 ```
 
-Typecheck the rewrite:
+Build the Bun entrypoint:
 
 ```bash
-./node_modules/.bin/tsc --noEmit
+bun run build
+./dist/ytdlb --help
+```
+
+Run the current checks:
+
+```bash
+bun run test
+```
+
+Other useful project commands:
+
+```bash
+bun run check
+bun run typecheck
+bun run bundle
+bun run build
+bun run clean
 ```
 
 ## Project Layout

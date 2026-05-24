@@ -3,6 +3,19 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "ytdl": "$npm_execpath run ./ytdlb.ts",
+    "start": "$npm_execpath run ./ytdlb.ts",
+    "build": "$npm_execpath build --compile ./ytdlb.ts --outfile=./dist/ytdlb",
+    "bundle": "$npm_execpath build ./ytdlb.ts --target=bun --outfile=./dist/ytdlb.js",
+    "typecheck": "tsc --noEmit",
+    "lint:headers": "rg --files -g '*.ts' yt_dlp ytdlb.ts | xargs -r awk 'FNR==1 && $0 !~ /^\\/\\/ Source:/ { print FILENAME \":\" FNR \":\" $0; failed=1 } END { exit failed }'",
+    "smoke:extractors": "$npm_execpath -e \"import { genExtractorClasses } from './yt_dlp/extractor/index.ts'; const classes = await genExtractorClasses(); console.log(classes.length);\"",
+    "smoke:help": "$npm_execpath run ./ytdlb.ts --help",
+    "check": "$npm_execpath run typecheck && $npm_execpath run lint:headers && $npm_execpath run smoke:extractors",
+    "test": "$npm_execpath run check",
+    "clean": "rm -rf dist"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

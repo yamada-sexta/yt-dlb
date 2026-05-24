@@ -38,7 +38,7 @@ export interface DownloadOptions {
 
 export abstract class InfoExtractor {
   static readonly _VALID_URL: string | RegExp | readonly (string | RegExp)[] | false = false;
-  static readonly _WORKING = true;
+  static readonly _WORKING: boolean = true;
   static readonly _NETRC_MACHINE: string | false = false;
   static readonly _GEO_COUNTRIES: readonly string[] = [];
   static readonly _GEO_IP_BLOCKS: readonly string[] = [];
@@ -324,7 +324,7 @@ export abstract class InfoExtractor {
     text: string,
     name: string,
     videoId: string,
-    options: { endPattern?: string; containsPattern?: string; fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT } = {},
+    options: { endPattern?: string; containsPattern?: string; fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT; transform_source?: (source: string) => string | null } = {},
   ): T | null {
     const contains = options.containsPattern ?? "{[\\s\\S]+}";
     const jsonString = this.searchRegex(
@@ -336,8 +336,12 @@ export abstract class InfoExtractor {
     if (typeof jsonString !== "string") {
       return options.defaultValue === NO_DEFAULT || options.defaultValue === undefined ? null : options.defaultValue;
     }
+    const transformed = options.transform_source ? options.transform_source(jsonString) : jsonString;
+    if (transformed === null) {
+      return options.defaultValue === NO_DEFAULT || options.defaultValue === undefined ? null : options.defaultValue;
+    }
     try {
-      return JSON.parse(jsonString) as T;
+      return JSON.parse(transformed) as T;
     } catch (error) {
       if (options.fatal === false) {
         this.reportWarning(`Unable to extract ${name} - Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`, videoId);
@@ -354,6 +358,37 @@ export abstract class InfoExtractor {
     options: { defaultValue?: string | typeof NO_DEFAULT | null; fatal?: boolean; group?: string | number | readonly (string | number)[] } = {},
   ): string | string[] | null {
     return this.searchRegex(pattern, text, name, options);
+  }
+
+  protected parseJson<T = unknown>(jsonString: string, videoId: string, options: { fatal?: boolean; transform_source?: (source: string) => string | null } = {}): T | null {
+    const transformed = options.transform_source ? options.transform_source(jsonString) : jsonString;
+    if (transformed === null) {
+      return null;
+    }
+    try {
+      return JSON.parse(transformed) as T;
+    } catch (error) {
+      if (options.fatal === false) {
+        this.reportWarning(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`, videoId);
+        return null;
+      }
+      throw new ExtractorError("Failed to parse JSON", { cause: error, videoId });
+    }
+  }
+
+  protected htmlSearchMeta(name: string | readonly string[], webpage: string, displayName = "metadata", fatal = false): string | null {
+    const names = Array.isArray(name) ? name : [name];
+    const escaped = names.map((item) => RegExp.escape(item)).join("|");
+    const result = this.searchRegex(
+      [
+        new RegExp(`<meta[^>]+(?:name|property)=["'](?:${escaped})["'][^>]+content=["']([^"']+)["']`, "i"),
+        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:name|property)=["'](?:${escaped})["']`, "i"),
+      ],
+      webpage,
+      displayName,
+      { fatal },
+    );
+    return typeof result === "string" ? htmlUnescape(result) : null;
   }
 
   static urlResult(url: string, ie: string | typeof InfoExtractor | null = null, videoId: string | null = null, videoTitle: string | null = null, options: Record<string, unknown> = {}): ExtractorInfo {
@@ -429,6 +464,10 @@ export abstract class InfoExtractor {
     return this.ogSearchProperty("description", webpage, false);
   }
 
+  protected ogSearchThumbnail(webpage: string): string | null {
+    return this.ogSearchProperty("image", webpage, false);
+  }
+
   protected ogSearchProperty(property: string, webpage: string, fatal = true): string | null {
     const escaped = RegExp.escape(property);
     const result = this.searchRegex(
@@ -460,6 +499,39 @@ export abstract class InfoExtractor {
       protocol: options.entryProtocol ?? "m3u8_native",
       format_id: options.m3u8Id ?? "hls",
       manifest_url: m3u8Url,
+    }];
+  }
+
+  protected extractM3u8FormatsAndSubtitles(
+    m3u8Url: string,
+    videoId: string,
+    ext = "mp4",
+    options: { entryProtocol?: string; m3u8Id?: string; live?: boolean } = {},
+  ): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
+    // Logic note: this compatibility wrapper preserves extractor flow while the Bun manifest
+    // parser only exposes media formats. Subtitle extraction will move here once needed.
+    return [this.extractM3u8Formats(m3u8Url, videoId, ext, options), {}];
+  }
+
+  protected extractF4mFormats(
+    f4mUrl: string,
+    _videoId: string,
+    options: { f4mId?: string; fatal?: boolean } = {},
+  ): Array<Record<string, unknown>> {
+    return [{
+      url: f4mUrl,
+      protocol: "f4m",
+      format_id: options.f4mId ?? "hds",
+      manifest_url: f4mUrl,
+    }];
+  }
+
+  protected extractMpdFormats(mpdUrl: string, _videoId: string, options: { mpdId?: string; fatal?: boolean } = {}): Array<Record<string, unknown>> {
+    return [{
+      url: mpdUrl,
+      protocol: "http_dash_segments",
+      format_id: options.mpdId ?? "dash",
+      manifest_url: mpdUrl,
     }];
   }
 

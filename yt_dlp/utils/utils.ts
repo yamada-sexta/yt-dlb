@@ -110,6 +110,19 @@ export function urljoin(base: string | Uint8Array | null | undefined, path: stri
   return new URL(decodedPath, decodedBase).toString();
 }
 
+export function urlOrNone(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  try {
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
+}
+
+export const url_or_none = urlOrNone;
+
 export function updateUrlQuery(url: string, query: URLSearchParams | Record<string, string | readonly string[]>): string {
   const parsed = new URL(url);
   const params = query instanceof URLSearchParams ? query : objectToParams(query);
@@ -237,6 +250,145 @@ export function unescapeHTML(value: string | null | undefined): string | null {
 }
 
 export const unescapeHTML_ = unescapeHTML;
+
+export function cleanHtml(html: string | null | undefined): string | null {
+  if (html === null || html === undefined) {
+    return null;
+  }
+  return unescapeHTML(html
+    .replaceAll(/\s+/g, " ")
+    .replaceAll(/\s?<\s?br\s?\/?\s?>\s?/gi, "\n")
+    .replaceAll(/<\s?\/\s?p\s?>\s?<\s?p[^>]*>/gi, "\n")
+    .replaceAll(/<.*?>/g, ""))?.trim() ?? null;
+}
+
+export const clean_html = cleanHtml;
+
+export function extractAttributes(htmlElement: string): Record<string, string | null> {
+  const attrs: Record<string, string | null> = {};
+  const source = htmlElement.replace(/^<\s*[\w:-]+/, "").replace(/\/?\s*>[\s\S]*$/, "");
+  for (const match of source.matchAll(/(?<name>[\w:-]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?/g)) {
+    const name = match.groups?.name?.toLowerCase();
+    if (!name) {
+      continue;
+    }
+    const rawValue = match.groups?.double ?? match.groups?.single ?? match.groups?.bare;
+    attrs[name] = rawValue === undefined ? null : unescapeHTML(rawValue);
+  }
+  return attrs;
+}
+
+export const extract_attributes = extractAttributes;
+
+export function cleanPodcastUrl(url: string): string {
+  const trackingPrefix = /(?:(?:(?:chtbl\.com\/track|media\.blubrry\.com|play\.podtrac\.com|chrt\.fm\/track|mgln\.ai\/e)(?:\/[^/.]+)?|(?:dts|www)\.podtrac\.com\/(?:pts\/)?redirect\.[0-9a-z]{3,4}|flex\.acast\.com|pd(?:cn\.co|st\.fm)\/e|[0-9]\.gum\.fm|pscrb\.fm\/rss\/p)\/)/g;
+  return url.replace(trackingPrefix, "").replace(/^(\w+):\/\/(\w+:\/\/)/, "$2");
+}
+
+export const clean_podcast_url = cleanPodcastUrl;
+
+export function parseIso8601(dateStr: string | null | undefined, delimiter = "T"): number | null {
+  if (!dateStr) {
+    return null;
+  }
+  const normalized = dateStr.replace(/\.[0-9]+/, "").replace(delimiter, "T");
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? Math.trunc(timestamp / 1000) : null;
+}
+
+export const parse_iso8601 = parseIso8601;
+
+export function unifiedTimestamp(dateStr: unknown, _dayFirst = true, tzOffset = 0): number | null {
+  if (typeof dateStr !== "string") {
+    return null;
+  }
+  // Logic note: Bun uses the platform Date parser here; yt-dlp's broad strptime table will be
+  // filled in when more extractors require the long-tail date formats.
+  const normalized = dateStr
+    .replaceAll(/[,|]/g, " ")
+    .replaceAll(/\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  const timestamp = Date.parse(normalized);
+  if (Number.isFinite(timestamp)) {
+    return Math.trunc(timestamp / 1000);
+  }
+  const withoutZone = normalized.replace(/\s+[A-Z]+$/, "");
+  const fallback = Date.parse(withoutZone);
+  return Number.isFinite(fallback) ? Math.trunc(fallback / 1000) - tzOffset * 3600 : null;
+}
+
+export const unified_timestamp = unifiedTimestamp;
+
+export function unifiedStrdate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) {
+    return null;
+  }
+  const parsed = Date.parse(dateStr.replaceAll(",", " "));
+  if (Number.isFinite(parsed)) {
+    return new Date(parsed).toISOString().slice(0, 10).replaceAll("-", "");
+  }
+  const match = /(?<year>\d{4})[-/.](?<month>\d{1,2})[-/.](?<day>\d{1,2})/.exec(dateStr)
+    ?? /(?<day>\d{1,2})[-/.](?<month>\d{1,2})[-/.](?<year>\d{4})/.exec(dateStr);
+  const year = match?.groups?.year;
+  const month = match?.groups?.month;
+  const day = match?.groups?.day;
+  return year && month && day ? `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}` : null;
+}
+
+export const unified_strdate = unifiedStrdate;
+
+export function qualities(qualityIds: readonly string[]): (qualityId: string | null | undefined) => number {
+  const map = new Map(qualityIds.map((qualityId, index) => [qualityId, index]));
+  return (qualityId) => qualityId ? map.get(qualityId) ?? -1 : -1;
+}
+
+export function strToInt(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number.parseInt(value.replaceAll(/[,.]/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export const str_to_int = strToInt;
+
+export function parseDuration(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  const colonParts = value.split(":").map((part) => Number.parseFloat(part));
+  if (colonParts.length > 1 && colonParts.every(Number.isFinite)) {
+    return colonParts.reduce((total, part) => total * 60 + part, 0);
+  }
+  const unitMatch = /(?:(?<hours>\d+(?:\.\d+)?)\s*h)?\s*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in)?)?\s*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec)?)?/i.exec(value);
+  if (unitMatch?.[0]?.trim()) {
+    return (Number(unitMatch.groups?.hours ?? 0) * 3600)
+      + (Number(unitMatch.groups?.minutes ?? 0) * 60)
+      + Number(unitMatch.groups?.seconds ?? 0);
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export const parse_duration = parseDuration;
+
+export function parseResolution(value: string | null | undefined): { width?: number; height?: number } {
+  if (!value) {
+    return {};
+  }
+  const explicit = /(?<width>\d{2,5})\s*[xX]\s*(?<height>\d{2,5})/.exec(value);
+  if (explicit?.groups?.width && explicit.groups.height) {
+    return { width: Number(explicit.groups.width), height: Number(explicit.groups.height) };
+  }
+  const height = /(?<height>\d{3,4})p\b/i.exec(value)?.groups?.height;
+  return height ? { height: Number(height) } : {};
+}
+
+export const parse_resolution = parseResolution;
 
 export function truncateString(value: string | null | undefined, left: number, right = 0): string | null | undefined {
   if (value == null || value.length <= left + right) {

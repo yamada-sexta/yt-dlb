@@ -118,7 +118,7 @@ yt-dlp.zip
 # Text Editor / IDE
 .idea
 *.iml
-.vscode
+# .vscode
 *.sublime-*
 *.code-workspace
 *.swp
