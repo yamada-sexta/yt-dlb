@@ -31,7 +31,7 @@ export interface DownloadOptions {
   encoding?: string | null;
   data?: RequestInit["body"] | null;
   headers?: ConstructorParameters<typeof Headers>[0];
-  query?: Record<string, string | number | boolean | null | undefined>;
+  query?: Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined>;
   expected_status?: number | readonly number[] | ((status: number) => boolean) | null;
   transform_source?: (source: string) => string;
 }
@@ -391,6 +391,39 @@ export abstract class InfoExtractor {
     return typeof result === "string" ? htmlUnescape(result) : null;
   }
 
+  protected searchJsonLd(webpage: string | false, videoId: string, options: { defaultValue?: Record<string, unknown> } = {}): Record<string, unknown> {
+    if (webpage === false) {
+      return options.defaultValue ?? {};
+    }
+    for (const match of webpage.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>(?<json>[\s\S]*?)<\/script>/gi)) {
+      const json = match.groups?.json?.trim();
+      if (!json) {
+        continue;
+      }
+      const parsed = this.parseJson<unknown>(json, videoId, { fatal: false });
+      const candidates = Array.isArray(parsed) ? parsed : [parsed];
+      for (const candidate of candidates) {
+        if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+          return candidate as Record<string, unknown>;
+        }
+      }
+    }
+    return options.defaultValue ?? {};
+  }
+
+  protected searchNextjsData<T = unknown>(webpage: string, videoId: string, options: { defaultValue?: T | null; fatal?: boolean } = {}): T | null {
+    const json = this.searchRegex(
+      /<script[^>]+\bid=["']__NEXT_DATA__["'][^>]*>(?<json>[\s\S]*?)<\/script>/,
+      webpage,
+      "Next.js data",
+      { group: "json", fatal: options.fatal ?? true, defaultValue: options.defaultValue === undefined ? NO_DEFAULT : null },
+    );
+    if (typeof json !== "string") {
+      return options.defaultValue ?? null;
+    }
+    return this.parseJson<T>(json, videoId, { fatal: options.fatal ?? true });
+  }
+
   static urlResult(url: string, ie: string | typeof InfoExtractor | null = null, videoId: string | null = null, videoTitle: string | null = null, options: Record<string, unknown> = {}): ExtractorInfo {
     return {
       ...options,
@@ -539,7 +572,11 @@ export abstract class InfoExtractor {
     const request = urlOrRequest instanceof Request ? urlOrRequest : new YtdlRequest(String(urlOrRequest));
     const url = new URL(request.url);
     for (const [key, value] of Object.entries(options.query ?? {})) {
-      if (value !== null && value !== undefined) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          url.searchParams.append(key, String(item));
+        }
+      } else if (value !== null && value !== undefined) {
         url.searchParams.set(key, String(value));
       }
     }

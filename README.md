@@ -15,7 +15,7 @@ Use upstream yt-dlp for production downloads. Use `ytdlb` if you want to try the
 - YouTube JS challenge solving through the `yt-dlp/ejs` package.
 - Direct HTTP/HTTPS downloads.
 - Some native downloader support for DASH, HLS, F4M, ISM, MHTML, RTMP/RTSP wrappers, WebSocket fragments, and selected live/site-specific flows.
-- Netscape cookie file loading and partial browser cookie extraction.
+- Netscape cookie file loading and URL-scoped browser cookie extraction through Sweet Cookie.
 - Basic options such as output templates, simulation, quiet/verbose mode, cookies, headers, proxy, cache removal, and plugin directories.
 
 ## Still In Progress

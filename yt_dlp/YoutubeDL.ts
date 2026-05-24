@@ -5,7 +5,7 @@
 import { basename } from "node:path";
 
 import { Cache } from "./cache.ts";
-import { loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
+import { extractCookiesFromBrowserForUrl, loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
 import { getSuitableDownloader } from "./downloader/index.ts";
 import { extractYoutubeVideo, isYoutubeWatchUrl } from "./extractor/youtube/video.ts";
 
@@ -44,6 +44,7 @@ export class YoutubeDL {
   readonly cache: Cache;
   cookies = new YoutubeDLCookieJar();
   downloadRetcode = 0;
+  readonly #browserCookieOriginsLoaded = new Set<string>();
 
   constructor(params: YoutubeDLOptions = {}) {
     this.params = params;
@@ -106,6 +107,7 @@ export class YoutubeDL {
     for (const [key, value] of Object.entries(this.params.http_headers ?? {})) {
       headers.set(key, value);
     }
+    await this.ensureBrowserCookiesForUrl(request.url);
     const cookieHeader = this.cookies.getCookieHeader(request.url);
     if (cookieHeader) {
       headers.set("Cookie", cookieHeader);
@@ -189,6 +191,32 @@ export class YoutubeDL {
     });
     if (ok) {
       this.toScreen(`[download] Destination: ${info.filename}`);
+    }
+  }
+
+  private async ensureBrowserCookiesForUrl(url: string): Promise<void> {
+    const spec = this.params.cookiesfrombrowser;
+    if (!spec) {
+      return;
+    }
+    const origin = new URL(url).origin;
+    const cacheKey = `${spec.join("\0")}\0${origin}`;
+    if (this.#browserCookieOriginsLoaded.has(cacheKey)) {
+      return;
+    }
+    this.#browserCookieOriginsLoaded.add(cacheKey);
+    try {
+      const jar = await extractCookiesFromBrowserForUrl(spec, url, {
+        debug: (message) => this.writeDebug(message),
+        info: (message) => this.writeDebug(message),
+        warning: (message) => this.reportWarning(message),
+        error: (message) => this.reportError(message),
+      });
+      for (const cookie of jar) {
+        this.cookies.setCookie(cookie);
+      }
+    } catch (error) {
+      this.reportWarning(`failed to extract browser cookies for ${origin}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

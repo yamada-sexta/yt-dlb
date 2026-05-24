@@ -23,6 +23,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@steipete/sweet-cookie": "^0.3.0",
     "astring": "^1.9.0",
     "ejs": "https://github.com/yt-dlp/ejs",
     "meriyah": "^6.1.4",

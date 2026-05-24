@@ -201,6 +201,20 @@ export function filterDict<T>(record: Record<string, T>, predicate: (key: string
 
 export const filter_dict = filterDict;
 
+export function mergeDicts<T extends Record<string, unknown>>(...dicts: Array<T | null | undefined>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const dict of dicts.toReversed()) {
+    for (const [key, value] of Object.entries(dict ?? {})) {
+      if (value !== null && value !== undefined && out[key] === undefined) {
+        out[key] = value;
+      }
+    }
+  }
+  return out;
+}
+
+export const merge_dicts = mergeDicts;
+
 export function variadic<T>(value: T | readonly T[] | null | undefined): T[] {
   if (value === null || value === undefined) {
     return [];
@@ -263,6 +277,14 @@ export function cleanHtml(html: string | null | undefined): string | null {
 }
 
 export const clean_html = cleanHtml;
+
+export function getElementById(id: string, html: string): string | null {
+  const escaped = RegExp.escape(id);
+  const match = new RegExp(`<(?<tag>[\\w:-]+)[^>]+id=["']${escaped}["'][^>]*>(?<body>[\\s\\S]*?)<\\/\\k<tag>>`, "i").exec(html);
+  return match?.groups?.body ? cleanHtml(match.groups.body) : null;
+}
+
+export const get_element_by_id = getElementById;
 
 export function extractAttributes(htmlElement: string): Record<string, string | null> {
   const attrs: Record<string, string | null> = {};

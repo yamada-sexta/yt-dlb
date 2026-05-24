@@ -7,6 +7,8 @@ import { copyFile, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
+import { getCookies } from "@steipete/sweet-cookie";
+import type { Cookie as SweetCookie, GetCookiesOptions } from "@steipete/sweet-cookie";
 import { Database } from "bun:sqlite";
 
 import { aesCbcDecryptBytes, aesGcmDecryptAndVerifyBytes, unpadPkcs7 } from "./aes.ts";
@@ -215,8 +217,9 @@ export async function loadCookies(
   try {
     const jars: YoutubeDLCookieJar[] = [];
     if (browserSpecification) {
-      const [browserName, profile, keyring, container] = parseBrowserSpecification(...browserSpecification);
-      jars.push(await extractCookiesFromBrowser(browserName, profile, new YDLLogger(), { keyring, container }));
+      // Logic change: Sweet Cookie requires a target URL for origin filtering. Browser cookies are
+      // now loaded lazily per request URL by YoutubeDL instead of eagerly at startup.
+      parseBrowserSpecification(...browserSpecification);
     }
     if (cookieFile) {
       const jar = new YoutubeDLCookieJar(expandPath(cookieFile));
@@ -228,6 +231,40 @@ export async function loadCookies(
     return mergeCookieJars(jars);
   } catch (error) {
     throw new CookieLoadError(`failed to load cookies: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function extractCookiesFromBrowserForUrl(
+  browserSpecification: readonly [string, string?, string?, string?],
+  url: string,
+  logger: CookieLogger = new YDLLogger(),
+): Promise<YoutubeDLCookieJar> {
+  const [browserName, profile, keyring, container] = parseBrowserSpecification(...browserSpecification);
+  if (container && container !== "none") {
+    logger.warning("Firefox container selection is not supported by Sweet Cookie; falling back to ytdlb's Firefox cookie reader", { onlyOnce: true });
+    return filterCookieJarForUrl(await extractCookiesFromBrowser(browserName, profile, logger, { keyring, container }), url);
+  }
+
+  const options = sweetCookieOptions(browserName, profile, url);
+  if (!options) {
+    logger.warning(`Sweet Cookie does not directly support ${browserName}; falling back to ytdlb's browser cookie reader`, { onlyOnce: true });
+    return filterCookieJarForUrl(await extractCookiesFromBrowser(browserName, profile, logger, { keyring, container }), url);
+  }
+
+  try {
+    const result = await getCookies(options);
+    for (const warning of result.warnings) {
+      logger.warning(warning, { onlyOnce: true });
+    }
+    const jar = new YoutubeDLCookieJar();
+    for (const cookie of result.cookies) {
+      jar.setCookie(sweetCookieToYtdlbCookie(cookie, url));
+    }
+    logger.info(`Extracted ${jar.length} cookies from ${browserName} for ${new URL(url).origin}`);
+    return jar;
+  } catch (error) {
+    logger.warning(`Sweet Cookie failed for ${browserName}: ${error instanceof Error ? error.message : String(error)}`, { onlyOnce: true });
+    return filterCookieJarForUrl(await extractCookiesFromBrowser(browserName, profile, logger, { keyring, container }), url);
   }
 }
 
@@ -663,6 +700,84 @@ function cookieMatchesUrl(cookie: Cookie, url: URL, now: number): boolean {
     return false;
   }
   return url.pathname.startsWith(cookie.path || "/");
+}
+
+function filterCookieJarForUrl(source: YoutubeDLCookieJar, url: string): YoutubeDLCookieJar {
+  const jar = new YoutubeDLCookieJar();
+  for (const cookie of source.getCookiesForUrl(url)) {
+    jar.setCookie(cookie);
+  }
+  return jar;
+}
+
+function sweetCookieOptions(browserName: string, profile: string | null, url: string): GetCookiesOptions | null {
+  const options: GetCookiesOptions = {
+    url,
+    mode: "merge",
+    includeExpired: false,
+    timeoutMs: 5000,
+  };
+  if (browserName === "firefox") {
+    options.browsers = ["firefox"];
+    if (profile) {
+      options.firefoxProfile = profile;
+    }
+    return options;
+  }
+  if (browserName === "safari") {
+    options.browsers = ["safari"];
+    if (profile) {
+      options.safariCookiesFile = profile;
+    }
+    return options;
+  }
+  if (browserName === "edge") {
+    options.browsers = ["edge"];
+    if (profile) {
+      options.edgeProfile = profile;
+    }
+    return options;
+  }
+  const chromiumBrowser = sweetChromiumBrowser(browserName);
+  if (chromiumBrowser) {
+    options.browsers = ["chrome"];
+    if (profile) {
+      options.chromeProfile = profile;
+    }
+    if (process.platform === "darwin") {
+      options.chromiumBrowser = chromiumBrowser;
+    }
+    return options;
+  }
+  return null;
+}
+
+function sweetChromiumBrowser(browserName: string): GetCookiesOptions["chromiumBrowser"] | null {
+  if (browserName === "chrome") {
+    return "chrome";
+  }
+  if (browserName === "brave") {
+    return "brave";
+  }
+  if (browserName === "chromium") {
+    return "chromium";
+  }
+  return null;
+}
+
+function sweetCookieToYtdlbCookie(cookie: SweetCookie, requestUrl: string): Cookie {
+  const parsed = new URL(cookie.url ?? requestUrl);
+  const domain = cookie.domain ?? parsed.hostname;
+  return new Cookie({
+    name: cookie.name,
+    value: cookie.value,
+    domain,
+    path: cookie.path ?? "/",
+    secure: cookie.secure ?? parsed.protocol === "https:",
+    expires: cookie.expires ?? null,
+    httpOnly: cookie.httpOnly ?? false,
+    discard: cookie.expires === undefined,
+  });
 }
 
 function firefoxBrowserDirs(): string[] {

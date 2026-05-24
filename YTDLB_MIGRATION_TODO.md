@@ -48,7 +48,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.ts`
 - [x] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`
-- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion, ACast extractor prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, and `parse_resolution`; full utility surface still pending.
+- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion, ACast extractor prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id`; full utility surface still pending.
 - [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; full traversal API still pending.
 - [x] `yt_dlp/postprocessor/index.ts`
 - [x] `yt_dlp/postprocessor/common.ts`
@@ -93,7 +93,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 - [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
-- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; full extractor helper surface still pending.
+- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, minimal JSON-LD parsing, and Next.js data extraction for migrated extractors; full extractor helper surface still pending.
 
 ## Complete Runtime Inventory
 
@@ -114,7 +114,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/compat/shutil.py` -> `yt_dlp/compat/shutil.ts`
 - [x] `yt_dlp/compat/urllib/__init__.py` -> `yt_dlp/compat/urllib/index.ts`
 - [x] `yt_dlp/compat/urllib/request.py` -> `yt_dlp/compat/urllib/request.ts`
-- [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts`
+- [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts` (browser cookies now prefer `@steipete/sweet-cookie` lazily per request URL; file cookies remain eager)
 - [x] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts`
 - [x] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
 - [x] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
@@ -154,8 +154,8 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/afreecatv.py` -> `yt_dlp/extractor/afreecatv.ts`
 - [ ] `yt_dlp/extractor/agalega.py` -> `yt_dlp/extractor/agalega.ts`
 - [ ] `yt_dlp/extractor/agora.py` -> `yt_dlp/extractor/agora.ts`
-- [ ] `yt_dlp/extractor/airtv.py` -> `yt_dlp/extractor/airtv.ts`
-- [ ] `yt_dlp/extractor/aitube.py` -> `yt_dlp/extractor/aitube.ts`
+- [x] `yt_dlp/extractor/airtv.py` -> `yt_dlp/extractor/airtv.ts`
+- [x] `yt_dlp/extractor/aitube.py` -> `yt_dlp/extractor/aitube.ts`
 - [x] `yt_dlp/extractor/alibaba.py` -> `yt_dlp/extractor/alibaba.ts`
 - [x] `yt_dlp/extractor/aliexpress.py` -> `yt_dlp/extractor/aliexpress.ts`
 - [x] `yt_dlp/extractor/aljazeera.py` -> `yt_dlp/extractor/aljazeera.ts`
@@ -172,15 +172,15 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/amcnetworks.py` -> `yt_dlp/extractor/amcnetworks.ts`
 - [ ] `yt_dlp/extractor/americastestkitchen.py` -> `yt_dlp/extractor/americastestkitchen.ts`
 - [ ] `yt_dlp/extractor/amp.py` -> `yt_dlp/extractor/amp.ts`
-- [ ] `yt_dlp/extractor/anchorfm.py` -> `yt_dlp/extractor/anchorfm.ts`
+- [x] `yt_dlp/extractor/anchorfm.py` -> `yt_dlp/extractor/anchorfm.ts`
 - [ ] `yt_dlp/extractor/angel.py` -> `yt_dlp/extractor/angel.ts`
 - [ ] `yt_dlp/extractor/antenna.py` -> `yt_dlp/extractor/antenna.ts`
 - [ ] `yt_dlp/extractor/anvato.py` -> `yt_dlp/extractor/anvato.ts`
 - [ ] `yt_dlp/extractor/aol.py` -> `yt_dlp/extractor/aol.ts`
-- [ ] `yt_dlp/extractor/apa.py` -> `yt_dlp/extractor/apa.ts`
-- [ ] `yt_dlp/extractor/aparat.py` -> `yt_dlp/extractor/aparat.ts`
+- [x] `yt_dlp/extractor/apa.py` -> `yt_dlp/extractor/apa.ts`
+- [x] `yt_dlp/extractor/aparat.py` -> `yt_dlp/extractor/aparat.ts`
 - [ ] `yt_dlp/extractor/appleconnect.py` -> `yt_dlp/extractor/appleconnect.ts`
-- [ ] `yt_dlp/extractor/applepodcasts.py` -> `yt_dlp/extractor/applepodcasts.ts`
+- [x] `yt_dlp/extractor/applepodcasts.py` -> `yt_dlp/extractor/applepodcasts.ts`
 - [ ] `yt_dlp/extractor/appletrailers.py` -> `yt_dlp/extractor/appletrailers.ts`
 - [ ] `yt_dlp/extractor/archiveorg.py` -> `yt_dlp/extractor/archiveorg.ts`
 - [ ] `yt_dlp/extractor/arcpublishing.py` -> `yt_dlp/extractor/arcpublishing.ts`
@@ -193,9 +193,9 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/atresplayer.py` -> `yt_dlp/extractor/atresplayer.ts`
 - [x] `yt_dlp/extractor/atscaleconf.py` -> `yt_dlp/extractor/atscaleconf.ts`
 - [ ] `yt_dlp/extractor/atvat.py` -> `yt_dlp/extractor/atvat.ts`
-- [ ] `yt_dlp/extractor/audimedia.py` -> `yt_dlp/extractor/audimedia.ts`
+- [x] `yt_dlp/extractor/audimedia.py` -> `yt_dlp/extractor/audimedia.ts`
 - [x] `yt_dlp/extractor/audioboom.py` -> `yt_dlp/extractor/audioboom.ts`
-- [ ] `yt_dlp/extractor/audiodraft.py` -> `yt_dlp/extractor/audiodraft.ts`
+- [x] `yt_dlp/extractor/audiodraft.py` -> `yt_dlp/extractor/audiodraft.ts`
 - [ ] `yt_dlp/extractor/audiomack.py` -> `yt_dlp/extractor/audiomack.ts`
 - [ ] `yt_dlp/extractor/audius.py` -> `yt_dlp/extractor/audius.ts`
 - [ ] `yt_dlp/extractor/awaan.py` -> `yt_dlp/extractor/awaan.ts`
@@ -1219,7 +1219,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
-- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion, ACast extractor utility prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, and `parse_resolution` added)
+- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion, ACast extractor utility prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id` added)
 - [ ] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
 - [ ] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
 - [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
