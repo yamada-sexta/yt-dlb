@@ -212,7 +212,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/beacon.py` -> `yt_dlp/extractor/beacon.ts`
 - [ ] `yt_dlp/extractor/beatbump.py` -> `yt_dlp/extractor/beatbump.ts`
 - [x] `yt_dlp/extractor/beatport.py` -> `yt_dlp/extractor/beatport.ts`
-- [ ] `yt_dlp/extractor/beeg.py` -> `yt_dlp/extractor/beeg.ts`
+- [x] `yt_dlp/extractor/beeg.py` -> `yt_dlp/extractor/beeg.ts`
 - [x] `yt_dlp/extractor/behindkink.py` -> `yt_dlp/extractor/behindkink.ts`
 - [x] `yt_dlp/extractor/berufetv.py` -> `yt_dlp/extractor/berufetv.ts`
 - [ ] `yt_dlp/extractor/bet.py` -> `yt_dlp/extractor/bet.ts`
@@ -221,27 +221,27 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/bibeltv.py` -> `yt_dlp/extractor/bibeltv.ts`
 - [x] `yt_dlp/extractor/bigflix.py` -> `yt_dlp/extractor/bigflix.ts`
 - [x] `yt_dlp/extractor/bigo.py` -> `yt_dlp/extractor/bigo.ts`
-- [ ] `yt_dlp/extractor/bild.py` -> `yt_dlp/extractor/bild.ts`
+- [x] `yt_dlp/extractor/bild.py` -> `yt_dlp/extractor/bild.ts`
 - [ ] `yt_dlp/extractor/bilibili.py` -> `yt_dlp/extractor/bilibili.ts`
-- [ ] `yt_dlp/extractor/biobiochiletv.py` -> `yt_dlp/extractor/biobiochiletv.ts`
+- [x] `yt_dlp/extractor/biobiochiletv.py` -> `yt_dlp/extractor/biobiochiletv.ts`
 - [ ] `yt_dlp/extractor/bitchute.py` -> `yt_dlp/extractor/bitchute.ts`
-- [ ] `yt_dlp/extractor/bitmovin.py` -> `yt_dlp/extractor/bitmovin.ts`
+- [x] `yt_dlp/extractor/bitmovin.py` -> `yt_dlp/extractor/bitmovin.ts`
 - [ ] `yt_dlp/extractor/blackboardcollaborate.py` -> `yt_dlp/extractor/blackboardcollaborate.ts`
 - [ ] `yt_dlp/extractor/bleacherreport.py` -> `yt_dlp/extractor/bleacherreport.ts`
-- [ ] `yt_dlp/extractor/blerp.py` -> `yt_dlp/extractor/blerp.ts`
-- [ ] `yt_dlp/extractor/blogger.py` -> `yt_dlp/extractor/blogger.ts`
+- [x] `yt_dlp/extractor/blerp.py` -> `yt_dlp/extractor/blerp.ts`
+- [x] `yt_dlp/extractor/blogger.py` -> `yt_dlp/extractor/blogger.ts`
 - [x] `yt_dlp/extractor/bloomberg.py` -> `yt_dlp/extractor/bloomberg.ts`
 - [ ] `yt_dlp/extractor/bluesky.py` -> `yt_dlp/extractor/bluesky.ts`
 - [x] `yt_dlp/extractor/bokecc.py` -> `yt_dlp/extractor/bokecc.ts`
-- [ ] `yt_dlp/extractor/bongacams.py` -> `yt_dlp/extractor/bongacams.ts`
+- [x] `yt_dlp/extractor/bongacams.py` -> `yt_dlp/extractor/bongacams.ts`
 - [ ] `yt_dlp/extractor/boosty.py` -> `yt_dlp/extractor/boosty.ts`
-- [ ] `yt_dlp/extractor/bostonglobe.py` -> `yt_dlp/extractor/bostonglobe.ts`
+- [x] `yt_dlp/extractor/bostonglobe.py` -> `yt_dlp/extractor/bostonglobe.ts`
 - [x] `yt_dlp/extractor/box.py` -> `yt_dlp/extractor/box.ts`
 - [ ] `yt_dlp/extractor/boxcast.py` -> `yt_dlp/extractor/boxcast.ts`
 - [ ] `yt_dlp/extractor/bpb.py` -> `yt_dlp/extractor/bpb.ts`
 - [ ] `yt_dlp/extractor/br.py` -> `yt_dlp/extractor/br.ts`
 - [ ] `yt_dlp/extractor/brainpop.py` -> `yt_dlp/extractor/brainpop.ts`
-- [ ] `yt_dlp/extractor/breitbart.py` -> `yt_dlp/extractor/breitbart.ts`
+- [x] `yt_dlp/extractor/breitbart.py` -> `yt_dlp/extractor/breitbart.ts`
 - [ ] `yt_dlp/extractor/brightcove.py` -> `yt_dlp/extractor/brightcove.ts`
 - [ ] `yt_dlp/extractor/brilliantpala.py` -> `yt_dlp/extractor/brilliantpala.ts`
 - [ ] `yt_dlp/extractor/btvplus.py` -> `yt_dlp/extractor/btvplus.ts`

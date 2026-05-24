@@ -141,6 +141,18 @@ export function updateUrlQuery(url: string, query: URLSearchParams | Record<stri
 
 export const update_url_query = updateUrlQuery;
 
+export function parseQs(url: string): Record<string, string[]> {
+  const query = URL.canParse(url) ? new URL(url).search : url.includes("?") ? url.slice(url.indexOf("?")) : url;
+  const params = new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of params) {
+    out[key] = [...(out[key] ?? []), value];
+  }
+  return out;
+}
+
+export const parse_qs = parseQs;
+
 export function urlencodePostdata(data: Record<string, string | number | boolean | null | undefined> | Iterable<readonly [string, string | number | boolean | null | undefined]>): URLSearchParams {
   const params = new URLSearchParams();
   const entries = Symbol.iterator in Object(data)
@@ -199,6 +211,16 @@ export function strOrNone(value: unknown, defaultValue: string | null = null): s
 }
 
 export const str_or_none = strOrNone;
+
+export function stripOrNone(value: unknown, defaultValue: string | null = null): string | null {
+  if (value === null || value === undefined) {
+    return defaultValue;
+  }
+  const stripped = String(value).trim();
+  return stripped || defaultValue;
+}
+
+export const strip_or_none = stripOrNone;
 
 export function tryGet<T>(source: unknown, getter: ((value: unknown) => T) | Array<(value: unknown) => T>, expectedType?: (value: unknown) => value is T): T | null {
   const getters = Array.isArray(getter) ? getter : [getter];
