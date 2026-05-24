@@ -1,6 +1,7 @@
 // Source: yt_dlp/plugins.py
-// Port note: Python importlib namespace packages are replaced with Bun/ESM filesystem discovery and dynamic import.
+// Port note: Python importlib namespace packages are replaced with Bun Glob discovery and ESM dynamic import.
 
+import { Glob } from "bun";
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -105,7 +106,7 @@ export async function* iterModules(subpackage: string): AsyncGenerator<string> {
     if (!(await isDirectory(packageDir))) {
       continue;
     }
-    for await (const moduleFile of walkModuleFiles(packageDir)) {
+    for await (const moduleFile of globModuleFiles(packageDir)) {
       const resolved = resolve(moduleFile);
       if (seen.has(resolved)) {
         continue;
@@ -159,17 +160,14 @@ async function* configuredPluginRoots(): AsyncGenerator<string> {
   }
 }
 
-async function* walkModuleFiles(dir: string): AsyncGenerator<string> {
-  for (const entry of await readdir(dir)) {
-    const fullPath = join(dir, entry);
-    const info = await stat(fullPath);
-    if (info.isDirectory()) {
-      if (!entry.startsWith("_")) {
-        yield* walkModuleFiles(fullPath);
-      }
-    } else if (/\.(?:mjs|js|ts)$/.test(entry) && !entry.startsWith("_")) {
-      yield fullPath;
+async function* globModuleFiles(dir: string): AsyncGenerator<string> {
+  const glob = new Glob("**/*.{mjs,js,ts}");
+  for await (const file of glob.scan({ cwd: dir, absolute: true, onlyFiles: true })) {
+    const relativeParts = file.slice(dir.length + 1).split(/[\\/]/);
+    if (relativeParts.some((part) => part.startsWith("_"))) {
+      continue;
     }
+    yield file;
   }
 }
 
