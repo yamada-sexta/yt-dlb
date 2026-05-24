@@ -4,7 +4,6 @@
 
 import { JSInterpreter } from "../../jsinterp.ts";
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
-import ejsSolve from "ejs/src/yt/solver/main.ts";
 
 export interface YoutubeVideoInfo {
   id: string;
@@ -50,31 +49,68 @@ interface YoutubeFormat {
   contentLength?: string;
 }
 
+type EjsSolverInput = {
+  type: "player";
+  player: string;
+  output_preprocessed: false;
+  requests: Array<{ type: "n" | "sig"; challenges: string[] }>;
+};
+
+type EjsSolverOutput =
+  | {
+      type: "result";
+      responses: Array<
+        | { type: "result"; data: Record<string, string> }
+        | { type: "error"; error: string }
+      >;
+    }
+  | {
+      type: "error";
+      error: string;
+    };
+
+type EjsSolver = (input: EjsSolverInput) => EjsSolverOutput;
+
 export function isYoutubeWatchUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(parsed.hostname)
-      && parsed.pathname === "/watch"
-      && Boolean(parsed.searchParams.get("v"));
+    return (
+      [
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
+      ].includes(parsed.hostname) &&
+      parsed.pathname === "/watch" &&
+      Boolean(parsed.searchParams.get("v"))
+    );
   } catch {
     return false;
   }
 }
 
-export async function extractYoutubeVideo(url: string, ydl: YoutubeDL): Promise<YoutubeVideoInfo> {
+export async function extractYoutubeVideo(
+  url: string,
+  ydl: YoutubeDL,
+): Promise<YoutubeVideoInfo> {
   const videoId = extractVideoId(url);
   const webpageUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
-  const response = await ydl.urlopen(new Request(webpageUrl, {
-    headers: {
-      "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": defaultUserAgent(),
-    },
-  }));
+  const response = await ydl.urlopen(
+    new Request(webpageUrl, {
+      headers: {
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": defaultUserAgent(),
+      },
+    }),
+  );
   const webpage = await response.text();
   const playerResponse = extractInitialPlayerResponse(webpage);
   const status = playerResponse.playabilityStatus?.status;
   if (status && status !== "OK") {
-    throw new DownloadError(playerResponse.playabilityStatus?.reason ?? `YouTube returned playability status ${status}`);
+    throw new DownloadError(
+      playerResponse.playabilityStatus?.reason ??
+        `YouTube returned playability status ${status}`,
+    );
   }
 
   const playerUrl = extractPlayerUrl(webpage);
@@ -82,15 +118,22 @@ export async function extractYoutubeVideo(url: string, ydl: YoutubeDL): Promise<
     ...(playerResponse.streamingData?.formats ?? []),
     ...(playerResponse.streamingData?.adaptiveFormats ?? []),
   ];
-  const resolved = await Promise.all(formats.map((format) => resolveFormat(format, playerUrl, ydl)));
-  const playable = resolved.filter((format): format is ResolvedYoutubeFormat => format !== null);
+  const resolved = await Promise.all(
+    formats.map((format) => resolveFormat(format, playerUrl, ydl)),
+  );
+  const playable = resolved.filter(
+    (format): format is ResolvedYoutubeFormat => format !== null,
+  );
   const selected = selectFormat(playable);
   if (!selected) {
     throw new DownloadError("No playable YouTube HTTP formats found");
   }
 
   const title = playerResponse.videoDetails?.title ?? videoId;
-  const ext = extensionFromMime(selected.mimeType) ?? extensionFromUrl(selected.url) ?? "mp4";
+  const ext =
+    extensionFromMime(selected.mimeType) ??
+    extensionFromUrl(selected.url) ??
+    "mp4";
   return {
     id: videoId,
     url: selected.url,
@@ -109,7 +152,11 @@ interface ResolvedYoutubeFormat extends YoutubeFormat {
   url: string;
 }
 
-async function resolveFormat(format: YoutubeFormat, playerUrl: string | null, ydl: YoutubeDL): Promise<ResolvedYoutubeFormat | null> {
+async function resolveFormat(
+  format: YoutubeFormat,
+  playerUrl: string | null,
+  ydl: YoutubeDL,
+): Promise<ResolvedYoutubeFormat | null> {
   let fmtUrl = format.url;
   if (format.url) {
     fmtUrl = format.url;
@@ -127,9 +174,15 @@ async function resolveFormat(format: YoutubeFormat, playerUrl: string | null, yd
     const parsed = new URL(fmtUrl);
     if (encryptedSignature) {
       if (!playerUrl) {
-        throw new DownloadError("YouTube format is signature-ciphered but player JS URL was not found");
+        throw new DownloadError(
+          "YouTube format is signature-ciphered but player JS URL was not found",
+        );
       }
-      const signature = await decipherSignature(encryptedSignature, playerUrl, ydl);
+      const signature = await decipherSignature(
+        encryptedSignature,
+        playerUrl,
+        ydl,
+      );
       parsed.searchParams.set(params.get("sp") ?? "signature", signature);
     }
     fmtUrl = parsed.toString();
@@ -138,9 +191,14 @@ async function resolveFormat(format: YoutubeFormat, playerUrl: string | null, yd
   const nChallenge = parsed.searchParams.get("n");
   if (nChallenge) {
     if (!playerUrl) {
-      throw new DownloadError("YouTube format has an n challenge but player JS URL was not found");
+      throw new DownloadError(
+        "YouTube format has an n challenge but player JS URL was not found",
+      );
     }
-    parsed.searchParams.set("n", await solveNChallenge(nChallenge, playerUrl, ydl));
+    parsed.searchParams.set(
+      "n",
+      await solveNChallenge(nChallenge, playerUrl, ydl),
+    );
   }
   return { ...format, url: parsed.toString() };
 }
@@ -149,7 +207,11 @@ const signatureCache = new Map<string, (signature: string) => string>();
 const nCache = new Map<string, string>();
 const playerCache = new Map<string, string>();
 
-async function decipherSignature(signature: string, playerUrl: string, ydl: YoutubeDL): Promise<string> {
+async function decipherSignature(
+  signature: string,
+  playerUrl: string,
+  ydl: YoutubeDL,
+): Promise<string> {
   let decipher = signatureCache.get(playerUrl);
   if (!decipher) {
     const response = await ydl.urlopen(playerUrl);
@@ -160,36 +222,68 @@ async function decipherSignature(signature: string, playerUrl: string, ydl: Yout
   return decipher(signature);
 }
 
-async function solveNChallenge(challenge: string, playerUrl: string, ydl: YoutubeDL): Promise<string> {
+async function solveNChallenge(
+  challenge: string,
+  playerUrl: string,
+  ydl: YoutubeDL,
+): Promise<string> {
   const cacheKey = `${playerUrl}\n${challenge}`;
   const cached = nCache.get(cacheKey);
   if (cached) {
     return cached;
   }
   const player = await loadPlayer(playerUrl, ydl);
+  const ejsSolve = await loadEjsSolver();
   const output = ejsSolve({
     type: "player",
     player,
     output_preprocessed: false,
-    requests: [{
-      type: "n",
-      challenges: [challenge],
-    }],
+    requests: [
+      {
+        type: "n",
+        challenges: [challenge],
+      },
+    ],
   });
   if (output.type === "error") {
-    throw new DownloadError(`YouTube n challenge solving failed: ${output.error}`);
+    throw new DownloadError(
+      `YouTube n challenge solving failed: ${output.error}`,
+    );
   }
   const [response] = output.responses;
   if (response?.type === "error") {
-    throw new DownloadError(`YouTube n challenge solving failed: ${response.error}`);
+    throw new DownloadError(
+      `YouTube n challenge solving failed: ${response.error}`,
+    );
   }
   const solved = response?.data[challenge];
   if (!solved) {
-    throw new DownloadError("YouTube n challenge solver did not return a result");
+    throw new DownloadError(
+      "YouTube n challenge solver did not return a result",
+    );
   }
   ydl.writeDebug(`Solved YouTube n challenge ${challenge} -> ${solved}`);
   nCache.set(cacheKey, solved);
   return solved;
+}
+
+let ejsSolverPromise: Promise<EjsSolver> | undefined;
+
+async function loadEjsSolver(): Promise<EjsSolver> {
+  ejsSolverPromise ??= (async () => {
+    // Logic change: Bun can import yt-dlp/ejs directly. The specifier is kept dynamic so this
+    // repo's strict TypeScript settings do not typecheck the package's internal TS sources.
+    const specifier = ["ejs", "src", "yt", "solver", "main.ts"].join("/");
+    const importModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+    const module = await importModule(specifier) as { default?: unknown };
+    if (typeof module.default !== "function") {
+      throw new DownloadError(
+        "Installed yt-dlp/ejs package does not export a solver function",
+      );
+    }
+    return module.default as EjsSolver;
+  })();
+  return await ejsSolverPromise;
 }
 
 async function loadPlayer(playerUrl: string, ydl: YoutubeDL): Promise<string> {
@@ -202,17 +296,23 @@ async function loadPlayer(playerUrl: string, ydl: YoutubeDL): Promise<string> {
   return player;
 }
 
-function extractSignatureDecipher(playerJs: string): (signature: string) => string {
+function extractSignatureDecipher(
+  playerJs: string,
+): (signature: string) => string {
   const functionName = extractSignatureFunctionName(playerJs);
   const interpreter = new JSInterpreter(playerJs);
   const [args, body] = interpreter.extractFunctionCode(functionName);
   const helperName = extractHelperObjectName(body);
-  const helpers = helperName ? { [helperName]: buildHelperObject(playerJs, helperName) } : {};
+  const helpers = helperName
+    ? { [helperName]: buildHelperObject(playerJs, helperName) }
+    : {};
   const fn = interpreter.extractFunctionFromCode(args, body, helpers);
   return (signature) => {
     const result = fn([signature]);
     if (typeof result !== "string") {
-      throw new DownloadError("YouTube signature decipher returned a non-string value");
+      throw new DownloadError(
+        "YouTube signature decipher returned a non-string value",
+      );
     }
     return result;
   };
@@ -237,34 +337,56 @@ function extractSignatureFunctionName(playerJs: string): string {
 }
 
 function extractHelperObjectName(functionBody: string): string | null {
-  const match = /(?<name>[a-zA-Z_$][\w$]*)\.[a-zA-Z_$][\w$]*\(/.exec(functionBody);
+  const match = /(?<name>[a-zA-Z_$][\w$]*)\.[a-zA-Z_$][\w$]*\(/.exec(
+    functionBody,
+  );
   return match?.groups?.name ?? null;
 }
 
-function buildHelperObject(playerJs: string, objectName: string): Record<string, (...args: unknown[]) => unknown> {
+function buildHelperObject(
+  playerJs: string,
+  objectName: string,
+): Record<string, (...args: unknown[]) => unknown> {
   const escaped = RegExp.escape(objectName);
-  const objectStart = new RegExp(`(?:var|let|const)\\s+${escaped}\\s*=\\s*\\{`).exec(playerJs)
-    ?? new RegExp(`${escaped}\\s*=\\s*\\{`).exec(playerJs);
+  const objectStart =
+    new RegExp(`(?:var|let|const)\\s+${escaped}\\s*=\\s*\\{`).exec(playerJs) ??
+    new RegExp(`${escaped}\\s*=\\s*\\{`).exec(playerJs);
   if (!objectStart) {
-    throw new DownloadError(`Could not find YouTube signature helper object ${objectName}`);
+    throw new DownloadError(
+      `Could not find YouTube signature helper object ${objectName}`,
+    );
   }
   const bodyStart = objectStart.index + objectStart[0].length - 1;
   const objectLiteral = readBalanced(playerJs, bodyStart);
   const objectCode = `return (${objectLiteral});`;
   const value = new Function(objectCode)();
   if (!value || typeof value !== "object") {
-    throw new DownloadError(`YouTube signature helper object ${objectName} is invalid`);
+    throw new DownloadError(
+      `YouTube signature helper object ${objectName} is invalid`,
+    );
   }
   return value as Record<string, (...args: unknown[]) => unknown>;
 }
 
-function selectFormat(formats: readonly ResolvedYoutubeFormat[]): ResolvedYoutubeFormat | null {
+function selectFormat(
+  formats: readonly ResolvedYoutubeFormat[],
+): ResolvedYoutubeFormat | null {
   const progressive = formats.filter((format) => {
     const mime = format.mimeType ?? "";
-    return mime.includes("video/") && !mime.includes("audio/mp4") && Boolean(format.audioQuality);
+    return (
+      mime.includes("video/") &&
+      !mime.includes("audio/mp4") &&
+      Boolean(format.audioQuality)
+    );
   });
-  const candidates = progressive.length ? progressive : formats.filter((format) => (format.mimeType ?? "").includes("video/"));
-  return candidates.sort((left, right) => formatScore(right) - formatScore(left))[0] ?? null;
+  const candidates = progressive.length
+    ? progressive
+    : formats.filter((format) => (format.mimeType ?? "").includes("video/"));
+  return (
+    candidates.sort(
+      (left, right) => formatScore(right) - formatScore(left),
+    )[0] ?? null
+  );
 }
 
 function formatScore(format: YoutubeFormat): number {
@@ -275,7 +397,9 @@ function extractInitialPlayerResponse(webpage: string): YoutubePlayerResponse {
   const marker = "ytInitialPlayerResponse";
   const markerIndex = webpage.indexOf(marker);
   if (markerIndex === -1) {
-    throw new DownloadError("Could not find ytInitialPlayerResponse in YouTube webpage");
+    throw new DownloadError(
+      "Could not find ytInitialPlayerResponse in YouTube webpage",
+    );
   }
   const braceIndex = webpage.indexOf("{", markerIndex);
   if (braceIndex === -1) {
@@ -285,11 +409,14 @@ function extractInitialPlayerResponse(webpage: string): YoutubePlayerResponse {
 }
 
 function extractPlayerUrl(webpage: string): string | null {
-  const match = /"jsUrl"\s*:\s*"(?<url>[^"]+)"/.exec(webpage)
-    ?? /"PLAYER_JS_URL"\s*:\s*"(?<url>[^"]+)"/.exec(webpage)
-    ?? /<script\s+[^>]*src="(?<url>\/s\/player\/[^"]+\/base\.js)"/.exec(webpage);
+  const match =
+    /"jsUrl"\s*:\s*"(?<url>[^"]+)"/.exec(webpage) ??
+    /"PLAYER_JS_URL"\s*:\s*"(?<url>[^"]+)"/.exec(webpage) ??
+    /<script\s+[^>]*src="(?<url>\/s\/player\/[^"]+\/base\.js)"/.exec(webpage);
   const raw = match?.groups?.url;
-  return raw ? new URL(raw.replaceAll("\\/", "/"), "https://www.youtube.com").toString() : null;
+  return raw
+    ? new URL(raw.replaceAll("\\/", "/"), "https://www.youtube.com").toString()
+    : null;
 }
 
 function extractVideoId(url: string): string {
@@ -318,7 +445,7 @@ function readBalanced(source: string, startIndex: number): string {
       }
       continue;
     }
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char;
       continue;
     }

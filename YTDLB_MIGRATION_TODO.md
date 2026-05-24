@@ -59,6 +59,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/index.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
+- [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
 
 ## Complete Runtime Inventory
 

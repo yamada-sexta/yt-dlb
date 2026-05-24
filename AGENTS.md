@@ -10,4 +10,6 @@ Unimplemented migrated features must fail loudly with `NotImplementedError` or a
 
 Every new TS file must start with a short source header naming the Python source, or explaining that the file is new. Prefer Bun-native APIs (`Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, Bun-compatible crypto) and avoid Python dependencies.
 
+For YouTube JS challenges, prefer importing the installed `yt-dlp/ejs` package at runtime from Bun. Keep that import behind a typed dynamic boundary so this repo's strict `tsc` does not typecheck EJS internals.
+
 Use async only for IO/network/runtime work; keep pure transforms synchronous. Prefer typed schemas such as `zod` for external data, and avoid broad `any`. When translating Python `re.escape` or dynamic literal regex construction, use native `RegExp.escape()`.

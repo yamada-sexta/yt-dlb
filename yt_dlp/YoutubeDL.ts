@@ -182,8 +182,30 @@ export class YoutubeDL {
   private async downloadDirect(info: DirectInfo): Promise<void> {
     this.toScreen(`[download] ${info.url}`);
     const response = await this.urlopen(info.url);
-    await Bun.write(info.filename, response);
+    await this.writeResponseToFile(info.filename, response);
     this.toScreen(`[download] Destination: ${info.filename}`);
+  }
+
+  private async writeResponseToFile(filename: string, response: Response): Promise<void> {
+    if (!response.body) {
+      throw new DownloadError("Response has no body");
+    }
+    const sink = Bun.file(filename).writer();
+    let downloaded = 0;
+    const total = Number(response.headers.get("content-length") ?? 0);
+    try {
+      for await (const chunk of response.body) {
+        downloaded += chunk.byteLength;
+        sink.write(chunk);
+        if (this.params.verbose && total) {
+          this.writeDebug(`Downloaded ${downloaded}/${total} bytes (${Math.trunc(downloaded / total * 100)}%)`);
+        }
+      }
+      await sink.end();
+    } catch (error) {
+      sink.end();
+      throw error;
+    }
   }
 }
 
