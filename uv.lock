@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-04-28T22:03:20.491912684Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -1191,6 +1191,9 @@ wheels = [
 [[package]]
 name = "yt-dlp"
 source = { editable = "." }
+dependencies = [
+    { name = "yt-dlp-ejs" },
+]
 
 [package.optional-dependencies]
 curl-cffi = [
@@ -1322,6 +1325,7 @@ requires-dist = [
     { name = "urllib3", marker = "extra == 'pin'", specifier = "==2.6.3" },
     { name = "websockets", marker = "extra == 'default'", specifier = ">=13.0" },
     { name = "websockets", marker = "extra == 'pin'", specifier = "==16.0" },
+    { name = "yt-dlp-ejs", specifier = ">=0.8.0" },
     { name = "yt-dlp-ejs", marker = "extra == 'default'", specifier = "==0.8.0" },
     { name = "yt-dlp-ejs", marker = "extra == 'pin'", specifier = "==0.8.0" },
 ]
