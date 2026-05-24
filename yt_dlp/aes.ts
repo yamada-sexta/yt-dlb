@@ -2,6 +2,7 @@
 // Port note: low-level pure-Python AES was replaced with Bun's native node:crypto compatibility.
 
 import { createCipheriv, createDecipheriv } from "node:crypto";
+import type { DecipherGCM } from "node:crypto";
 
 export const BLOCK_SIZE_BYTES = 16;
 
@@ -89,7 +90,7 @@ export function aesGcmDecryptAndVerifyBytes(
   tag: Uint8Array,
   nonce: Uint8Array,
 ): Uint8Array {
-  const decipher = createDecipheriv(algorithmFor(key, "gcm"), toBuffer(key), toBuffer(nonce));
+  const decipher = createDecipheriv(algorithmFor(key, "gcm"), toBuffer(key), toBuffer(nonce)) as DecipherGCM;
   decipher.setAuthTag(toBuffer(tag));
   return new Uint8Array(Buffer.concat([decipher.update(toBuffer(data)), decipher.final()]));
 }

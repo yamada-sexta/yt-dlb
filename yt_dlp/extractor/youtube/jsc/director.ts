@@ -4,15 +4,18 @@ import {
   JsChallengeProvider,
   JsChallengeProviderError,
   JsChallengeProviderRejectedRequest,
+  JsChallengeType,
+  jscPreferences,
+  jscProviders,
+} from "./provider.ts";
+import type {
+  JsChallengeProviderHost,
   JsChallengeRequest,
   JsChallengeResponse,
-  JsChallengeType,
   NChallengeInput,
   NChallengeOutput,
   SigChallengeInput,
   SigChallengeOutput,
-  jscPreferences,
-  jscProviders,
 } from "./provider.ts";
 
 export interface JscLogger {
@@ -108,7 +111,7 @@ export class JsChallengeRequestDirector {
   }
 }
 
-export function initializeJscDirector(host: ConstructorParameters<typeof JsChallengeProvider>[0], logger?: JscLogger): JsChallengeRequestDirector {
+export function initializeJscDirector(host: JsChallengeProviderHost, logger?: JscLogger): JsChallengeRequestDirector {
   const director = new JsChallengeRequestDirector(logger);
   for (const Provider of jscProviders.values()) {
     director.registerProvider(new Provider(host));

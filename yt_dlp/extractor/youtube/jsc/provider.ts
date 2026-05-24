@@ -42,9 +42,9 @@ export interface JsChallengeProviderResponse {
 
 export class JsChallengeProviderRejectedRequest extends Error {
   readonly expected: boolean;
-  readonly skippedComponents?: readonly unknown[];
+  readonly skippedComponents?: readonly SkippedComponent[];
 
-  constructor(message = "JS challenge provider rejected request", expected = false, skippedComponents?: readonly unknown[]) {
+  constructor(message = "JS challenge provider rejected request", expected = false, skippedComponents?: readonly SkippedComponent[]) {
     super(message);
     this.expected = expected;
     this.skippedComponents = skippedComponents;
@@ -62,6 +62,20 @@ export class JsChallengeProviderError extends Error {
 
 export interface JsChallengeProviderHost {
   loadPlayer(videoId: string | undefined, playerUrl: string): Promise<string>;
+  cache?: {
+    load(section: string, key: string, dtype?: string, defaultValue?: unknown): Promise<unknown>;
+    store(section: string, key: string, data: unknown, dtype?: string): Promise<void>;
+  };
+  settings?: Record<string, readonly string[] | undefined>;
+  remoteComponents?: readonly string[];
+  downloadText?(url: string): Promise<string | null>;
+  reportWarning?(message: string): void;
+  writeDebug?(message: string): void;
+}
+
+export interface SkippedComponent {
+  component: string;
+  runtime: string;
 }
 
 export abstract class JsChallengeProvider {
@@ -115,10 +129,15 @@ export type JsChallengePreference = (
   requests: readonly JsChallengeRequest[],
 ) => number;
 
-export const jscProviders = new Map<string, new (host: JsChallengeProviderHost) => JsChallengeProvider>();
+export type JsChallengeProviderConstructor = {
+  readonly providerName: string;
+  new (host: JsChallengeProviderHost): JsChallengeProvider;
+};
+
+export const jscProviders = new Map<string, JsChallengeProviderConstructor>();
 export const jscPreferences = new Set<JsChallengePreference>();
 
-export function registerProvider<T extends new (host: JsChallengeProviderHost) => JsChallengeProvider>(provider: T): T {
+export function registerProvider<T extends JsChallengeProviderConstructor>(provider: T): T {
   const name = provider.providerName;
   if (jscProviders.has(name)) {
     throw new Error(`JsChallengeProvider ${name} already registered`);

@@ -22,6 +22,22 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/utils/jsruntime.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/provider.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/director.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/ejs.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/index.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/info.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/index.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/registry.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
+- [x] `yt_dlp/extractor/youtube/pot/index.ts`
+- [x] `yt_dlp/extractor/youtube/pot/internal-provider.ts`
+- [x] `yt_dlp/extractor/youtube/pot/provider.ts`
+- [x] `yt_dlp/extractor/youtube/pot/registry.ts`
+- [x] `yt_dlp/extractor/youtube/pot/cache.ts`
+- [x] `yt_dlp/extractor/youtube/pot/utils.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/index.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 
 ## Complete Runtime Inventory
 
@@ -1082,28 +1098,28 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
 - [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts`
 - [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/__init__.py` -> `yt_dlp/extractor/youtube/jsc/index.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/bun.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/__init__.py` -> `yt_dlp/extractor/youtube/jsc/index.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/bun.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
 - [ ] `yt_dlp/extractor/youtube/jsc/_builtin/deno.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/deno.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/ejs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/ejs.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/ejs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/ejs.ts`
 - [ ] `yt_dlp/extractor/youtube/jsc/_builtin/node.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/node.ts`
 - [ ] `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/index.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/info.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/index.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/info.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_director.py` -> `yt_dlp/extractor/youtube/jsc/director.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_registry.py` -> `yt_dlp/extractor/youtube/jsc/registry.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_registry.py` -> `yt_dlp/extractor/youtube/jsc/registry.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/provider.py` -> `yt_dlp/extractor/youtube/jsc/provider.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/__init__.py` -> `yt_dlp/extractor/youtube/pot/index.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/pot/_builtin/index.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/_builtin/memory_cache.py` -> `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/_builtin/webpo_cachespec.py` -> `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
+- [x] `yt_dlp/extractor/youtube/pot/__init__.py` -> `yt_dlp/extractor/youtube/pot/index.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/pot/_builtin/index.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/memory_cache.py` -> `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo_cachespec.py` -> `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 - [ ] `yt_dlp/extractor/youtube/pot/_director.py` -> `yt_dlp/extractor/youtube/pot/director.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/_provider.py` -> `yt_dlp/extractor/youtube/pot/internal-provider.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/_registry.py` -> `yt_dlp/extractor/youtube/pot/registry.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/cache.py` -> `yt_dlp/extractor/youtube/pot/cache.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/provider.py` -> `yt_dlp/extractor/youtube/pot/provider.ts`
-- [ ] `yt_dlp/extractor/youtube/pot/utils.py` -> `yt_dlp/extractor/youtube/pot/utils.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_provider.py` -> `yt_dlp/extractor/youtube/pot/internal-provider.ts`
+- [x] `yt_dlp/extractor/youtube/pot/_registry.py` -> `yt_dlp/extractor/youtube/pot/registry.ts`
+- [x] `yt_dlp/extractor/youtube/pot/cache.py` -> `yt_dlp/extractor/youtube/pot/cache.ts`
+- [x] `yt_dlp/extractor/youtube/pot/provider.py` -> `yt_dlp/extractor/youtube/pot/provider.ts`
+- [x] `yt_dlp/extractor/youtube/pot/utils.py` -> `yt_dlp/extractor/youtube/pot/utils.ts`
 - [ ] `yt_dlp/extractor/zaiko.py` -> `yt_dlp/extractor/zaiko.ts`
 - [ ] `yt_dlp/extractor/zapiks.py` -> `yt_dlp/extractor/zapiks.ts`
 - [ ] `yt_dlp/extractor/zattoo.py` -> `yt_dlp/extractor/zattoo.ts`
@@ -1116,9 +1132,9 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/zingmp3.py` -> `yt_dlp/extractor/zingmp3.ts`
 - [ ] `yt_dlp/extractor/zoom.py` -> `yt_dlp/extractor/zoom.ts`
 - [ ] `yt_dlp/extractor/zype.py` -> `yt_dlp/extractor/zype.ts`
-- [ ] `yt_dlp/globals.py` -> `yt_dlp/globals.ts`
+- [x] `yt_dlp/globals.py` -> `yt_dlp/globals.ts`
 - [ ] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
-- [ ] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
+- [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
 - [ ] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
 - [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
 - [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts`
@@ -1153,5 +1169,5 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
 - [ ] `yt_dlp/utils/progress.py` -> `yt_dlp/utils/progress.ts`
 - [ ] `yt_dlp/utils/traversal.py` -> `yt_dlp/utils/traversal.ts`
-- [ ] `yt_dlp/version.py` -> `yt_dlp/version.ts`
-- [ ] `yt_dlp/webvtt.py` -> `yt_dlp/webvtt.ts`
+- [x] `yt_dlp/version.py` -> `yt_dlp/version.ts`
+- [x] `yt_dlp/webvtt.py` -> `yt_dlp/webvtt.ts`
