@@ -3,5 +3,7 @@
 
 export * from "./networking.ts";
 export * from "./progress.ts";
+export * from "./traversal.ts";
+export * from "./utils.ts";
 export * from "./xml.ts";
 export * from "./jsruntime.ts";

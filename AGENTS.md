@@ -10,10 +10,12 @@ TS filenames should use kebab-case, `index.ts` for `__init__.py`, and `internal-
 
 Unimplemented migrated features must fail loudly with `NotImplementedError` or an equally explicit error. Do not leave live exported functions, classes, or constants as blank no-ops, empty arrays, nullable stand-ins, or silent placeholder behavior.
 
-Every new TS file must start with a short source header naming the Python source, or explaining that the file is new. Prefer Bun-native APIs (`Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, Bun-compatible crypto) and avoid Python dependencies.
+Every new TS file must start with a short source header naming the Python source, or explaining that the file is new. Prefer Bun-native APIs (`Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, Bun Shell, Bun-compatible crypto) and avoid Python dependencies.
 
 For YouTube JS challenges, prefer importing the installed `yt-dlp/ejs` package at runtime from Bun. Keep that import behind a typed dynamic boundary so this repo's strict `tsc` does not typecheck EJS internals.
 
-Downloader ports should use Bun `fetch`, WebSocket, subprocess, and file APIs directly. If a protocol still needs an unported muxer/extractor layer, keep an explicit throwing downloader instead of a fake success path.
+Downloader ports should use Bun `fetch`, WebSocket, Bun Shell, and file APIs directly. Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs when interacting with external programs such as `ffmpeg`, `curl`, `aria2c`, `mpv`, or `mplayer`. Use `fetch` for native HTTP downloads; Bun Shell can execute a system `curl` from `PATH`, but `curl` is not one of Bun Shell's built-in commands. If a protocol still needs an unported muxer/extractor layer, keep an explicit throwing downloader instead of a fake success path.
+
+When a command is already represented as an argv array, pass that array to Bun Shell as an interpolated expression, for example `await $\`${cmd}\`.nothrow().quiet()`. This preserves Bun Shell's escaping and avoids rebuilding command lines by hand.
 
 Use async only for IO/network/runtime work; keep pure transforms synchronous. Prefer typed schemas such as `zod` for external data, and avoid broad `any`. When translating Python `re.escape` or dynamic literal regex construction, use native `RegExp.escape()`.

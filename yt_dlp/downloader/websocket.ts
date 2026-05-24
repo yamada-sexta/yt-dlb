@@ -1,6 +1,8 @@
 // Source: yt_dlp/downloader/websocket.py
 // Port note: Python threads are replaced with a Bun WebSocket feeding ffmpeg stdin.
 
+import { $ } from "bun";
+
 import { FileDownloader, type DownloadInfo } from "./common.ts";
 import { headersToFfmpegArgs, outputFormat } from "./external.ts";
 
@@ -24,32 +26,24 @@ export class FFmpegSinkFD extends FileDownloader {
       tmpfilename,
     ];
     const started = performance.now() / 1000;
-    const proc = Bun.spawn([exe, ...args], {
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const writer = proc.stdin;
+    const shell = $`${[exe, ...args]}`.nothrow().quiet();
+    const writer = shell.stdin.getWriter();
     const pump = this.realConnection(writer, info)
-      .catch((error: unknown) => {
-        if (!proc.killed) {
-          proc.kill("SIGINT");
-        }
+      .catch(async (error: unknown) => {
+        await writer.abort(error).catch(() => undefined);
         throw error;
       })
       .finally(async () => {
         try {
-          await writer.end();
+          await writer.close();
         } catch {
           // ffmpeg may close stdin first when enough data has been received.
         }
       });
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-      pump,
-    ]).then(([stdoutText, stderrText, code]) => [stdoutText, stderrText, code] as const);
+    const [output] = await Promise.all([shell, pump]);
+    const stdout = output.stdout.toString();
+    const stderr = output.stderr.toString();
+    const exitCode = output.exitCode;
     if (exitCode !== 0) {
       throw new Error(`ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
     }
@@ -65,20 +59,19 @@ export class FFmpegSinkFD extends FileDownloader {
     return true;
   }
 
-  async realConnection(_sink: Bun.FileSink, _info: DownloadInfo): Promise<void> {
+  async realConnection(_sink: WritableStreamDefaultWriter<Uint8Array>, _info: DownloadInfo): Promise<void> {
     throw new Error("FFmpegSinkFD.realConnection must be implemented by subclasses");
   }
 }
 
 export class WebSocketFragmentFD extends FFmpegSinkFD {
-  override async realConnection(sink: Bun.FileSink, info: DownloadInfo): Promise<void> {
+  override async realConnection(sink: WritableStreamDefaultWriter<Uint8Array>, info: DownloadInfo): Promise<void> {
     const ws = await openWebSocket(info.url, info.http_headers);
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener("message", (event) => {
         void bytesFromMessage(event.data)
           .then(async (chunk) => {
-            sink.write(chunk);
-            await sink.flush();
+            await sink.write(chunk);
           })
           .catch(reject);
       });

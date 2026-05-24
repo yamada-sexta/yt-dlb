@@ -4,6 +4,7 @@
 import { NotImplementedError } from "../errors.ts";
 import { aesCbcDecryptBytes, unpadPkcs7 } from "../aes.ts";
 import { HTTPHeaderDict } from "../utils/networking.ts";
+import { parseM3u8Attributes, updateUrlQuery } from "../utils/utils.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
 
@@ -45,12 +46,40 @@ export class HlsFD extends FragmentFD {
     let mediaSequence = 0;
     let byteRange: { length: number; offset: number } | null = null;
     let nextByteRangeOffset = 0;
+    let discontinuityCount = 0;
+    const formatIndex = typeof info.format_index === "number" ? info.format_index : null;
+    const extraSegmentQuery = typeof info.extra_param_to_segment_url === "string"
+      ? new URLSearchParams(info.extra_param_to_segment_url)
+      : null;
+    const extraKeyQuery = typeof info.extra_param_to_key_url === "string"
+      ? new URLSearchParams(info.extra_param_to_key_url)
+      : extraSegmentQuery;
+    const externalAes = parseExternalAes(info.hls_aes);
     for (const rawLine of manifest.split(/\r?\n/)) {
       const line = rawLine.trim();
       if (!line) {
         continue;
       }
       if (line.startsWith("#")) {
+        if (line.startsWith("#EXT-X-MAP:")) {
+          if (formatIndex !== null && discontinuityCount !== formatIndex) {
+            continue;
+          }
+          if (fragments.length > 0) {
+            throw new Error("Initialization fragment found after media fragments, unable to download");
+          }
+          const mapInfo = parseM3u8Attributes(line.slice("#EXT-X-MAP:".length));
+          const uri = mapInfo.URI;
+          if (!uri) {
+            throw new Error("HLS initialization fragment is missing URI");
+          }
+          fragments.push({
+            frag_index: fragments.length + 1,
+            url: buildUrl(uri, manifestUrl, extraSegmentQuery),
+            http_headers: mapInfo.BYTERANGE ? rangeHeaders(info.http_headers, parseByteRange(mapInfo.BYTERANGE, 0)) : undefined,
+          });
+          mediaSequence += 1;
+        }
         if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
           mediaSequence = Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length)) || 0;
         }
@@ -60,23 +89,26 @@ export class HlsFD extends FragmentFD {
           nextByteRangeOffset = parsed.offset + parsed.length;
         }
         if (line.startsWith("#EXT-X-KEY:")) {
-          decryptInfo = await this.parseDecryptInfo(line.slice("#EXT-X-KEY:".length), manifestUrl);
+          decryptInfo = await this.parseDecryptInfo(line.slice("#EXT-X-KEY:".length), manifestUrl, extraKeyQuery, externalAes);
         }
         if ((line.startsWith("#ANVATO-SEGMENT-INFO") && line.includes("type=ad")) || (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",ad"))) {
           adFragment = true;
         } else if ((line.startsWith("#ANVATO-SEGMENT-INFO") && line.includes("type=master")) || (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",segment"))) {
           adFragment = false;
         }
+        if (line.startsWith("#EXT-X-DISCONTINUITY")) {
+          discontinuityCount += 1;
+        }
         continue;
       }
-      if (!adFragment) {
+      if (!adFragment && (formatIndex === null || discontinuityCount === formatIndex)) {
         const sequence = mediaSequence;
         const transformData = decryptInfo.method === "AES-128"
           ? aes128Transform(decryptInfo.key, decryptInfo.iv ?? sequenceIv(sequence))
           : undefined;
         fragments.push({
           frag_index: fragments.length + 1,
-          url: new URL(line, manifestUrl).toString(),
+          url: buildUrl(line, manifestUrl, extraSegmentQuery),
           http_headers: byteRange ? rangeHeaders(info.http_headers, byteRange) : undefined,
           transformData,
         });
@@ -91,7 +123,7 @@ export class HlsFD extends FragmentFD {
     return await this.downloadFragments(filename, info, fragments);
   }
 
-  private async parseDecryptInfo(rawAttributes: string, manifestUrl: string): Promise<HlsDecryptInfo> {
+  private async parseDecryptInfo(rawAttributes: string, manifestUrl: string, extraKeyQuery: URLSearchParams | null, externalAes: ExternalAesInfo): Promise<HlsDecryptInfo> {
     const attributes = parseM3u8Attributes(rawAttributes);
     const method = attributes.METHOD ?? "NONE";
     if (method === "NONE") {
@@ -101,19 +133,24 @@ export class HlsFD extends FragmentFD {
       throw new NotImplementedError(`HLS encryption method ${method}`);
     }
     const uri = attributes.URI;
-    if (!uri) {
+    const key = externalAes.key ?? (uri ? new Uint8Array(await (await this.ydl.urlopen(buildUrl(uri, manifestUrl, extraKeyQuery))).arrayBuffer()) : null);
+    if (!key) {
       throw new Error("HLS AES-128 key is missing URI");
     }
-    const key = new Uint8Array(await (await this.ydl.urlopen(new URL(uri, manifestUrl).toString())).arrayBuffer());
     if (![16, 24, 32].includes(key.byteLength)) {
       throw new Error(`Invalid HLS AES key length: ${key.byteLength}`);
     }
     return {
       method,
       key,
-      iv: attributes.IV ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0")) : undefined,
+      iv: externalAes.iv ?? (attributes.IV ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0")) : undefined),
     };
   }
+}
+
+interface ExternalAesInfo {
+  key?: Uint8Array;
+  iv?: Uint8Array;
 }
 
 function rangeHeaders(headers: Record<string, string> | undefined, byteRange: { length: number; offset: number }): Record<string, string> {
@@ -145,18 +182,6 @@ type HlsDecryptInfo = {
   iv?: Uint8Array;
 };
 
-function parseM3u8Attributes(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const pattern = /(?<key>[A-Z0-9-]+)=(?:"(?<quoted>[^"]*)"|(?<bare>[^,]*))/g;
-  for (const match of text.matchAll(pattern)) {
-    const key = match.groups?.key;
-    if (key) {
-      out[key] = match.groups?.quoted ?? match.groups?.bare ?? "";
-    }
-  }
-  return out;
-}
-
 function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2) {
     throw new Error("Invalid hex string");
@@ -166,6 +191,31 @@ function hexToBytes(hex: string): Uint8Array {
     out[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
   }
   return out;
+}
+
+function buildUrl(path: string, base: string, extraQuery: URLSearchParams | null): string {
+  const url = new URL(path, base).toString();
+  return extraQuery ? updateUrlQuery(url, queryToRecord(extraQuery)) : url;
+}
+
+function queryToRecord(extraQuery: URLSearchParams): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of extraQuery) {
+    out[key] ??= [];
+    out[key]!.push(value);
+  }
+  return out;
+}
+
+function parseExternalAes(value: unknown): ExternalAesInfo {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    key: typeof record.key === "string" ? hexToBytes(record.key.replace(/^0x/i, "")) : undefined,
+    iv: typeof record.iv === "string" ? hexToBytes(record.iv.replace(/^0x/i, "").padStart(32, "0")) : undefined,
+  };
 }
 
 function sequenceIv(sequence: number): Uint8Array {

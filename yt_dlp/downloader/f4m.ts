@@ -1,10 +1,9 @@
 // Source: yt_dlp/downloader/f4m.py
-// Port note: live bootstrap refresh remains explicit unsupported until live fragment state is migrated.
+// Port note: F4M live refresh is streamed through FragmentFD's async fragment support.
 
 import { Buffer } from "node:buffer";
 
 import { compatEtreeFromstring, type XmlElement } from "../compat/index.ts";
-import { NotImplementedError } from "../errors.ts";
 import { fixXmlAmpersands, xmlFind, xmlFindAll, xpathText } from "../utils/xml.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
@@ -36,11 +35,7 @@ export class F4mFD extends FragmentFD {
     const manifestBaseUrl = doc.baseUrl ? new URL(doc.baseUrl, manifestUrl).toString() : manifestUrl;
     const mediaBaseUrl = new URL(requiredAttr(media, "url"), manifestBaseUrl).toString();
     const bootstrapInfo = await this.parseBootstrap(doc.bootstrap, manifestBaseUrl);
-    if (bootstrapInfo.live) {
-      throw new NotImplementedError("live F4M bootstrap refresh");
-    }
     const fragmentsList = buildFragmentsList(bootstrapInfo);
-    const selectedFragments = this.params.test ? fragmentsList.slice(0, 1) : fragmentsList;
     const baseUrl = new URL(mediaBaseUrl);
     const queryParts = [
       baseUrl.search.replace(/^\?/, ""),
@@ -52,7 +47,7 @@ export class F4mFD extends FragmentFD {
       media.metadata ? writeMetadataTag(media.metadata) : new Uint8Array(),
     ]);
     let wroteHeader = false;
-    const fragments = selectedFragments.map(([segment, fragment], index): FragmentInfo => {
+    const makeFragment = ([segment, fragment]: [number, number], index: number): FragmentInfo => {
       const url = new URL(baseUrl.toString());
       url.pathname += `Seg${segment}-Frag${fragment}`;
       url.search = queryParts.join("&");
@@ -68,8 +63,11 @@ export class F4mFD extends FragmentFD {
           return concatBytes([prefix, payload]);
         },
       };
-    });
-    this.toScreen("[f4m] Total fragments: " + fragments.length);
+    };
+    const fragments = bootstrapInfo.live && doc.bootstrap.url && !this.params.test
+      ? this.liveFragments(doc.bootstrap.url, manifestBaseUrl, fragmentsList, makeFragment)
+      : (this.params.test ? fragmentsList.slice(0, 1) : fragmentsList).map(makeFragment);
+    this.toScreen("[f4m] Total fragments: " + (bootstrapInfo.live ? "unknown (live)" : fragmentsList.length));
     return await this.downloadFragments(filename, info, fragments);
   }
 
@@ -80,6 +78,41 @@ export class F4mFD extends FragmentFD {
       return readBootstrapInfo(data);
     }
     return readBootstrapInfo(Buffer.from(node.text.trim(), "base64"));
+  }
+
+  private async *liveFragments(
+    bootstrapUrl: string,
+    manifestBaseUrl: string,
+    initialFragments: [number, number][],
+    makeFragment: (pair: [number, number], index: number) => FragmentInfo,
+  ): AsyncIterable<FragmentInfo> {
+    let queue = [...initialFragments];
+    let latestFragment = queue.at(-1)?.[1] ?? 0;
+    let index = 0;
+    while (queue.length) {
+      while (queue.length) {
+        const pair = queue.shift()!;
+        latestFragment = pair[1];
+        index += 1;
+        yield makeFragment(pair, index);
+      }
+      queue = await this.updateLiveFragments(new URL(bootstrapUrl, manifestBaseUrl).toString(), latestFragment);
+      if (queue.length && queue[0]![1] > latestFragment + 1) {
+        this.ydl.reportWarning?.(`Missed ${queue[0]![1] - (latestFragment + 1)} fragments`);
+      }
+    }
+  }
+
+  private async updateLiveFragments(bootstrapUrl: string, latestFragment: number): Promise<[number, number][]> {
+    for (let retries = 30; retries > 0; retries -= 1) {
+      const fragments = buildFragmentsList(await this.parseBootstrap({ url: bootstrapUrl, text: "" }, bootstrapUrl))
+        .filter((fragment) => fragment[1] > latestFragment);
+      if (fragments.length) {
+        return fragments;
+      }
+      await sleep(5000);
+    }
+    return [];
   }
 }
 
@@ -331,4 +364,8 @@ function u32(value: number): Uint8Array {
 
 function uint24(value: number): Uint8Array {
   return u32(value).slice(1);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

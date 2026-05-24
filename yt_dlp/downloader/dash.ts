@@ -1,25 +1,39 @@
 // Source: yt_dlp/downloader/dash.py
 
 import { NotImplementedError } from "../errors.ts";
+import { ReExtractInfo, updateUrlQuery } from "../utils/utils.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
 
 export class DashSegmentsFD extends FragmentFD {
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
     const formats = Array.isArray(info.requested_formats) ? info.requested_formats as DownloadInfo[] : [info];
-    if (formats.length !== 1) {
-      throw new NotImplementedError("DASH merged multi-format downloads");
+    if (info.is_live) {
+      throw new NotImplementedError("live DASH videos");
     }
-    const format = formats[0]!;
+    let result = true;
+    for (const [index, format] of formats.entries()) {
+      const target = formats.length === 1
+        ? filename
+        : typeof format.filepath === "string" ? format.filepath : null;
+      if (!target) {
+        throw new NotImplementedError("DASH multi-format download without per-format filepath");
+      }
+      result = await this.downloadFormat(target, { ...info, ...format }, index === 0) && result;
+    }
+    return result;
+  }
+
+  private async downloadFormat(filename: string, format: DownloadInfo, isFatal: boolean): Promise<boolean> {
     if (typeof format.fragments === "string") {
-      throw new NotImplementedError("DASH fragment generator re-extraction");
+      throw new ReExtractInfo("the stream needs to be re-extracted", true);
     }
     if (!Array.isArray(format.fragments)) {
       throw new Error("DASH format has no fragments");
     }
     const base = typeof format.fragment_base_url === "string" ? format.fragment_base_url : format.url;
-    const extraQuery = typeof info.extra_param_to_segment_url === "string"
-      ? new URLSearchParams(info.extra_param_to_segment_url)
+    const extraQuery = typeof format.extra_param_to_segment_url === "string"
+      ? new URLSearchParams(format.extra_param_to_segment_url)
       : null;
     const sourceFragments = this.params.test ? format.fragments.slice(0, 1) : format.fragments;
     const fragments = sourceFragments.map((fragment, index): FragmentInfo => {
@@ -28,18 +42,27 @@ export class DashSegmentsFD extends FragmentFD {
       return {
         frag_index: index + 1,
         fragment_count: item.fragment_count,
-        url: extraQuery ? updateUrlQuery(rawUrl, extraQuery) : rawUrl,
+        url: extraQuery ? updateUrlQuery(rawUrl, queryToRecord(extraQuery)) : rawUrl,
       };
     });
     this.toScreen("[dashsegments] Total fragments: " + fragments.length);
-    return await this.downloadFragments(filename, format, fragments);
+    try {
+      return await this.downloadFragments(filename, format, fragments);
+    } catch (error) {
+      if (isFatal) {
+        throw error;
+      }
+      this.reportSkipFragment(0, error);
+      return false;
+    }
   }
 }
 
-function updateUrlQuery(url: string, extraQuery: URLSearchParams): string {
-  const parsed = new URL(url);
+function queryToRecord(extraQuery: URLSearchParams): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
   for (const [key, value] of extraQuery) {
-    parsed.searchParams.append(key, value);
+    out[key] ??= [];
+    out[key]!.push(value);
   }
-  return parsed.toString();
+  return out;
 }

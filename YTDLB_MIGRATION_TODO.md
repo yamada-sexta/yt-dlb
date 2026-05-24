@@ -8,6 +8,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] Use `ytdlb` for the Bun rewrite entrypoint and exported package surface.
 - [x] Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
 - [x] Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
+- [x] Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs for external tools; keep native HTTP on Bun `fetch`.
 - [x] Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
 - [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
 - [x] Before porting a file, inspect its internal Python imports and port missing internal dependency modules first; Bun-native replacements are fine only for platform/runtime dependencies and must be commented.
@@ -46,14 +47,19 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.ts`
 - [x] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`
+- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; full utility surface still pending.
+- [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; full traversal API still pending.
+- [ ] `yt_dlp/postprocessor/index.ts` exports migrated postprocessor surfaces.
+- [ ] `yt_dlp/postprocessor/common.ts` base postprocessor subset present.
+- [ ] `yt_dlp/postprocessor/ffmpeg.ts` ffmpeg executable/command subset present; full postprocessor matrix still pending.
 - [x] `yt_dlp/downloader/index.ts`
 - [x] `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/http.ts`
-- [ ] `yt_dlp/downloader/fragment.ts` sequential fragments, retry, append resume, and .ytdl state present; concurrent workers still pending.
-- [ ] `yt_dlp/downloader/dash.ts` fragment list, test limiting, and segment query params present; live/generator/merged cases still pending.
-- [ ] `yt_dlp/downloader/hls.ts` plain, AES-128, byte-range, and nonzero media-sequence playlists present; live-refresh HLS still pending.
-- [ ] `yt_dlp/downloader/external.ts` Bun.spawn ffmpeg path, multi-input mapping, RTMP args, test limit, and shared ffmpeg args present; non-ffmpeg external downloader matrix still pending.
-- [ ] `yt_dlp/downloader/f4m.ts` on-demand F4M/HDS support present; live bootstrap refresh still pending.
+- [ ] `yt_dlp/downloader/fragment.ts` fragment retry, ordered concurrent workers, append resume, and .ytdl state present; legacy private context helper surface still pending.
+- [ ] `yt_dlp/downloader/dash.ts` fragment list, test limiting, segment query params, multi-format per-file outputs, and re-extract signaling present; live DASH still pending.
+- [ ] `yt_dlp/downloader/hls.ts` plain, AES-128, byte-range, init-map, discontinuity format selection, external AES, and nonzero media-sequence playlists present; live-refresh and WebVTT packing still pending.
+- [ ] `yt_dlp/downloader/external.ts` Bun Shell external command execution, ffmpeg path, multi-input mapping, RTMP args, test limit, shared ffmpeg args, and curl/axel/wget/aria2c/httpie command builders present; full parity audit still pending.
+- [x] `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.ts`
 - [x] `yt_dlp/downloader/ism.ts`
 - [x] `yt_dlp/downloader/mhtml.ts`
@@ -114,7 +120,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
 - [ ] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
 - [ ] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts`
-- [ ] `yt_dlp/downloader/f4m.py` -> `yt_dlp/downloader/f4m.ts`
+- [x] `yt_dlp/downloader/f4m.py` -> `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.py` -> `yt_dlp/downloader/fc2.ts`
 - [ ] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
 - [ ] `yt_dlp/downloader/hls.py` -> `yt_dlp/downloader/hls.ts`
@@ -1195,11 +1201,11 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
 - [x] `yt_dlp/options.py` -> `yt_dlp/options.ts`
 - [x] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
-- [ ] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts`
-- [ ] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts`
+- [ ] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts` (subset started)
+- [ ] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts` (subset started)
 - [ ] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts`
 - [ ] `yt_dlp/postprocessor/exec.py` -> `yt_dlp/postprocessor/exec.ts`
-- [ ] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts`
+- [ ] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts` (ffmpeg executable/command subset started)
 - [ ] `yt_dlp/postprocessor/metadataparser.py` -> `yt_dlp/postprocessor/metadataparser.ts`
 - [ ] `yt_dlp/postprocessor/modify_chapters.py` -> `yt_dlp/postprocessor/modify-chapters.ts`
 - [ ] `yt_dlp/postprocessor/movefilesafterdownload.py` -> `yt_dlp/postprocessor/movefilesafterdownload.ts`
@@ -1211,11 +1217,11 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
-- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts`
+- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started)
 - [ ] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
 - [ ] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
 - [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.py` -> `yt_dlp/utils/progress.ts`
-- [ ] `yt_dlp/utils/traversal.py` -> `yt_dlp/utils/traversal.ts`
+- [ ] `yt_dlp/utils/traversal.py` -> `yt_dlp/utils/traversal.ts` (dependency subset started)
 - [x] `yt_dlp/version.py` -> `yt_dlp/version.ts`
 - [x] `yt_dlp/webvtt.py` -> `yt_dlp/webvtt.ts`

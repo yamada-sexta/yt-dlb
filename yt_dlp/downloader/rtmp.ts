@@ -1,5 +1,7 @@
 // Source: yt_dlp/downloader/rtmp.py
-// Port note: subprocess handling is implemented with Bun.spawn.
+// Port note: external rtmpdump execution is implemented with Bun Shell.
+
+import { $ } from "bun";
 
 import { FileDownloader, type DownloadInfo } from "./common.ts";
 
@@ -17,11 +19,7 @@ export class RtmpFD extends FileDownloader {
     const args = this.makeArgs(tmpfilename, info);
     this.writeDebug(`rtmpdump command: ${[exe, ...args].join(" ")}`);
     const started = performance.now() / 1000;
-    const proc = Bun.spawn([exe, ...args], { stdout: "pipe", stderr: "pipe" });
-    const [stderr, exitCode] = await Promise.all([
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
+    const { stderr, exitCode } = await runShellCommand([exe, ...args]);
     if (this.params.verbose && stderr) {
       this.toScreen(`[rtmpdump] ${stderr.trim()}`);
     }
@@ -79,4 +77,12 @@ function appendArg(args: string[], flag: string, value: unknown): void {
   if (typeof value === "string" && value) {
     args.push(flag, value);
   }
+}
+
+async function runShellCommand(cmd: readonly string[]): Promise<{ stderr: string; exitCode: number }> {
+  const output = await $`${[...cmd]}`.nothrow().quiet();
+  return {
+    stderr: output.stderr.toString(),
+    exitCode: output.exitCode,
+  };
 }

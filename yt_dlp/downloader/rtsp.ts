@@ -1,5 +1,7 @@
 // Source: yt_dlp/downloader/rtsp.py
-// Port note: mplayer/mpv/ffmpeg subprocess execution is implemented with Bun.spawn.
+// Port note: mplayer/mpv/ffmpeg execution is implemented with Bun Shell.
+
+import { $ } from "bun";
 
 import { FileDownloader, type DownloadInfo } from "./common.ts";
 
@@ -12,11 +14,7 @@ export class RtspFD extends FileDownloader {
     }
     this.writeDebug(`RTSP command: ${command.join(" ")}`);
     const started = performance.now() / 1000;
-    const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-    const [stderr, exitCode] = await Promise.all([
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
+    const { stderr, exitCode } = await runShellCommand(command);
     if (exitCode !== 0) {
       throw new Error(`${command[0]} exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}`);
     }
@@ -47,4 +45,12 @@ export class RtspFD extends FileDownloader {
     }
     return null;
   }
+}
+
+async function runShellCommand(cmd: readonly string[]): Promise<{ stderr: string; exitCode: number }> {
+  const output = await $`${[...cmd]}`.nothrow().quiet();
+  return {
+    stderr: output.stderr.toString(),
+    exitCode: output.exitCode,
+  };
 }
