@@ -4,6 +4,11 @@
 
 This is not currently a drop-in replacement for yt-dlp. The migration is being done layer by layer, with unfinished features throwing explicit `NotImplementedError`-style failures instead of silently falling back to Python or pretending to work.
 
+YTDLB aims to be a more developer friendly version of YTDLP. Consider the fact that YTDLP is hard dependent on a JS runtime. A full JavaScript/TypeScript version is going to provide better DX/UX. But unfortunately I am unable to contribute to the upstream :( 
+
+<img width="525" height="169" alt="image" src="https://github.com/user-attachments/assets/a6ca526d-4bce-4a8a-9912-c172f209ea0a" />
+
+
 ## What Works Now
 
 - Bun CLI entrypoint: `bun run ./ytdlb.ts ...`
