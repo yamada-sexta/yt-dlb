@@ -6,6 +6,7 @@ import { basename } from "node:path";
 
 import { Cache } from "./cache.ts";
 import { loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
+import { extractYoutubeVideo, isYoutubeWatchUrl } from "./extractor/youtube/video.ts";
 
 export interface YoutubeDLOptions {
   outtmpl?: string | Record<string, string>;
@@ -116,6 +117,11 @@ export class YoutubeDL {
   }
 
   async extractInfo(url: string): Promise<DirectInfo> {
+    if (isYoutubeWatchUrl(url)) {
+      // Logic change: direct URL fallback downloaded the YouTube HTML page. Dispatch watch URLs to
+      // a Bun-native extractor so the selected media URL is downloaded instead.
+      return await extractYoutubeVideo(url, this);
+    }
     const parsed = new URL(url);
     const title = decodeURIComponent(basename(parsed.pathname) || parsed.hostname);
     const ext = extensionFromPath(parsed.pathname) || "bin";

@@ -4,14 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yt-dlp"
-authors = [
-    {name = "pukkandan", email = "pukkandan.ytdlp@gmail.com"},
-]
+authors = [{ name = "pukkandan", email = "pukkandan.ytdlp@gmail.com" }]
 maintainers = [
-    {email = "maintainers@yt-dlp.org"},
-    {name = "Grub4K", email = "contact@grub4k.dev"},
-    {name = "bashonly", email = "bashonly@protonmail.com"},
-    {name = "coletdjnz", email = "coletdjnz@protonmail.com"},
+    { email = "maintainers@yt-dlp.org" },
+    { name = "Grub4K", email = "contact@grub4k.dev" },
+    { name = "bashonly", email = "bashonly@protonmail.com" },
+    { name = "coletdjnz", email = "coletdjnz@protonmail.com" },
 ]
 description = "A feature-rich command-line audio/video downloader"
 readme = "README.md"
@@ -43,9 +41,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
-dependencies = [
-    "yt-dlp-ejs>=0.8.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 default = [
@@ -62,12 +58,8 @@ default = [
 curl-cffi = [
     "curl-cffi>=0.5.10,!=0.6.*,!=0.7.*,!=0.8.*,!=0.9.*,<0.16 ; implementation_name == 'cpython'",
 ]
-secretstorage = [
-    "secretstorage",
-]
-deno = [
-    "deno>=2.6.6",
-]
+secretstorage = ["secretstorage"]
+deno = ["deno>=2.6.6"]
 pin = [
     "brotli==1.2.0 ; implementation_name == 'cpython' and sys_platform != 'ios'",
     "brotlicffi==1.2.0.1 ; implementation_name != 'cpython'",
@@ -99,43 +91,22 @@ pin-secretstorage = [
     "secretstorage==3.5.0",
     "typing-extensions==4.15.0 ; python_full_version < '3.11'",
 ]
-pin-deno = [
-    "deno==2.7.14",
-]
+pin-deno = ["deno==2.7.14"]
 
 [dependency-groups]
-build = [
-    "build",
-    "hatchling>=1.27.0",
-]
-static-analysis = [
-    "autopep8~=2.0",
-    "ruff~=0.15.0",
-]
-test = [
-    "pytest~=9.0",
-    "pytest-rerunfailures~=16.0",
-]
+build = ["build", "hatchling>=1.27.0"]
+static-analysis = ["autopep8~=2.0", "ruff~=0.15.0"]
+test = ["pytest~=9.0", "pytest-rerunfailures~=16.0"]
 dev = [
     "pre-commit",
-    {include-group = "static-analysis"},
-    {include-group = "test"},
+    { include-group = "static-analysis" },
+    { include-group = "test" },
 ]
-pyinstaller = [
-    "pyinstaller>=6.17.0",
-]
-delocate = [
-    "delocate>=0.13.0 ; sys_platform == 'darwin'",
-]
-pyflakes = [
-    "pyflakes~=3.4.0",
-]
-pip = [
-    "pip",
-]
-uv = [
-    "uv>=0.10",
-]
+pyinstaller = ["pyinstaller>=6.17.0"]
+delocate = ["delocate>=0.13.0 ; sys_platform == 'darwin'"]
+pyflakes = ["pyflakes~=3.4.0"]
+pip = ["pip"]
+uv = ["uv>=0.10"]
 
 [project.urls]
 Documentation = "https://github.com/yt-dlp/yt-dlp#readme"
@@ -154,29 +125,25 @@ include = [
     "/yt_dlp",
     "/devscripts",
     "/test",
-    "/.gitignore",  # included by default, needed for auto-excludes
+    "/.gitignore",        # included by default, needed for auto-excludes
     "/Changelog.md",
-    "/LICENSE",  # included as license
-    "/pyproject.toml",  # included by default
-    "/README.md",  # included as readme
+    "/LICENSE",           # included as license
+    "/pyproject.toml",    # included by default
+    "/README.md",         # included as readme
     "/supportedsites.md",
 ]
 artifacts = [
     "/yt_dlp/extractor/lazy_extractors.py",
     "/completions",
-    "/AUTHORS",  # included by default
+    "/AUTHORS",                             # included by default
     "/README.txt",
     "/yt-dlp.1",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["yt_dlp"]
-artifacts = [
-    "/yt_dlp/extractor/lazy_extractors.py",
-]
-exclude = [
-    "/yt_dlp/**/*.md",
-]
+artifacts = ["/yt_dlp/extractor/lazy_extractors.py"]
+exclude = ["/yt_dlp/**/*.md"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "completions/bash/yt-dlp" = "share/bash-completion/completions/yt-dlp"
@@ -190,13 +157,8 @@ path = "yt_dlp/version.py"
 pattern = "_pkg_version = '(?P<version>[^']+)'"
 
 [tool.hatch.envs.default]
-features = [
-    "curl-cffi",
-    "default",
-]
-dependencies = [
-    "pre-commit",
-]
+features = ["curl-cffi", "default"]
+dependencies = ["pre-commit"]
 path = ".venv"
 installer = "uv"
 
@@ -205,16 +167,12 @@ setup = "pre-commit install --config .pre-commit-hatch.yaml"
 yt-dlp = "python -Werror -Xdev -m yt_dlp {args}"
 
 [tool.hatch.envs.hatch-uv]
-dependencies = [
-    "uv>=0.10",
-]
+dependencies = ["uv>=0.10"]
 
 [tool.hatch.envs.hatch-static-analysis]
 detached = true
-dependency-groups = [
-    "static-analysis",
-]
-dependencies = []  # override hatch ruff version
+dependency-groups = ["static-analysis"]
+dependencies = []                       # override hatch ruff version
 config-path = "pyproject.toml"
 
 [tool.hatch.envs.hatch-static-analysis.scripts]
@@ -224,31 +182,16 @@ lint-check = "ruff check {args:.}"
 lint-fix = "ruff check --fix {args:.}"
 
 [tool.hatch.envs.hatch-test]
-features = [
-    "curl-cffi",
-    "default",
-]
-dependency-groups = [
-    "test",
-]
-dependencies = [
-    "pytest-randomly~=3.15",
-    "pytest-xdist[psutil]~=3.5",
-]
+features = ["curl-cffi", "default"]
+dependency-groups = ["test"]
+dependencies = ["pytest-randomly~=3.15", "pytest-xdist[psutil]~=3.5"]
 
 [tool.hatch.envs.hatch-test.scripts]
 run = "python -m devscripts.run_tests {args}"
 run-cov = "echo Code coverage not implemented && exit 1"
 
 [[tool.hatch.envs.hatch-test.matrix]]
-python = [
-    "3.10",
-    "3.11",
-    "3.12",
-    "3.13",
-    "3.14",
-    "pypy3.11",
-]
+python = ["3.10", "3.11", "3.12", "3.13", "3.14", "pypy3.11"]
 
 [tool.uv]
 exclude-newer = "7 days"
@@ -333,7 +276,7 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "devscripts/lazy_load_template.py" = [
-    "F401",   # unused-import
+    "F401", # unused-import
 ]
 "!yt_dlp/extractor/**.py" = [
     "I",      # isort
@@ -344,11 +287,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = [
-    "bundle",
-    "devscripts",
-    "test",
-]
+known-first-party = ["bundle", "devscripts", "test"]
 relative-imports-order = "closest-to-furthest"
 
 [tool.ruff.lint.flake8-quotes]
@@ -358,9 +297,7 @@ inline-quotes = "single"
 avoid-escape = false
 
 [tool.ruff.lint.pep8-naming]
-classmethod-decorators = [
-    "yt_dlp.utils.classproperty",
-]
+classmethod-decorators = ["yt_dlp.utils.classproperty"]
 
 [tool.ruff.lint.flake8-import-conventions]
 banned-from = [
@@ -471,12 +408,10 @@ exclude = "*/extractor/lazy_extractors.py,*venv*,*/test/testdata/sigs/player-*.j
 
 [tool.pytest]
 addopts = [
-    "-ra",  # summary: all except passed
+    "-ra",        # summary: all except passed
     "--tb=short",
 ]
 verbosity_test_cases = "1"
 strict_config = true
 strict_markers = true
-markers = [
-    "download",
-]
+markers = ["download"]
