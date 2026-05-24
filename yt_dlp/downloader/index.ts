@@ -2,7 +2,11 @@
 
 import { NotImplementedError } from "../errors.ts";
 import { BunnyCdnFD } from "./bunnycdn.ts";
-import { FileDownloader, type DownloadInfo, type DownloaderHost } from "./common.ts";
+import {
+  FileDownloader,
+  type DownloadInfo,
+  type DownloaderHost,
+} from "./common.ts";
 import { DashSegmentsFD } from "./dash.ts";
 import { FFmpegFD } from "./external.ts";
 import { F4mFD } from "./f4m.ts";
@@ -25,7 +29,10 @@ export { FragmentFD } from "./fragment.ts";
 export { HlsFD } from "./hls.ts";
 export { HttpFD } from "./http.ts";
 
-export type DownloaderConstructor = new (ydl: DownloaderHost, params?: Record<string, unknown>) => FileDownloader;
+export type DownloaderConstructor = new (
+  ydl: DownloaderHost,
+  params?: Record<string, unknown>,
+) => FileDownloader;
 
 export const PROTOCOL_MAP: Record<string, DownloaderConstructor> = {
   http: HttpFD,
@@ -59,10 +66,16 @@ export function getSuitableDownloader(
   defaultDownloader: DownloaderConstructor = HttpFD,
   protocol?: string,
 ): DownloaderConstructor {
-  const protocols = (protocol ?? info.protocol ?? determineProtocol(info)).split("+");
+  const protocols = (
+    protocol ??
+    info.protocol ??
+    determineProtocol(info)
+  ).split("+");
   if (protocols.length > 1) {
     // Logic change: merged multi-protocol downloads require FFmpeg/postprocessor layers that are not migrated yet.
-    throw new NotImplementedError(`merged downloader for protocols ${protocols.join("+")}`);
+    throw new NotImplementedError(
+      `merged downloader for protocols ${protocols.join("+")}`,
+    );
   }
   return PROTOCOL_MAP[protocols[0] ?? ""] ?? defaultDownloader;
 }

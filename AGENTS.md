@@ -4,6 +4,8 @@ This repo is a yt-dlp fork being migrated to a Bun/TypeScript runtime named `ytd
 
 Follow [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the full source-to-target inventory. Migrate layer by layer: finish all direct `yt_dlp/*.py` files before moving into subdirectories, then proceed one directory layer at a time. Do not mark a TODO item complete until the file is fully ported, has a source header, and `tsc --noEmit` passes.
 
+Before porting a file, inspect its internal Python imports and port missing internal dependency modules first. Bun-native replacements are acceptable for platform/runtime dependencies, but do not inline or bypass repo modules just to finish a dependent file; leave the dependent file unchecked until its prerequisites exist.
+
 TS filenames should use kebab-case, `index.ts` for `__init__.py`, and `internal-*.ts` for private Python modules that would collide with public module names. Never leave placeholder facades marked complete; if a file depends on an unfinished layer, leave it unchecked.
 
 Unimplemented migrated features must fail loudly with `NotImplementedError` or an equally explicit error. Do not leave live exported functions, classes, or constants as blank no-ops, empty arrays, nullable stand-ins, or silent placeholder behavior.

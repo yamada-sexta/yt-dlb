@@ -3,6 +3,7 @@
 
 import { NotImplementedError } from "../errors.ts";
 import { aesCbcDecryptBytes, unpadPkcs7 } from "../aes.ts";
+import { HTTPHeaderDict } from "../utils/networking.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
 
@@ -76,10 +77,7 @@ export class HlsFD extends FragmentFD {
         fragments.push({
           frag_index: fragments.length + 1,
           url: new URL(line, manifestUrl).toString(),
-          http_headers: byteRange ? {
-            ...info.http_headers,
-            Range: `bytes=${byteRange.offset}-${byteRange.offset + byteRange.length - 1}`,
-          } : undefined,
+          http_headers: byteRange ? rangeHeaders(info.http_headers, byteRange) : undefined,
           transformData,
         });
       }
@@ -116,6 +114,12 @@ export class HlsFD extends FragmentFD {
       iv: attributes.IV ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0")) : undefined,
     };
   }
+}
+
+function rangeHeaders(headers: Record<string, string> | undefined, byteRange: { length: number; offset: number }): Record<string, string> {
+  const out = new HTTPHeaderDict(headers);
+  out.set("Range", `bytes=${byteRange.offset}-${byteRange.offset + byteRange.length - 1}`);
+  return out.sensitive();
 }
 
 function parseByteRange(value: string, nextOffset: number): { length: number; offset: number } {

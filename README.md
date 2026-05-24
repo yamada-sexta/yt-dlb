@@ -4,10 +4,9 @@
 
 This is not currently a drop-in replacement for yt-dlp. The migration is being done layer by layer, with unfinished features throwing explicit `NotImplementedError`-style failures instead of silently falling back to Python or pretending to work.
 
-YTDLB aims to be a more developer friendly version of YTDLP. Consider the fact that YTDLP is hard dependent on a JS runtime. A full JavaScript/TypeScript version is going to provide better DX/UX. But unfortunately I am unable to contribute to the upstream :( 
+YTDLB aims to be a more developer friendly version of YTDLP. Consider the fact that YTDLP is hard dependent on a JS runtime. A full JavaScript/TypeScript version is going to provide better DX/UX. But unfortunately I am unable to contribute to the upstream :(
 
 <img width="525" height="169" alt="image" src="https://github.com/user-attachments/assets/a6ca526d-4bce-4a8a-9912-c172f209ea0a" />
-
 
 ## What Works Now
 
@@ -77,15 +76,6 @@ Typecheck the rewrite:
 - `yt_dlp/**/*.py`: original yt-dlp Python source, retained for reference and not modified during the migration.
 - `YTDLB_MIGRATION_TODO.md`: source-to-target migration checklist.
 - `AGENTS.md`: short rules for agents working in this repository.
-
-## Migration Rules
-
-- Do not edit original Python files unless explicitly asked.
-- Add TypeScript files beside their Python sources.
-- Each TypeScript file must start with a source header naming the Python source or explaining that it is new.
-- Prefer Bun-native APIs such as `Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, and Bun-compatible crypto.
-- Use async for IO/network/runtime work, and keep pure transforms synchronous.
-- Unimplemented migrated features must throw explicit errors instead of returning blank placeholder values.
 
 ## Relationship To yt-dlp
 

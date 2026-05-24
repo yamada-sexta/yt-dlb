@@ -10,12 +10,14 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
 - [x] Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
 - [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
+- [x] Before porting a file, inspect its internal Python imports and port missing internal dependency modules first; Bun-native replacements are fine only for platform/runtime dependencies and must be commented.
 - [x] Use native `RegExp.escape()` for Python `re.escape` equivalents or dynamic literal regex construction.
 - [ ] Avoid broad `unknown` plumbing where a `zod` schema can validate external data.
 - [ ] Add focused Bun tests as each functional area becomes executable.
 - [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
 - [ ] Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
 - [x] Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
+- [ ] Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils`, `networking`, `postprocessor/ffmpeg`, and XML helpers are known prerequisites).
 
 ## Started Files
 
@@ -38,16 +40,22 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/compat/urllib/request.ts`
 - [x] `yt_dlp/dependencies/Cryptodome.ts`
 - [x] `yt_dlp/dependencies/index.ts`
+- [x] `yt_dlp/networking/index.ts`
+- [x] `yt_dlp/networking/exceptions.ts`
+- [x] `yt_dlp/utils/index.ts`
+- [x] `yt_dlp/utils/networking.ts`
+- [x] `yt_dlp/utils/progress.ts`
+- [x] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`
 - [x] `yt_dlp/downloader/index.ts`
 - [x] `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/http.ts`
-- [ ] `yt_dlp/downloader/fragment.ts` sequential fragments and append resume present; .ytdl state/concurrency still pending.
+- [ ] `yt_dlp/downloader/fragment.ts` sequential fragments, retry, append resume, and .ytdl state present; concurrent workers still pending.
 - [ ] `yt_dlp/downloader/dash.ts` fragment list, test limiting, and segment query params present; live/generator/merged cases still pending.
 - [ ] `yt_dlp/downloader/hls.ts` plain, AES-128, byte-range, and nonzero media-sequence playlists present; live-refresh HLS still pending.
-- [ ] `yt_dlp/downloader/external.ts` Bun.spawn ffmpeg path and shared ffmpeg args present; full external downloader matrix still pending.
-- [ ] `yt_dlp/downloader/f4m.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/external.ts` Bun.spawn ffmpeg path, multi-input mapping, RTMP args, test limit, and shared ffmpeg args present; non-ffmpeg external downloader matrix still pending.
+- [ ] `yt_dlp/downloader/f4m.ts` on-demand F4M/HDS support present; live bootstrap refresh still pending.
 - [x] `yt_dlp/downloader/fc2.ts`
-- [ ] `yt_dlp/downloader/ism.ts` explicit unsupported surface present.
+- [x] `yt_dlp/downloader/ism.ts`
 - [x] `yt_dlp/downloader/mhtml.ts`
 - [x] `yt_dlp/downloader/niconico.ts`
 - [x] `yt_dlp/downloader/rtmp.ts`
@@ -111,7 +119,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
 - [ ] `yt_dlp/downloader/hls.py` -> `yt_dlp/downloader/hls.ts`
 - [x] `yt_dlp/downloader/http.py` -> `yt_dlp/downloader/http.ts`
-- [ ] `yt_dlp/downloader/ism.py` -> `yt_dlp/downloader/ism.ts`
+- [x] `yt_dlp/downloader/ism.py` -> `yt_dlp/downloader/ism.ts`
 - [x] `yt_dlp/downloader/mhtml.py` -> `yt_dlp/downloader/mhtml.ts`
 - [x] `yt_dlp/downloader/niconico.py` -> `yt_dlp/downloader/niconico.ts`
 - [x] `yt_dlp/downloader/rtmp.py` -> `yt_dlp/downloader/rtmp.ts`
@@ -1175,14 +1183,14 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/globals.py` -> `yt_dlp/globals.ts`
 - [x] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
-- [ ] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
+- [x] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
 - [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
 - [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts`
 - [ ] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts`
 - [ ] `yt_dlp/networking/_urllib.py` -> `yt_dlp/networking/urllib.ts`
 - [ ] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts`
 - [ ] `yt_dlp/networking/common.py` -> `yt_dlp/networking/common.ts`
-- [ ] `yt_dlp/networking/exceptions.py` -> `yt_dlp/networking/exceptions.ts`
+- [x] `yt_dlp/networking/exceptions.py` -> `yt_dlp/networking/exceptions.ts`
 - [ ] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
 - [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
 - [x] `yt_dlp/options.py` -> `yt_dlp/options.ts`
@@ -1199,15 +1207,15 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/postprocessor/xattrpp.py` -> `yt_dlp/postprocessor/xattrpp.ts`
 - [x] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
 - [x] `yt_dlp/update.py` -> `yt_dlp/update.ts`
-- [ ] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts`
+- [x] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts`
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
 - [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts`
 - [ ] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
 - [ ] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
-- [ ] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
-- [ ] `yt_dlp/utils/progress.py` -> `yt_dlp/utils/progress.ts`
+- [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
+- [x] `yt_dlp/utils/progress.py` -> `yt_dlp/utils/progress.ts`
 - [ ] `yt_dlp/utils/traversal.py` -> `yt_dlp/utils/traversal.ts`
 - [x] `yt_dlp/version.py` -> `yt_dlp/version.ts`
 - [x] `yt_dlp/webvtt.py` -> `yt_dlp/webvtt.ts`
