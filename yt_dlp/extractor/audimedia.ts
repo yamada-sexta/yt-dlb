@@ -1,6 +1,7 @@
 // Source: yt_dlp/extractor/audimedia.py
 
 import { intOrNone, parseIso8601 } from "../utils/index.ts";
+import { NotImplementedError } from "../errors.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 interface AudiVideoVersion {
@@ -52,7 +53,7 @@ export class AudiMediaIE extends InfoExtractor {
       throw new Error("Unable to extract Audi MediaCenter video id");
     }
     if (stageMode === "s" || stageMode === "e") {
-      throw new Error("Audi MediaCenter live stream stages are not implemented");
+      throw new NotImplementedError("Audi MediaCenter live stream stages");
     }
 
     const response = await this.downloadJson<AudiVideoResponse>(

@@ -19,7 +19,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - Add focused Bun tests as each functional area becomes executable.
 - For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
 - Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
-- Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
+- Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, approximate compatibility results, or silent placeholders.
 - Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
 
 ## Started Files
@@ -253,7 +253,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/bunnycdn.py` -> `yt_dlp/extractor/bunnycdn.ts`
 - [ ] `yt_dlp/extractor/businessinsider.py` -> `yt_dlp/extractor/businessinsider.ts`
 - [ ] `yt_dlp/extractor/buzzfeed.py` -> `yt_dlp/extractor/buzzfeed.ts`
-- [ ] `yt_dlp/extractor/byutv.py` -> `yt_dlp/extractor/byutv.ts`
+- [x] `yt_dlp/extractor/byutv.py` -> `yt_dlp/extractor/byutv.ts`
 - [ ] `yt_dlp/extractor/c56.py` -> `yt_dlp/extractor/c56.ts`
 - [ ] `yt_dlp/extractor/caffeinetv.py` -> `yt_dlp/extractor/caffeinetv.ts`
 - [ ] `yt_dlp/extractor/callin.py` -> `yt_dlp/extractor/callin.ts`

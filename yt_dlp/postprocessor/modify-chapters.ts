@@ -4,6 +4,7 @@
 import { rename, stat } from "node:fs/promises";
 import { z } from "zod";
 
+import { NotImplementedError } from "../errors.ts";
 import { PostProcessingError, prependExtension } from "../utils/utils.ts";
 import { FFmpegPostProcessor, FFmpegSubtitlesConvertorPP } from "./ffmpeg.ts";
 import type { PostProcessorInfo } from "./common.ts";
@@ -411,12 +412,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
         if (typeof evaluated === "string") {
           return evaluated;
         }
+        throw new NotImplementedError("chapter title outtmpl evaluator returning non-string values");
       }
     }
-    // Logic note: full outtmpl formatting is not in this layer; support the SponsorBlock list/string fields used here.
-    return template
-      .replaceAll(/%\((\w+)\)l/g, (_match, key: string) => Array.isArray(chapter[key]) ? (chapter[key] as unknown[]).join(", ") : String(chapter[key] ?? ""))
-      .replaceAll(/%\((\w+)\)s/g, (_match, key: string) => String(chapter[key] ?? ""));
+    throw new NotImplementedError("chapter title outtmpl evaluation without downloader.evaluateOuttmpl");
   }
 }
 

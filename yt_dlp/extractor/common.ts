@@ -3,6 +3,7 @@
 
 import { compatEtreeFromstring, type XmlElement } from "../compat/index.ts";
 import type { DownloaderHost } from "../downloader/common.ts";
+import { NotImplementedError } from "../errors.ts";
 import { Request as YtdlRequest } from "../networking/common.ts";
 import {
   ExtractorError,
@@ -572,9 +573,33 @@ export abstract class InfoExtractor {
     ext = "mp4",
     options: { entryProtocol?: string; m3u8Id?: string; live?: boolean } = {},
   ): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
-    // Logic note: this compatibility wrapper preserves extractor flow while the Bun manifest
-    // parser only exposes media formats. Subtitle extraction will move here once needed.
-    return [this.extractM3u8Formats(m3u8Url, videoId, ext, options), {}];
+    void m3u8Url;
+    void videoId;
+    void ext;
+    void options;
+    throw new NotImplementedError("HLS manifest subtitle extraction");
+  }
+
+  protected extractMpdFormatsAndSubtitles(
+    mpdUrl: string,
+    videoId: string,
+    options: { mpdId?: string; fatal?: boolean } = {},
+  ): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
+    void mpdUrl;
+    void videoId;
+    void options;
+    throw new NotImplementedError("DASH manifest subtitle extraction");
+  }
+
+  protected mergeSubtitles(
+    source: Record<string, unknown[]> | null | undefined,
+    target: Record<string, unknown[]> = {},
+  ): Record<string, unknown[]> {
+    for (const [lang, entries] of Object.entries(source ?? {})) {
+      target[lang] ??= [];
+      target[lang].push(...entries);
+    }
+    return target;
   }
 
   protected extractF4mFormats(
@@ -591,14 +616,10 @@ export abstract class InfoExtractor {
   }
 
   protected extractSmilFormats(smilUrl: string, _videoId: string, options: { smilId?: string; fatal?: boolean } = {}): Array<Record<string, unknown>> {
-    // Logic note: full SMIL media traversal is not yet ported; expose the manifest as an explicit
-    // format so callers do not silently lose the URL while the parser layer is expanded.
-    return [{
-      url: smilUrl,
-      protocol: "smil",
-      format_id: options.smilId ?? "smil",
-      manifest_url: smilUrl,
-    }];
+    void smilUrl;
+    void _videoId;
+    void options;
+    throw new NotImplementedError("SMIL manifest format extraction");
   }
 
   protected extractMpdFormats(mpdUrl: string, _videoId: string, options: { mpdId?: string; fatal?: boolean } = {}): Array<Record<string, unknown>> {

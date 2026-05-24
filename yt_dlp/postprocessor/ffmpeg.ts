@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
 import { getDurationFromMetadata } from "../dependencies/mediabunny.ts";
+import { NotImplementedError } from "../errors.ts";
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
 import {
   detectExeVersion,
@@ -374,7 +375,7 @@ export class FFmpegPostProcessor extends PostProcessor {
   }
 
   override async run(_information: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
-    throw new PostProcessingError("FFmpegPostProcessor base run is not implemented directly");
+    throw new NotImplementedError("FFmpegPostProcessor base run");
   }
 
   private determineExecutables(): Record<"ffmpeg" | "ffprobe", string | null> {
@@ -658,8 +659,7 @@ export class FFmpegEmbedSubtitlePP extends FFmpegPostProcessor {
       const lang = subLangs[index] ?? "";
       const name = subNames[index];
       opts.push("-map", `${index + 1}:0`);
-      // Logic note: ISO639Utils is not ported yet; ffmpeg accepts common short language codes directly.
-      opts.push(`-metadata:s:s:${index}`, `language=${lang}`);
+      opts.push(`-metadata:s:s:${index}`, `language=${normalizeFfmpegLanguage(lang)}`);
       if (name) {
         opts.push(`-metadata:s:s:${index}`, `handler_name=${name}`, `-metadata:s:s:${index}`, `title=${name}`);
       }
@@ -818,8 +818,7 @@ export class FFmpegMetadataPP extends FFmpegPostProcessor {
       for (let index = streamIndex; index < streamIndex + streamCount; index += 1) {
         metadata[String(index)] ??= {};
         if (language) {
-          // Logic note: ISO639Utils is not ported yet; keep extractor language tags unchanged.
-          metadata[String(index)]!.language ??= language;
+          metadata[String(index)]!.language ??= normalizeFfmpegLanguage(language);
         }
         for (const [name, value] of Object.entries(metadata[String(index)]!)) {
           opts.push(`-metadata:s:${index}`, `${name}=${value}`);
@@ -836,12 +835,7 @@ export class FFmpegMetadataPP extends FFmpegPostProcessor {
       if (this.addInfoJson !== true) {
         return { options: [] };
       }
-      // Logic note: Python uses YoutubeDL.sanitize_info and template preparation. Those helpers
-      // are outside this layer, so ytdlb writes a JSON-safe projection beside the media file.
-      infoFilename = replaceExtension(requireStringInfo(info, "filepath", this.ppKey()), "info.json");
-      await Bun.write(infoFilename, `${JSON.stringify(jsonSafeInfo(info), null, 2)}\n`);
-      info.infojson_filename = infoFilename;
-      fileToDelete = infoFilename;
+      throw new NotImplementedError("infojson embedding without a prepared infojson file");
     }
     const [oldStream, newStreamInitial] = await this.getStreamNumber(requireStringInfo(info, "filepath", this.ppKey()), ["tags", "mimetype"], "application/json");
     let newStream = newStreamInitial;
@@ -1386,27 +1380,15 @@ function metadataValue(value: unknown): string | null {
   return values.map((item) => String(item)).join(", ").replaceAll("\0", "");
 }
 
-function jsonSafeInfo(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => jsonSafeInfo(item, seen));
-  }
-  if (isRecord(value)) {
-    if (seen.has(value)) {
-      return "[Circular]";
-    }
-    seen.add(value);
-    return Object.fromEntries(Object.entries(value)
-      .filter(([, item]) => typeof item !== "function" && typeof item !== "symbol" && item !== undefined)
-      .map(([key, item]) => [key, jsonSafeInfo(item, seen)]));
-  }
-  return String(value);
-}
-
 function ffmpegMetadataEscape(value: string): string {
   return value.replaceAll(/([\\=;#\n])/g, "\\$1");
+}
+
+function normalizeFfmpegLanguage(language: string): string {
+  if (/^[a-z]{2,3}$/i.test(language) || language === "und") {
+    return language;
+  }
+  throw new NotImplementedError(`ISO639 language normalization for ${language}`);
 }
 
 function requireAudioCodec(codec: string): readonly [string, string | null, readonly string[]] {

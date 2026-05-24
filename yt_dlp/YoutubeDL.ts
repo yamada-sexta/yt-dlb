@@ -7,6 +7,7 @@ import { basename } from "node:path";
 import { Cache } from "./cache.ts";
 import { extractCookiesFromBrowserForUrl, loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
 import { getSuitableDownloader } from "./downloader/index.ts";
+import { NotImplementedError } from "./errors.ts";
 import { extractYoutubeVideo, isYoutubeWatchUrl } from "./extractor/youtube/video.ts";
 
 export interface YoutubeDLOptions {
@@ -148,6 +149,10 @@ export class YoutubeDL {
       .replaceAll("%(ext)s", sanitizeFilename(info.ext));
   }
 
+  evaluateOuttmpl(template: string, info: Record<string, unknown>): string {
+    return renderSimpleOuttmpl(template, info, false);
+  }
+
   async download(urls: readonly string[]): Promise<number> {
     await this.init();
     for (const url of urls) {
@@ -232,4 +237,23 @@ function createId(url: string): string {
 
 function sanitizeFilename(value: string): string {
   return value.replaceAll(/[\\/:*?"<>|]/g, "_").trim() || "_";
+}
+
+function renderSimpleOuttmpl(template: string, info: Record<string, unknown>, sanitize: boolean): string {
+  const tokenPattern = /%\((?<key>[^)]+)\)(?<type>[sl])/g;
+  const rendered = template.replaceAll(tokenPattern, (_match, key: string, type: string) => {
+    if (!/^\w+$/.test(key)) {
+      throw new NotImplementedError(`outtmpl field expression ${key}`);
+    }
+    const rawValue = info[key];
+    const value = type === "l" && Array.isArray(rawValue)
+      ? rawValue.map((item) => String(item)).join(", ")
+      : String(rawValue ?? "");
+    return sanitize ? sanitizeFilename(value) : value;
+  });
+  const unsupported = /%/.exec(template.replaceAll("%%", "").replaceAll(tokenPattern, ""));
+  if (unsupported) {
+    throw new NotImplementedError(`outtmpl syntax near ${unsupported[0]}`);
+  }
+  return rendered.replaceAll("%%", "%");
 }

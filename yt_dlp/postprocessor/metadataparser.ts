@@ -1,7 +1,7 @@
 // Source: yt_dlp/postprocessor/metadataparser.py
-// Port note: Python template parsing is delegated to downloader.evaluateOuttmpl when present;
-// otherwise ytdlb supports the simple %(field)s forms used by metadata parser actions.
+// Port note: Python template parsing is delegated to downloader.evaluateOuttmpl.
 
+import { NotImplementedError } from "../errors.ts";
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
 import { z } from "zod";
 
@@ -125,10 +125,10 @@ export class MetadataParserPP extends PostProcessor {
         if (typeof evaluated === "string") {
           return evaluated;
         }
+        throw new NotImplementedError("metadata outtmpl evaluator returning non-string values");
       }
     }
-    // Logic note: full YoutubeDL outtmpl validation is not ported; this preserves simple metadata field interpolation.
-    return template.replaceAll(/%\((\w+)\)s/g, (_match, key: string) => String(info[key] ?? ""));
+    throw new NotImplementedError("metadata outtmpl evaluation without downloader.evaluateOuttmpl");
   }
 }
 

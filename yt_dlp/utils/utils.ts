@@ -4,6 +4,8 @@
 import { spawnSync } from "node:child_process";
 import { basename, extname } from "node:path";
 
+import { NotImplementedError } from "../errors.ts";
+
 export const NO_DEFAULT = Symbol("NO_DEFAULT");
 export const IDENTITY = <T>(value: T): T => value;
 
@@ -376,8 +378,7 @@ export function unifiedTimestamp(dateStr: unknown, _dayFirst = true, tzOffset = 
   if (typeof dateStr !== "string") {
     return null;
   }
-  // Logic note: Bun uses the platform Date parser here; yt-dlp's broad strptime table will be
-  // filled in when more extractors require the long-tail date formats.
+  // Logic note: Bun uses the platform Date parser after normalizing common feed date text.
   const normalized = dateStr
     .replaceAll(/[,|]/g, " ")
     .replaceAll(/\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi, " ")
@@ -702,8 +703,6 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
       }
       endTime = beginTime + duration;
     }
-    // Logic note: Python preserves a subset of TTML styling. This utility keeps line breaks/text
-    // and strips style tags because the Bun XML shim does not preserve mixed element tails yet.
     const text = ttmlTextToSrt(paragraph.groups?.body ?? "");
     output.push(`${index + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`);
   }
@@ -713,6 +712,9 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
 export const dfxp2srt_ = dfxp2srt;
 
 function ttmlTextToSrt(body: string): string {
+  if (/<(?!\/?(?:[\w-]+:)?br\b)[^>]+>/i.test(body)) {
+    throw new NotImplementedError("TTML subtitle styling conversion");
+  }
   return xmlUnescapeSubset(body
     .replaceAll(/<(?:(?:[\w-]+:)?br)\s*\/?>/g, "\n")
     .replaceAll(/<[^>]+>/g, ""))
