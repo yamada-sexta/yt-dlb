@@ -9,9 +9,12 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
 - [x] Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
 - [x] Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
+- [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
+- [x] Use native `RegExp.escape()` for Python `re.escape` equivalents or dynamic literal regex construction.
 - [ ] Avoid broad `unknown` plumbing where a `zod` schema can validate external data.
 - [ ] Add focused Bun tests as each functional area becomes executable.
 - [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
+- [ ] Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
 
 ## Started Files
 
@@ -1133,7 +1136,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/zoom.py` -> `yt_dlp/extractor/zoom.ts`
 - [ ] `yt_dlp/extractor/zype.py` -> `yt_dlp/extractor/zype.ts`
 - [x] `yt_dlp/globals.py` -> `yt_dlp/globals.ts`
-- [ ] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
+- [x] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
 - [ ] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
 - [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
@@ -1146,7 +1149,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
 - [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
 - [ ] `yt_dlp/options.py` -> `yt_dlp/options.ts`
-- [ ] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
+- [x] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
 - [ ] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts`
 - [ ] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts`
 - [ ] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts`
@@ -1157,8 +1160,8 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/postprocessor/movefilesafterdownload.py` -> `yt_dlp/postprocessor/movefilesafterdownload.ts`
 - [ ] `yt_dlp/postprocessor/sponsorblock.py` -> `yt_dlp/postprocessor/sponsorblock.ts`
 - [ ] `yt_dlp/postprocessor/xattrpp.py` -> `yt_dlp/postprocessor/xattrpp.ts`
-- [ ] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
-- [ ] `yt_dlp/update.py` -> `yt_dlp/update.ts`
+- [x] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
+- [x] `yt_dlp/update.py` -> `yt_dlp/update.ts`
 - [ ] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts`
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
