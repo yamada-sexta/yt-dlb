@@ -6,6 +6,7 @@ import { basename } from "node:path";
 
 import { Cache } from "./cache.ts";
 import { loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
+import { getSuitableDownloader } from "./downloader/index.ts";
 import { extractYoutubeVideo, isYoutubeWatchUrl } from "./extractor/youtube/video.ts";
 
 export interface YoutubeDLOptions {
@@ -180,31 +181,14 @@ export class YoutubeDL {
   }
 
   private async downloadDirect(info: DirectInfo): Promise<void> {
-    this.toScreen(`[download] ${info.url}`);
-    const response = await this.urlopen(info.url);
-    await this.writeResponseToFile(info.filename, response);
-    this.toScreen(`[download] Destination: ${info.filename}`);
-  }
-
-  private async writeResponseToFile(filename: string, response: Response): Promise<void> {
-    if (!response.body) {
-      throw new DownloadError("Response has no body");
-    }
-    const sink = Bun.file(filename).writer();
-    let downloaded = 0;
-    const total = Number(response.headers.get("content-length") ?? 0);
-    try {
-      for await (const chunk of response.body) {
-        downloaded += chunk.byteLength;
-        sink.write(chunk);
-        if (this.params.verbose && total) {
-          this.writeDebug(`Downloaded ${downloaded}/${total} bytes (${Math.trunc(downloaded / total * 100)}%)`);
-        }
-      }
-      await sink.end();
-    } catch (error) {
-      sink.end();
-      throw error;
+    const Downloader = getSuitableDownloader({ ...info, protocol: new URL(info.url).protocol.replace(/:$/, "") });
+    const fd = new Downloader(this, this.params as Record<string, unknown>);
+    const ok = await fd.download(info.filename, {
+      ...info,
+      http_headers: this.params.http_headers,
+    });
+    if (ok) {
+      this.toScreen(`[download] Destination: ${info.filename}`);
     }
   }
 }

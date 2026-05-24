@@ -38,6 +38,24 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/compat/urllib/request.ts`
 - [x] `yt_dlp/dependencies/Cryptodome.ts`
 - [x] `yt_dlp/dependencies/index.ts`
+- [x] `yt_dlp/downloader/index.ts`
+- [x] `yt_dlp/downloader/common.ts`
+- [x] `yt_dlp/downloader/http.ts`
+- [ ] `yt_dlp/downloader/fragment.ts` sequential fragments and append resume present; .ytdl state/concurrency still pending.
+- [ ] `yt_dlp/downloader/dash.ts` basic fragment list support present; live/generator/merged cases still pending.
+- [ ] `yt_dlp/downloader/hls.ts` plain and AES-128 media playlists present; live/byte-range cases still pending.
+- [ ] `yt_dlp/downloader/external.ts` basic Bun.spawn ffmpeg path present; full external downloader matrix still pending.
+- [ ] `yt_dlp/downloader/f4m.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/fc2.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/ism.ts` explicit unsupported surface present.
+- [x] `yt_dlp/downloader/mhtml.ts`
+- [ ] `yt_dlp/downloader/niconico.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/rtmp.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/rtsp.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/soop.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/websocket.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/youtube-live-chat.ts` explicit unsupported surface present.
+- [ ] `yt_dlp/downloader/bunnycdn.ts` explicit unsupported surface present.
 - [x] `yt_dlp/aes.ts`
 - [x] `yt_dlp/cache.ts`
 - [x] `yt_dlp/utils/jsruntime.ts`
@@ -83,18 +101,18 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts`
 - [x] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts`
 - [x] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
-- [ ] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
+- [x] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
 - [ ] `yt_dlp/downloader/bunnycdn.py` -> `yt_dlp/downloader/bunnycdn.ts`
-- [ ] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
+- [x] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
 - [ ] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
 - [ ] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts`
 - [ ] `yt_dlp/downloader/f4m.py` -> `yt_dlp/downloader/f4m.ts`
 - [ ] `yt_dlp/downloader/fc2.py` -> `yt_dlp/downloader/fc2.ts`
 - [ ] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
 - [ ] `yt_dlp/downloader/hls.py` -> `yt_dlp/downloader/hls.ts`
-- [ ] `yt_dlp/downloader/http.py` -> `yt_dlp/downloader/http.ts`
+- [x] `yt_dlp/downloader/http.py` -> `yt_dlp/downloader/http.ts`
 - [ ] `yt_dlp/downloader/ism.py` -> `yt_dlp/downloader/ism.ts`
-- [ ] `yt_dlp/downloader/mhtml.py` -> `yt_dlp/downloader/mhtml.ts`
+- [x] `yt_dlp/downloader/mhtml.py` -> `yt_dlp/downloader/mhtml.ts`
 - [ ] `yt_dlp/downloader/niconico.py` -> `yt_dlp/downloader/niconico.ts`
 - [ ] `yt_dlp/downloader/rtmp.py` -> `yt_dlp/downloader/rtmp.ts`
 - [ ] `yt_dlp/downloader/rtsp.py` -> `yt_dlp/downloader/rtsp.ts`
