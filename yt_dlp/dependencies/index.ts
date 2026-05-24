@@ -3,7 +3,9 @@
 
 import { Database } from "bun:sqlite";
 
+import * as Brotli from "./brotli.ts";
 import * as Cryptodome from "./Cryptodome.ts";
+import * as Mediabunny from "./mediabunny.ts";
 
 export interface DependencyInfo {
   name: string;
@@ -16,9 +18,21 @@ function dependency(name: string, version: string | null, available = true, reas
   return { name, version, available, reason };
 }
 
-export const brotli = dependency("bun:zlib/brotli", process.versions.bun);
+export const brotli = {
+  ...dependency("brotli", null),
+  decompress: Brotli.decompress,
+  error: Brotli.error,
+  module: Brotli,
+};
 export const certifi = dependency("certifi", null, false, "Bun uses platform/Web TLS trust instead of Python certifi");
-export const mutagen = dependency("mutagen", null, false, "media metadata postprocessing is not implemented in ytdlb yet");
+export const mediabunny = {
+  ...dependency("mediabunny", null),
+  module: Mediabunny,
+};
+export const mutagen = {
+  ...dependency("mediabunny", null, true, "Mediabunny replaces Mutagen metadata reads/writes through container rewrites"),
+  module: Mediabunny,
+};
 export const secretstorage = dependency("secretstorage", null, false, "Bun rewrite does not use Python secretstorage");
 export const _SECRETSTORAGE_UNAVAILABLE_REASON = "Bun rewrite does not use Python secretstorage";
 export const sqlite3 = dependency("bun:sqlite", process.versions.bun);
@@ -34,6 +48,7 @@ export const Cryptodome_AES = Cryptodome.AES;
 export const all_dependencies = {
   brotli,
   certifi,
+  mediabunny,
   mutagen,
   secretstorage,
   sqlite3,

@@ -1,16 +1,18 @@
 // Source: yt_dlp/postprocessor/embedthumbnail.py
-// Port note: Python mutagen/AtomicParsley paths are replaced with ffmpeg paths where supported.
+// Port note: Python mutagen/AtomicParsley paths are replaced with Mediabunny/ffmpeg paths where supported.
 
-import { rename, stat } from "node:fs/promises";
+import { rename, stat, unlink } from "node:fs/promises";
 import { extname } from "node:path";
 import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
+import { rewriteMetadataTags, type AttachedImage } from "../dependencies/mediabunny.ts";
 import { PostProcessingError } from "../utils/utils.ts";
 import { FFmpegPostProcessor, FFmpegThumbnailsConvertorPP } from "./ffmpeg.ts";
 import type { PostProcessorInfo } from "./common.ts";
 
 const RecordSchema = z.record(z.string(), z.unknown());
+const MEDIABUNNY_THUMBNAIL_EXTS = new Set(["mp3", "m4a", "mp4", "m4v", "mov", "mkv", "mka", "webm", "weba", "flac", "ogg", "opus"]);
 
 export class EmbedThumbnailPPError extends PostProcessingError {}
 
@@ -55,7 +57,10 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
     }
 
     const mtime = (await stat(filename)).mtimeMs / 1000;
-    if (ext === "mp3") {
+    const embeddedWithMediabunny = await this.tryEmbedThumbnailWithMediabunny(filename, tempFilename, ext, thumbnailFilename);
+    if (embeddedWithMediabunny) {
+      // Logic change: Mediabunny is the Bun-native metadata writer and mirrors the role Python mutagen filled.
+    } else if (ext === "mp3") {
       this.reportRun("ffmpeg", filename);
       await this.runFfmpegMultipleFiles([filename, thumbnailFilename], tempFilename, [
         "-c", "copy",
@@ -127,6 +132,28 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
   private reportRun(exe: string, filename: string): void {
     this.toScreen(`${exe}: Adding thumbnail to "${filename}"`);
   }
+
+  private async tryEmbedThumbnailWithMediabunny(filename: string, tempFilename: string, ext: string, thumbnailFilename: string): Promise<boolean> {
+    if (!MEDIABUNNY_THUMBNAIL_EXTS.has(ext)) {
+      return false;
+    }
+    try {
+      const image = await attachedThumbnailImage(thumbnailFilename);
+      this.reportRun("mediabunny", filename);
+      await rewriteMetadataTags(filename, tempFilename, ext, (tags) => ({
+        ...tags,
+        images: [
+          image,
+          ...(tags.images ?? []).filter((existing) => existing.kind !== "coverFront"),
+        ],
+      }));
+      return true;
+    } catch (error) {
+      await unlink(tempFilename).catch(() => undefined);
+      this.reportWarning(`unable to embed using mediabunny; ${error instanceof Error ? error.message : String(error)}. Falling back to ffmpeg`);
+      return false;
+    }
+  }
 }
 
 function findLastThumbnailIndex(thumbnails: Array<Record<string, unknown>>): number {
@@ -174,6 +201,19 @@ async function metadataBlockPicture(thumbnailFilename: string, thumbnail: Record
     offset += chunk.length;
   }
   return Buffer.from(out).toString("base64");
+}
+
+async function attachedThumbnailImage(thumbnailFilename: string): Promise<AttachedImage> {
+  const data = await Bun.file(thumbnailFilename).bytes();
+  const imageType = await detectImageType(null, data.subarray(0, 12));
+  const mimeType = `image/${(imageType ?? extname(thumbnailFilename).slice(1).toLowerCase()).replace("jpg", "jpeg")}`;
+  return {
+    data,
+    mimeType,
+    kind: "coverFront",
+    name: `cover.${mimeType.split("/").at(-1) ?? "image"}`,
+    description: "Album cover",
+  };
 }
 
 function uint32be(value: number): Uint8Array {

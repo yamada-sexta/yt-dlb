@@ -16,6 +16,8 @@ For browser cookies, prefer `@steipete/sweet-cookie` for `--cookies-from-browser
 
 For YouTube JS challenges, prefer importing the installed `yt-dlp/ejs` package at runtime from Bun. Keep that import behind a typed dynamic boundary so this repo's strict `tsc` does not typecheck EJS internals.
 
+For Python dependency replacements, use the installed JS packages only where their API really matches. `brotli` is the Brotli decompression dependency. `mediabunny` plus `@mediabunny/server` is the Mutagen-side replacement for metadata reads and metadata/tag writes that can be expressed as a media container rewrite. `node-av` is a direct dependency for the native codec layer, but prefer accessing it through `@mediabunny/server` unless low-level frame interop is explicitly needed. Import through `yt_dlp/dependencies/mediabunny.ts` so the server codecs are registered once. Keep ffmpeg as the fallback for media rewrites Mediabunny cannot represent.
+
 Downloader ports should use Bun `fetch`, WebSocket, Bun Shell, and file APIs directly. Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs when interacting with external programs such as `ffmpeg`, `curl`, `aria2c`, `mpv`, or `mplayer`. Use `fetch` for native HTTP downloads; Bun Shell can execute a system `curl` from `PATH`, but `curl` is not one of Bun Shell's built-in commands. If a protocol still needs an unported muxer/extractor layer, keep an explicit throwing downloader instead of a fake success path.
 
 When a command is already represented as an argv array, pass that array to Bun Shell as an interpolated expression, for example `await $\`${cmd}\`.nothrow().quiet()`. This preserves Bun Shell's escaping and avoids rebuilding command lines by hand.

@@ -7,6 +7,7 @@ import { dirname, extname } from "node:path";
 import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
+import { getDurationFromMetadata } from "../dependencies/mediabunny.ts";
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
 import {
   detectExeVersion,
@@ -265,9 +266,23 @@ export class FFmpegPostProcessor extends PostProcessor {
       }
       return duration;
     } catch (error) {
+      const fallbackDuration = await this.getMusicMetadataDuration(filepath);
+      if (fallbackDuration !== null) {
+        return fallbackDuration;
+      }
       if (fatal) {
         throw new PostProcessingError(`Unable to determine video duration: ${error instanceof Error ? error.message : String(error)}`);
       }
+      return null;
+    }
+  }
+
+  private async getMusicMetadataDuration(filepath: string): Promise<number | null> {
+    try {
+      // Logic change: the Bun port can use Mediabunny as a lightweight fallback when ffprobe
+      // is unavailable or cannot parse an audio container. ffprobe remains the primary video probe.
+      return await getDurationFromMetadata(filepath);
+    } catch {
       return null;
     }
   }

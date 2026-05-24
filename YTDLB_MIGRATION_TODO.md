@@ -8,6 +8,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] Use `ytdlb` for the Bun rewrite entrypoint and exported package surface.
 - [x] Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
 - [x] Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
+- [x] Use JS package replacements where they are a real API match: `brotli` for Brotli decompression and `mediabunny` with `@mediabunny/server` for media metadata reads/writes through server-capable container rewrites.
 - [x] Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs for external tools; keep native HTTP on Bun `fetch`.
 - [x] Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
 - [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
@@ -43,6 +44,8 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/compat/urllib/request.ts`
 - [x] `yt_dlp/dependencies/Cryptodome.ts`
 - [x] `yt_dlp/dependencies/index.ts`
+- [x] `yt_dlp/dependencies/brotli.ts` JS Brotli adapter for the optional Python Brotli dependency.
+- [x] `yt_dlp/dependencies/mediabunny.ts` JS media metadata adapter for Mutagen-style read/write replacement paths.
 - [x] `yt_dlp/networking/index.ts`
 - [x] `yt_dlp/networking/exceptions.ts`
 - [x] `yt_dlp/utils/index.ts`

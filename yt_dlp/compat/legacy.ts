@@ -3,8 +3,10 @@
 
 import { Buffer } from "node:buffer";
 import { createConnection } from "node:net";
+import { brotli as compat_brotli } from "../dependencies/index.ts";
 import { compatExpanduser, compat_HTMLParseError } from "./index.ts";
 
+export { compat_brotli };
 export const compat_base64_b64decode = (value: string): Uint8Array => new Uint8Array(Buffer.from(value, "base64"));
 export const compat_basestring = String;
 export const compat_chr = String.fromCodePoint;
