@@ -489,6 +489,13 @@ export abstract class InfoExtractor {
     return this.genericId(url).replaceAll(/[_-]+/g, " ");
   }
 
+  protected protoRelativeUrl(url: string | null | undefined, scheme = "http:"): string | null {
+    if (!url) {
+      return null;
+    }
+    return url.startsWith("//") ? `${scheme}${url}` : url;
+  }
+
   protected ogSearchTitle(webpage: string): string | null {
     return this.ogSearchProperty("title", webpage, false);
   }

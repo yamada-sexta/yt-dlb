@@ -2,33 +2,33 @@
 
 Scope: migrate yt-dlp runtime code related to the ytdl download/extraction function into Bun-oriented TypeScript modules, colocated with the Python source files. Python files are left untouched. This inventory is generated from `rg --files yt_dlp -g '*.py'` and intentionally excludes `bundle/`, `devscripts/`, and `test/`.
 
-## Ground Rules
+## Migration Guide
 
-- [x] Create TypeScript files beside their Python sources.
-- [x] Use `ytdlb` for the Bun rewrite entrypoint and exported package surface.
-- [x] Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
-- [x] Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
-- [x] Use JS package replacements where they are a real API match: `brotli` for Brotli decompression and `mediabunny` with `@mediabunny/server` for media metadata reads/writes through server-capable container rewrites.
-- [x] Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs for external tools; keep native HTTP on Bun `fetch`.
-- [x] Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
-- [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
-- [x] Before porting a file, inspect its internal Python imports and port missing internal dependency modules first; Bun-native replacements are fine only for platform/runtime dependencies and must be commented.
-- [x] Use native `RegExp.escape()` for Python `re.escape` equivalents or dynamic literal regex construction.
-- [x] Refactor migrated runtime data type predicates to use `zod` schemas; reserve direct structural checks for non-data constructs such as constructors and async iterables.
-- [ ] Avoid broad `unknown` plumbing where a `zod` schema can validate external data.
-- [ ] Add focused Bun tests as each functional area becomes executable.
-- [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
-- [ ] Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
-- [x] Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
-- [ ] Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
+- Create TypeScript files beside their Python sources.
+- Use `ytdlb` for the Bun rewrite entrypoint and exported package surface.
+- Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
+- Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
+- Use JS package replacements where they are a real API match: `brotli` for Brotli decompression and `mediabunny` with `@mediabunny/server` for media metadata reads/writes through server-capable container rewrites.
+- Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs for external tools; keep native HTTP on Bun `fetch`.
+- Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.
+- Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
+- Before porting a file, inspect its internal Python imports and port missing internal dependency modules first; Bun-native replacements are fine only for platform/runtime dependencies and must be commented.
+- Use native `RegExp.escape()` for Python `re.escape` equivalents or dynamic literal regex construction.
+- Refactor migrated runtime data type predicates to use `zod` schemas; reserve direct structural checks for non-data constructs such as constructors and async iterables.
+- Avoid broad `unknown` plumbing where a `zod` schema can validate external data.
+- Add focused Bun tests as each functional area becomes executable.
+- For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
+- Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
+- Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
+- Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
 
 ## Started Files
 
 - [x] `index.ts`
 - [x] `ytdlb.ts`
 - [x] `README.md` updated as a user-facing project README based on current runnable features and project positioning.
-- [x] `yt_dlp/YoutubeDL.ts`
-- [x] `yt_dlp/index.ts`
+- [ ] `yt_dlp/YoutubeDL.ts` Bun CLI/download shell is present; full `YoutubeDL.py` orchestration, format selection, archive, and postprocessor flow remains pending.
+- [ ] `yt_dlp/index.ts` CLI entry works for staged options; full option validation, compat rewriting, postprocessor construction, and extractor listing/generation still throw.
 - [x] `yt_dlp/main.ts`
 - [x] `yt_dlp/options.ts`
 - [x] `yt_dlp/errors.ts`
@@ -42,22 +42,22 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/compat/shutil.ts`
 - [x] `yt_dlp/compat/urllib/index.ts`
 - [x] `yt_dlp/compat/urllib/request.ts`
-- [x] `yt_dlp/dependencies/Cryptodome.ts`
+- [ ] `yt_dlp/dependencies/Cryptodome.ts` AES replacement is present; RSA/PKCS/Blowfish/SHA/CMAC compatibility exports still throw explicit unsupported errors.
 - [x] `yt_dlp/dependencies/index.ts`
 - [x] `yt_dlp/dependencies/brotli.ts` JS Brotli adapter for the optional Python Brotli dependency.
 - [x] `yt_dlp/dependencies/mediabunny.ts` JS media metadata adapter for Mutagen-style read/write replacement paths.
 - [x] `yt_dlp/networking/index.ts`
 - [x] `yt_dlp/networking/exceptions.ts`
-- [x] `yt_dlp/utils/index.ts`
+- [ ] `yt_dlp/utils/index.ts` staged exports are present; full Python `utils` package surface is blocked on pending utility modules.
 - [x] `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.ts`
-- [x] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`
+- [ ] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`; not a complete utility-layer port.
 - [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion, ACast extractor prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id`; full utility surface still pending.
 - [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; full traversal API still pending.
 - [x] `yt_dlp/postprocessor/index.ts`
 - [x] `yt_dlp/postprocessor/common.ts`
-- [x] `yt_dlp/postprocessor/ffmpeg.ts`
-- [x] `yt_dlp/downloader/index.ts`
+- [ ] `yt_dlp/postprocessor/ffmpeg.ts` large functional subset is present; source still identifies it as the ytdlb-needed subset and full parity is not audited.
+- [ ] `yt_dlp/downloader/index.ts` protocol selection is present; merged multi-protocol downloader selection still throws explicit unsupported errors.
 - [x] `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/http.ts`
 - [x] `yt_dlp/downloader/fragment.ts`
@@ -103,8 +103,8 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 
 Each item is `Python source -> TypeScript target`. Mark an item complete only when the TypeScript file exists, has a source header, and has been checked for Bun-native APIs and async boundaries.
 
-- [x] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts`
-- [x] `yt_dlp/__init__.py` -> `yt_dlp/index.ts`
+- [ ] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts` (Bun CLI/download shell is present; full `YoutubeDL.py` orchestration remains pending)
+- [ ] `yt_dlp/__init__.py` -> `yt_dlp/index.ts` (staged CLI entry is present; full option validation/postprocessor/extractor wiring remains pending)
 - [x] `yt_dlp/__main__.py` -> `yt_dlp/main.ts`
 - [x] `yt_dlp/__pyinstaller/__init__.py` -> `yt_dlp/__pyinstaller/index.ts`
 - [x] `yt_dlp/__pyinstaller/hook-yt_dlp.py` -> `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
@@ -119,9 +119,9 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/compat/urllib/__init__.py` -> `yt_dlp/compat/urllib/index.ts`
 - [x] `yt_dlp/compat/urllib/request.py` -> `yt_dlp/compat/urllib/request.ts`
 - [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts` (browser cookies now prefer `@steipete/sweet-cookie` lazily per request URL; file cookies remain eager)
-- [x] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts`
+- [ ] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts` (AES replacement is present; non-AES compatibility exports still throw)
 - [x] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
-- [x] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
+- [ ] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts` (protocol selection is present; merged multi-protocol selection remains pending)
 - [x] `yt_dlp/downloader/bunnycdn.py` -> `yt_dlp/downloader/bunnycdn.ts`
 - [x] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
@@ -242,7 +242,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/box.py` -> `yt_dlp/extractor/box.ts`
 - [ ] `yt_dlp/extractor/boxcast.py` -> `yt_dlp/extractor/boxcast.ts`
 - [ ] `yt_dlp/extractor/bpb.py` -> `yt_dlp/extractor/bpb.ts`
-- [ ] `yt_dlp/extractor/br.py` -> `yt_dlp/extractor/br.ts`
+- [x] `yt_dlp/extractor/br.py` -> `yt_dlp/extractor/br.ts`
 - [ ] `yt_dlp/extractor/brainpop.py` -> `yt_dlp/extractor/brainpop.ts`
 - [x] `yt_dlp/extractor/breitbart.py` -> `yt_dlp/extractor/breitbart.ts`
 - [ ] `yt_dlp/extractor/brightcove.py` -> `yt_dlp/extractor/brightcove.ts`
@@ -1196,30 +1196,30 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
 - [x] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
-- [x] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
-- [x] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts`
-- [x] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts`
+- [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts` (explicit unsupported backend facade; not a port)
+- [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts` (redirect/header helpers are present; Python SSL/SOCKS helpers still throw)
+- [ ] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts` (explicit unsupported backend facade; Bun fetch is in `urllib.ts`)
 - [x] `yt_dlp/networking/_urllib.py` -> `yt_dlp/networking/urllib.ts`
-- [x] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts`
+- [ ] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts` (reexports incomplete WebSocket bridge)
 - [x] `yt_dlp/networking/common.py` -> `yt_dlp/networking/common.ts`
 - [x] `yt_dlp/networking/exceptions.py` -> `yt_dlp/networking/exceptions.ts`
 - [x] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
-- [x] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
+- [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts` (Bun WebSocket wrapper is started; recv/handler adaptation still throw)
 - [x] `yt_dlp/options.py` -> `yt_dlp/options.ts`
 - [x] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
 - [x] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts`
 - [x] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts`
-- [x] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts`
+- [ ] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts` (Mediabunny/ffmpeg paths are present where supported; full Mutagen/AtomicParsley parity not complete)
 - [x] `yt_dlp/postprocessor/exec.py` -> `yt_dlp/postprocessor/exec.ts`
-- [x] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts`
-- [x] `yt_dlp/postprocessor/metadataparser.py` -> `yt_dlp/postprocessor/metadataparser.ts`
-- [x] `yt_dlp/postprocessor/modify_chapters.py` -> `yt_dlp/postprocessor/modify-chapters.ts`
+- [ ] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts` (large functional subset is present; full parity is not audited)
+- [ ] `yt_dlp/postprocessor/metadataparser.py` -> `yt_dlp/postprocessor/metadataparser.ts` (simple metadata interpolation is present; full outtmpl validation/parsing remains pending)
+- [ ] `yt_dlp/postprocessor/modify_chapters.py` -> `yt_dlp/postprocessor/modify-chapters.ts` (chapter cutting is present; full outtmpl formatting is not in this layer)
 - [x] `yt_dlp/postprocessor/movefilesafterdownload.py` -> `yt_dlp/postprocessor/movefilesafterdownload.ts`
 - [x] `yt_dlp/postprocessor/sponsorblock.py` -> `yt_dlp/postprocessor/sponsorblock.ts`
 - [x] `yt_dlp/postprocessor/xattrpp.py` -> `yt_dlp/postprocessor/xattrpp.ts`
 - [x] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
 - [x] `yt_dlp/update.py` -> `yt_dlp/update.ts`
-- [x] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts`
+- [ ] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts` (staged exports are present; full utility package surface remains pending)
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
