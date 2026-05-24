@@ -15,11 +15,29 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [ ] Add focused Bun tests as each functional area becomes executable.
 - [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
 - [ ] Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
+- [x] Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
 
 ## Started Files
 
 - [x] `index.ts`
 - [x] `ytdlb.ts`
+- [x] `yt_dlp/YoutubeDL.ts`
+- [x] `yt_dlp/index.ts`
+- [x] `yt_dlp/main.ts`
+- [x] `yt_dlp/options.ts`
+- [x] `yt_dlp/errors.ts`
+- [x] `yt_dlp/__pyinstaller/index.ts`
+- [x] `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
+- [x] `yt_dlp/compat/index.ts`
+- [x] `yt_dlp/compat/deprecated.ts`
+- [x] `yt_dlp/compat/legacy.ts`
+- [x] `yt_dlp/compat/compat-utils.ts`
+- [x] `yt_dlp/compat/imghdr.ts`
+- [x] `yt_dlp/compat/shutil.ts`
+- [x] `yt_dlp/compat/urllib/index.ts`
+- [x] `yt_dlp/compat/urllib/request.ts`
+- [x] `yt_dlp/dependencies/Cryptodome.ts`
+- [x] `yt_dlp/dependencies/index.ts`
 - [x] `yt_dlp/aes.ts`
 - [x] `yt_dlp/cache.ts`
 - [x] `yt_dlp/utils/jsruntime.ts`
@@ -46,24 +64,24 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 
 Each item is `Python source -> TypeScript target`. Mark an item complete only when the TypeScript file exists, has a source header, and has been checked for Bun-native APIs and async boundaries.
 
-- [ ] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts`
-- [ ] `yt_dlp/__init__.py` -> `yt_dlp/index.ts`
-- [ ] `yt_dlp/__main__.py` -> `yt_dlp/main.ts`
-- [ ] `yt_dlp/__pyinstaller/__init__.py` -> `yt_dlp/__pyinstaller/index.ts`
-- [ ] `yt_dlp/__pyinstaller/hook-yt_dlp.py` -> `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
+- [x] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts`
+- [x] `yt_dlp/__init__.py` -> `yt_dlp/index.ts`
+- [x] `yt_dlp/__main__.py` -> `yt_dlp/main.ts`
+- [x] `yt_dlp/__pyinstaller/__init__.py` -> `yt_dlp/__pyinstaller/index.ts`
+- [x] `yt_dlp/__pyinstaller/hook-yt_dlp.py` -> `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
 - [x] `yt_dlp/aes.py` -> `yt_dlp/aes.ts`
 - [x] `yt_dlp/cache.py` -> `yt_dlp/cache.ts`
-- [ ] `yt_dlp/compat/__init__.py` -> `yt_dlp/compat/index.ts`
-- [ ] `yt_dlp/compat/_deprecated.py` -> `yt_dlp/compat/deprecated.ts`
-- [ ] `yt_dlp/compat/_legacy.py` -> `yt_dlp/compat/legacy.ts`
-- [ ] `yt_dlp/compat/compat_utils.py` -> `yt_dlp/compat/compat-utils.ts`
-- [ ] `yt_dlp/compat/imghdr.py` -> `yt_dlp/compat/imghdr.ts`
-- [ ] `yt_dlp/compat/shutil.py` -> `yt_dlp/compat/shutil.ts`
-- [ ] `yt_dlp/compat/urllib/__init__.py` -> `yt_dlp/compat/urllib/index.ts`
-- [ ] `yt_dlp/compat/urllib/request.py` -> `yt_dlp/compat/urllib/request.ts`
-- [ ] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts`
-- [ ] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts`
-- [ ] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
+- [x] `yt_dlp/compat/__init__.py` -> `yt_dlp/compat/index.ts`
+- [x] `yt_dlp/compat/_deprecated.py` -> `yt_dlp/compat/deprecated.ts`
+- [x] `yt_dlp/compat/_legacy.py` -> `yt_dlp/compat/legacy.ts`
+- [x] `yt_dlp/compat/compat_utils.py` -> `yt_dlp/compat/compat-utils.ts`
+- [x] `yt_dlp/compat/imghdr.py` -> `yt_dlp/compat/imghdr.ts`
+- [x] `yt_dlp/compat/shutil.py` -> `yt_dlp/compat/shutil.ts`
+- [x] `yt_dlp/compat/urllib/__init__.py` -> `yt_dlp/compat/urllib/index.ts`
+- [x] `yt_dlp/compat/urllib/request.py` -> `yt_dlp/compat/urllib/request.ts`
+- [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts`
+- [x] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts`
+- [x] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
 - [ ] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
 - [ ] `yt_dlp/downloader/bunnycdn.py` -> `yt_dlp/downloader/bunnycdn.ts`
 - [ ] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
@@ -1148,7 +1166,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/networking/exceptions.py` -> `yt_dlp/networking/exceptions.ts`
 - [ ] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
 - [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
-- [ ] `yt_dlp/options.py` -> `yt_dlp/options.ts`
+- [x] `yt_dlp/options.py` -> `yt_dlp/options.ts`
 - [x] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
 - [ ] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts`
 - [ ] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts`

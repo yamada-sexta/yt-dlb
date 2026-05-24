@@ -86,7 +86,9 @@ export abstract class IEContentProvider {
 
   abstract isAvailable(): boolean;
 
-  close(): void {}
+  close(): void {
+    this.logger.trace(`${this.providerName} closed`);
+  }
 
   configurationArg(key: string, defaultValue: readonly string[] = [], casesense = false): readonly string[] {
     return configurationArg(this.settings, key, defaultValue, casesense);

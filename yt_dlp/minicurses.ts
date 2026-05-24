@@ -1,5 +1,7 @@
 // Source: yt_dlp/minicurses.py
 
+import { NotImplementedError } from "./errors.ts";
+
 export const CONTROL_SEQUENCES = {
   DOWN: "\n",
   UP: "\x1B[A",
@@ -91,8 +93,13 @@ export class MultilinePrinterBase {
     this.haveFullcap = Boolean(process.stderr.isTTY && process.env.TERM);
   }
 
-  printAtLine(_text: string, _pos: number): void {}
-  end(): void {}
+  printAtLine(_text: string, _pos: number): void {
+    throw new NotImplementedError("MultilinePrinterBase.printAtLine");
+  }
+
+  end(): void {
+    throw new NotImplementedError("MultilinePrinterBase.end");
+  }
 
   protected addLineNumber(text: string, line: number): string {
     return this.maximum ? `${line + 1}: ${text}` : text;
@@ -108,7 +115,15 @@ export class MultilinePrinterBase {
   }
 }
 
-export class QuietMultilinePrinter extends MultilinePrinterBase {}
+export class QuietMultilinePrinter extends MultilinePrinterBase {
+  override printAtLine(_text: string, _pos: number): void {
+    return;
+  }
+
+  override end(): void {
+    return;
+  }
+}
 
 export class MultilineLogger extends MultilinePrinterBase {
   override write(...text: string[]): void {
