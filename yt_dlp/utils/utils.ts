@@ -60,6 +60,13 @@ export class GeoRestrictedError extends ExtractorError {
   }
 }
 
+export class UserNotLive extends ExtractorError {
+  constructor(message = "The channel is not currently live", options: { videoId?: string | null; cause?: unknown } = {}) {
+    super(message, { expected: true, videoId: options.videoId, cause: options.cause });
+    this.name = "UserNotLive";
+  }
+}
+
 export class UnsupportedError extends ExtractorError {
   constructor(message: string) {
     super(message, { expected: true });
@@ -133,6 +140,21 @@ export function updateUrlQuery(url: string, query: URLSearchParams | Record<stri
 }
 
 export const update_url_query = updateUrlQuery;
+
+export function urlencodePostdata(data: Record<string, string | number | boolean | null | undefined> | Iterable<readonly [string, string | number | boolean | null | undefined]>): URLSearchParams {
+  const params = new URLSearchParams();
+  const entries = Symbol.iterator in Object(data)
+    ? data as Iterable<readonly [string, string | number | boolean | null | undefined]>
+    : Object.entries(data as Record<string, string | number | boolean | null | undefined>);
+  for (const [key, value] of entries) {
+    if (value !== null && value !== undefined) {
+      params.append(key, String(value));
+    }
+  }
+  return params;
+}
+
+export const urlencode_postdata = urlencodePostdata;
 
 export function parseM3u8Attributes(attributes: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -286,6 +308,14 @@ export function getElementById(id: string, html: string): string | null {
 
 export const get_element_by_id = getElementById;
 
+export function getElementByClass(className: string, html: string): string | null {
+  const escaped = RegExp.escape(className);
+  const match = new RegExp(`<(?<tag>[\\w:-]+)[^>]+class=["'][^"']*(?:^|\\s)${escaped}(?:\\s|$)[^"']*["'][^>]*>(?<body>[\\s\\S]*?)<\\/\\k<tag>>`, "i").exec(html);
+  return match?.groups?.body ? cleanHtml(match.groups.body) : null;
+}
+
+export const get_element_by_class = getElementByClass;
+
 export function extractAttributes(htmlElement: string): Record<string, string | null> {
   const attrs: Record<string, string | null> = {};
   const source = htmlElement.replace(/^<\s*[\w:-]+/, "").replace(/\/?\s*>[\s\S]*$/, "");
@@ -397,6 +427,49 @@ export function parseDuration(value: string | number | null | undefined): number
 }
 
 export const parse_duration = parseDuration;
+
+const FILESIZE_UNITS: Record<string, number> = {
+  B: 1,
+  b: 1,
+  bytes: 1,
+  KiB: 1024,
+  KB: 1000,
+  kB: 1024,
+  Kb: 1000,
+  kb: 1000,
+  kilobytes: 1000,
+  kibibytes: 1024,
+  MiB: 1024 ** 2,
+  MB: 1000 ** 2,
+  mB: 1024 ** 2,
+  Mb: 1000 ** 2,
+  mb: 1000 ** 2,
+  megabytes: 1000 ** 2,
+  mebibytes: 1024 ** 2,
+  GiB: 1024 ** 3,
+  GB: 1000 ** 3,
+  gB: 1024 ** 3,
+  Gb: 1000 ** 3,
+  gb: 1000 ** 3,
+  gigabytes: 1000 ** 3,
+  gibibytes: 1024 ** 3,
+};
+
+export function parseFilesize(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const match = /(?<number>[\d.,]+)\s*(?<unit>[A-Za-z]+)?/.exec(value.trim());
+  const number = match?.groups?.number ? Number.parseFloat(match.groups.number.replaceAll(",", "")) : Number.NaN;
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  const unit = match?.groups?.unit ?? "B";
+  const multiplier = FILESIZE_UNITS[unit] ?? null;
+  return multiplier ? Math.round(number * multiplier) : null;
+}
+
+export const parse_filesize = parseFilesize;
 
 export function parseResolution(value: string | null | undefined): { width?: number; height?: number } {
   if (!value) {
@@ -650,6 +723,25 @@ export function urlBasename(url: string): string {
 }
 
 export const url_basename = urlBasename;
+
+export function formatField<T>(
+  obj: Record<string, T> | T | null | undefined,
+  field: string | null = null,
+  template = "%s",
+  ignore: unknown = NO_DEFAULT,
+  defaultValue = "",
+  func: (value: T) => unknown = IDENTITY,
+): string {
+  const value = field && obj && typeof obj === "object" && !Array.isArray(obj)
+    ? (obj as Record<string, T>)[field]
+    : obj as T | null | undefined;
+  if (value === null || value === undefined || value === ignore) {
+    return defaultValue;
+  }
+  return template.replace("%s", String(func(value)));
+}
+
+export const format_field = formatField;
 
 function objectToParams(query: Record<string, string | readonly string[]>): URLSearchParams {
   const params = new URLSearchParams();

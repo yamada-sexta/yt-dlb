@@ -2,10 +2,13 @@
 // Port note: Python optparse/config expansion is replaced with a Bun/Node parseArgs baseline.
 
 import { parseArgs } from "node:util";
+import { z } from "zod";
 
 import { SUPPORTED_BROWSERS, SUPPORTED_KEYRINGS } from "./cookies.ts";
 import { UPDATE_SOURCES, detectVariant, isNonUpdateable } from "./update.ts";
 import { version } from "./version.ts";
+
+const StringSchema = z.string();
 
 export interface ParsedOptions {
   urls: string[];
@@ -173,7 +176,7 @@ function asStringArray(value: string | boolean | (string | boolean)[] | undefine
     return [value];
   }
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string");
+    return value.filter((item) => StringSchema.safeParse(item).success) as string[];
   }
   return undefined;
 }

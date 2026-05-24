@@ -2,6 +2,7 @@
 // Port note: this implements the traversal forms used by migrated downloader/extractor code.
 
 import { NO_DEFAULT, variadic } from "./utils.ts";
+import { z } from "zod";
 
 export type TraverseKey =
   | string
@@ -16,6 +17,11 @@ export type TraverseKey =
 export type TraversePath = TraverseKey | readonly unknown[];
 
 export const Ellipsis = Symbol("Ellipsis");
+
+const RecordSchema = z.record(z.string(), z.unknown());
+const GroupsSchema = z.object({
+  groups: z.record(z.string(), z.string().optional()),
+}).passthrough();
 
 export function traverseObj<T = unknown>(
   obj: unknown,
@@ -138,9 +144,9 @@ function applyKey(value: unknown, key: TraverseKey): unknown[] {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  return RecordSchema.safeParse(value).success;
 }
 
 function hasGroups(value: unknown): value is { groups: Record<string, string | undefined> } {
-  return Boolean(value && typeof value === "object" && "groups" in value && isRecord(value.groups));
+  return GroupsSchema.safeParse(value).success;
 }

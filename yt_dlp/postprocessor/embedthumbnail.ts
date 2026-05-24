@@ -3,11 +3,14 @@
 
 import { rename, stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
 import { PostProcessingError } from "../utils/utils.ts";
 import { FFmpegPostProcessor, FFmpegThumbnailsConvertorPP } from "./ffmpeg.ts";
 import type { PostProcessorInfo } from "./common.ts";
+
+const RecordSchema = z.record(z.string(), z.unknown());
 
 export class EmbedThumbnailPPError extends PostProcessingError {}
 
@@ -189,5 +192,5 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }

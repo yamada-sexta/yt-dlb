@@ -1,6 +1,7 @@
 // Source: yt_dlp/minicurses.py
 
 import { NotImplementedError } from "./errors.ts";
+import { z } from "zod";
 
 export const CONTROL_SEQUENCES = {
   DOWN: "\n",
@@ -25,6 +26,9 @@ const TEXT_STYLES = {
   BOLD: "1",
   UNDERLINED: "4",
 } as const;
+
+const ColorSchema = z.enum(Object.keys(COLORS) as [keyof typeof COLORS, ...Array<keyof typeof COLORS>]);
+const TextStyleSchema = z.enum(Object.keys(TEXT_STYLES) as [keyof typeof TEXT_STYLES, ...Array<keyof typeof TEXT_STYLES>]);
 
 type WritableStreamLike = {
   write?(text: string): void;
@@ -197,9 +201,9 @@ export class MultilinePrinter extends MultilinePrinterBase {
 }
 
 function isColor(value: string | undefined): value is keyof typeof COLORS {
-  return Boolean(value && value in COLORS);
+  return ColorSchema.safeParse(value).success;
 }
 
 function isTextStyle(value: string | undefined): value is keyof typeof TEXT_STYLES {
-  return Boolean(value && value in TEXT_STYLES);
+  return TextStyleSchema.safeParse(value).success;
 }

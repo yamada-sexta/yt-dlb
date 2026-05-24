@@ -4,6 +4,7 @@
 import { $ } from "bun";
 import { mkdir, realpath, rename, stat } from "node:fs/promises";
 import { dirname, extname } from "node:path";
+import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
@@ -35,6 +36,9 @@ export const EXT_TO_OUT_FORMATS: Record<string, string> = {
   weba: "webm",
   vtt: "webvtt",
 };
+
+const StringArraySchema = z.array(z.string());
+const RecordSchema = z.record(z.string(), z.unknown());
 
 export const ACODECS: Record<string, readonly [string, string | null, readonly string[]]> = {
   mp3: ["mp3", "libmp3lame", []],
@@ -1216,7 +1220,7 @@ export class FFmpegConcatPP extends FFmpegPostProcessor {
     const metadata = await this.getMetadataObject(file);
     const codecs = (metadata.streams ?? [])
       .map((stream) => stream.codec_name)
-      .filter((codec): codec is string => typeof codec === "string");
+      .filter((codec) => z.string().safeParse(codec).success) as string[];
     this.writeDebug(`Codecs = ${codecs.join(", ")}`);
     return codecs;
   }
@@ -1258,14 +1262,14 @@ export class FFmpegConcatPP extends FFmpegPostProcessor {
     });
     const inFiles = requestedDownloads
       .map((download) => download?.filepath)
-      .filter((filepath): filepath is string => typeof filepath === "string");
+      .filter((filepath) => z.string().safeParse(filepath).success) as string[];
     if (inFiles.length < entries.length) {
       throw new PostProcessingError("Aborting concatenation because some downloads failed");
     }
 
     const exts = requestedDownloads
       .map((download, index) => typeof download?.ext === "string" ? download.ext : typeof entries[index]?.ext === "string" ? entries[index]?.ext : null)
-      .filter((ext): ext is string => typeof ext === "string");
+      .filter((ext) => z.string().safeParse(ext).success) as string[];
     const outExt = exts.length && new Set(exts).size === 1 ? exts[0]! : "mkv";
     const outputInfo: PostProcessorInfo = { ...info, ext: outExt };
     const outFile = preparePostprocessorFilename(this.downloader, outputInfo, "pl_video");
@@ -1303,10 +1307,11 @@ function requireStringInfo(info: PostProcessorInfo, key: string, ppName: string)
 }
 
 function requireStringArray(value: unknown, key: string, ppName: string): string[] {
-  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === "string")) {
+  const parsed = StringArraySchema.safeParse(value);
+  if (!parsed.success) {
     throw new PostProcessingError(`${ppName} requires info.${key} to be a string array`);
   }
-  return value;
+  return parsed.data;
 }
 
 function requireRecordArray(value: unknown, key: string, ppName: string): Array<Record<string, unknown>> {
@@ -1343,7 +1348,7 @@ function getPathValue(value: unknown, path: readonly string[]): unknown | null {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }
 
 function recordOrNull(value: unknown): Record<string, unknown> | null {

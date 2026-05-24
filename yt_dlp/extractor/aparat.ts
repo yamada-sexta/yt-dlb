@@ -2,12 +2,15 @@
 
 import { getElementById, intOrNone, mergeDicts, mimetype2ext, urlOrNone } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
+import { z } from "zod";
 
-interface AparatSource {
-  src?: string;
-  type?: string;
-  label?: string;
-}
+const AparatSourceSchema = z.object({
+  src: z.string().optional(),
+  type: z.string().optional(),
+  label: z.string().optional(),
+}).passthrough();
+
+type AparatSource = z.infer<typeof AparatSourceSchema>;
 
 interface AparatOptions {
   multiSRC?: unknown;
@@ -90,5 +93,5 @@ export class AparatIE extends InfoExtractor {
 }
 
 function isAparatSource(value: unknown): value is AparatSource {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  return AparatSourceSchema.safeParse(value).success;
 }

@@ -2,16 +2,19 @@
 
 import { cleanHtml, floatOrNone, traverseObj, unescapeHTML } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
+import { z } from "zod";
 
-interface AudioBoomClip {
-  clipURLPriorToLoading?: string;
-  title?: string;
-  description?: string;
-  formattedDescription?: string;
-  duration?: unknown;
-  author?: string;
-  author_url?: string;
-}
+const AudioBoomClipSchema = z.object({
+  clipURLPriorToLoading: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  formattedDescription: z.string().optional(),
+  duration: z.unknown().optional(),
+  author: z.string().optional(),
+  author_url: z.string().optional(),
+}).passthrough();
+
+type AudioBoomClip = z.infer<typeof AudioBoomClipSchema>;
 
 export class AudioBoomIE extends InfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://(?:www\.)?audioboom\.com/(?:boos|posts)/(?<id>[0-9]+)(?:\.mp3)?`;
@@ -45,5 +48,5 @@ export class AudioBoomIE extends InfoExtractor {
 }
 
 function isAudioBoomClip(value: unknown): value is AudioBoomClip {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  return AudioBoomClipSchema.safeParse(value).success;
 }

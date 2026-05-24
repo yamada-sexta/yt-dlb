@@ -5,6 +5,7 @@ import { $ } from "bun";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
+import { z } from "zod";
 
 import { NotImplementedError } from "../errors.ts";
 import { FileDownloader, type DownloadInfo, type DownloaderHost } from "./common.ts";
@@ -27,6 +28,14 @@ interface ExternalCookie {
   path: string;
   domain: string;
 }
+
+const DownloadInfoSchema = z.object({
+  url: z.string(),
+}).passthrough();
+
+const ExternalFragmentSchema = z.object({
+  url: z.string(),
+}).passthrough();
 
 type ExternalFeature = "to_stdout" | "multiple_formats";
 
@@ -482,7 +491,7 @@ function selectedFfmpegFormats(info: DownloadInfo): DownloadInfo[] {
 }
 
 function isDownloadInfo(value: unknown): value is DownloadInfo {
-  return Boolean(value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string");
+  return DownloadInfoSchema.safeParse(value).success;
 }
 
 function inputArgs(
@@ -633,7 +642,7 @@ function selectedExternalDownloader(value: unknown, protocolKey: string): string
 }
 
 function isExternalFragment(value: unknown): value is FragmentInfo {
-  return Boolean(value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string");
+  return ExternalFragmentSchema.safeParse(value).success;
 }
 
 async function runShellCommand(

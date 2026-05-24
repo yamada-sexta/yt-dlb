@@ -84,12 +84,8 @@ type EjsSolverOutput =
 type EjsSolver = (input: EjsSolverInput) => EjsSolverOutput;
 
 function isYoutubeDL(value: unknown): value is YoutubeDL {
-  return typeof value === "object"
-    && value !== null
-    && "urlopen" in value
-    && "prepareFilename" in value
-    && typeof (value as { urlopen?: unknown }).urlopen === "function"
-    && typeof (value as { prepareFilename?: unknown }).prepareFilename === "function";
+  const candidate = value as Partial<YoutubeDL> | null;
+  return Boolean(candidate && typeof candidate.urlopen === "function" && typeof candidate.prepareFilename === "function");
 }
 
 export function isYoutubeWatchUrl(url: string): boolean {
@@ -142,9 +138,7 @@ export async function extractYoutubeVideo(
   const resolved = await Promise.all(
     formats.map((format) => resolveFormat(format, playerUrl, ydl)),
   );
-  const playable = resolved.filter(
-    (format): format is ResolvedYoutubeFormat => format !== null,
-  );
+  const playable = resolved.filter((format): format is ResolvedYoutubeFormat => format !== null);
   const selected = selectFormat(playable);
   if (!selected) {
     throw new DownloadError("No playable YouTube HTTP formats found");

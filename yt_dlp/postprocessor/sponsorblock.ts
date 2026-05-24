@@ -2,6 +2,7 @@
 // Port note: SponsorBlock requests use Bun fetch/downloader.urlopen instead of Python urllib.
 
 import { createHash } from "node:crypto";
+import { z } from "zod";
 
 import { PostProcessingError } from "../utils/utils.ts";
 import { FFmpegPostProcessor } from "./ffmpeg.ts";
@@ -19,6 +20,21 @@ interface SponsorSegment {
   videoDuration?: number | null;
   description?: string;
 }
+
+const SponsorSegmentSchema = z.object({
+  segment: z.tuple([z.number(), z.number()]),
+  category: z.string(),
+  actionType: z.string(),
+  videoDuration: z.number().nullable().optional(),
+  description: z.string().optional(),
+}).passthrough();
+
+const SponsorBlockSegmentSchema = z.object({
+  videoID: z.string(),
+  segments: z.array(SponsorSegmentSchema),
+}).passthrough();
+
+const RecordSchema = z.record(z.string(), z.unknown());
 
 export class SponsorBlockPP extends FFmpegPostProcessor {
   static readonly EXTRACTORS: Record<string, string> = {
@@ -146,21 +162,13 @@ export class SponsorBlockPP extends FFmpegPostProcessor {
 }
 
 function isSponsorBlockSegment(value: unknown): value is SponsorBlockSegment {
-  return isRecord(value)
-    && typeof value.videoID === "string"
-    && Array.isArray(value.segments)
-    && value.segments.every(isSponsorSegment);
+  return SponsorBlockSegmentSchema.safeParse(value).success;
 }
 
 function isSponsorSegment(value: unknown): value is SponsorSegment {
-  return isRecord(value)
-    && Array.isArray(value.segment)
-    && value.segment.length === 2
-    && value.segment.every((item) => typeof item === "number")
-    && typeof value.category === "string"
-    && typeof value.actionType === "string";
+  return SponsorSegmentSchema.safeParse(value).success;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }

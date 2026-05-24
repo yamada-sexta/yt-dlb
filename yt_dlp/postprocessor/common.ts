@@ -2,9 +2,12 @@
 // Port note: postprocessor hooks are async-capable, matching Bun subprocess/file APIs.
 
 import { rm, utimes } from "node:fs/promises";
+import { z } from "zod";
 
 import type { DownloaderHost } from "../downloader/common.ts";
 import { configurationArgs, PostProcessingError } from "../utils/utils.ts";
+
+const StringSchema = z.string();
 
 export interface PostProcessorInfo {
   filepath?: string;
@@ -79,7 +82,11 @@ export class PostProcessor {
   }
 
   async deleteDownloadedFiles(...filesToDelete: Array<string | null | undefined>): Promise<void> {
-    await Promise.all([...new Set(filesToDelete.filter((item): item is string => Boolean(item)))].map((filename) => rm(filename, { force: true })));
+    const filenames = filesToDelete.flatMap((item) => {
+      const parsed = StringSchema.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    });
+    await Promise.all([...new Set(filenames)].map((filename) => rm(filename, { force: true })));
   }
 
   configurationArgs(exe: string, keys?: readonly string[], defaultValue: readonly string[] = []): string[] {

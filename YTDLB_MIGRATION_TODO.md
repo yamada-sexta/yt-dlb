@@ -13,6 +13,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] Migrate layer by layer: complete direct `yt_dlp/*.py` files before moving into subdirectories, then continue one directory layer at a time.
 - [x] Before porting a file, inspect its internal Python imports and port missing internal dependency modules first; Bun-native replacements are fine only for platform/runtime dependencies and must be commented.
 - [x] Use native `RegExp.escape()` for Python `re.escape` equivalents or dynamic literal regex construction.
+- [x] Refactor migrated runtime data type predicates to use `zod` schemas; reserve direct structural checks for non-data constructs such as constructors and async iterables.
 - [ ] Avoid broad `unknown` plumbing where a `zod` schema can validate external data.
 - [ ] Add focused Bun tests as each functional area becomes executable.
 - [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
@@ -161,8 +162,8 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/aljazeera.py` -> `yt_dlp/extractor/aljazeera.ts`
 - [ ] `yt_dlp/extractor/allocine.py` -> `yt_dlp/extractor/allocine.ts`
 - [ ] `yt_dlp/extractor/allstar.py` -> `yt_dlp/extractor/allstar.ts`
-- [ ] `yt_dlp/extractor/alphaporno.py` -> `yt_dlp/extractor/alphaporno.ts`
-- [ ] `yt_dlp/extractor/alsace20tv.py` -> `yt_dlp/extractor/alsace20tv.ts`
+- [x] `yt_dlp/extractor/alphaporno.py` -> `yt_dlp/extractor/alphaporno.ts`
+- [x] `yt_dlp/extractor/alsace20tv.py` -> `yt_dlp/extractor/alsace20tv.ts`
 - [ ] `yt_dlp/extractor/altcensored.py` -> `yt_dlp/extractor/altcensored.ts`
 - [ ] `yt_dlp/extractor/alura.py` -> `yt_dlp/extractor/alura.ts`
 - [ ] `yt_dlp/extractor/amadeustv.py` -> `yt_dlp/extractor/amadeustv.ts`
@@ -173,7 +174,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/americastestkitchen.py` -> `yt_dlp/extractor/americastestkitchen.ts`
 - [ ] `yt_dlp/extractor/amp.py` -> `yt_dlp/extractor/amp.ts`
 - [x] `yt_dlp/extractor/anchorfm.py` -> `yt_dlp/extractor/anchorfm.ts`
-- [ ] `yt_dlp/extractor/angel.py` -> `yt_dlp/extractor/angel.ts`
+- [x] `yt_dlp/extractor/angel.py` -> `yt_dlp/extractor/angel.ts`
 - [ ] `yt_dlp/extractor/antenna.py` -> `yt_dlp/extractor/antenna.ts`
 - [ ] `yt_dlp/extractor/anvato.py` -> `yt_dlp/extractor/anvato.ts`
 - [ ] `yt_dlp/extractor/aol.py` -> `yt_dlp/extractor/aol.ts`
@@ -185,7 +186,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/archiveorg.py` -> `yt_dlp/extractor/archiveorg.ts`
 - [ ] `yt_dlp/extractor/arcpublishing.py` -> `yt_dlp/extractor/arcpublishing.ts`
 - [ ] `yt_dlp/extractor/ard.py` -> `yt_dlp/extractor/ard.ts`
-- [ ] `yt_dlp/extractor/arnes.py` -> `yt_dlp/extractor/arnes.ts`
+- [x] `yt_dlp/extractor/arnes.py` -> `yt_dlp/extractor/arnes.ts`
 - [ ] `yt_dlp/extractor/art19.py` -> `yt_dlp/extractor/art19.ts`
 - [ ] `yt_dlp/extractor/arte.py` -> `yt_dlp/extractor/arte.ts`
 - [ ] `yt_dlp/extractor/asobichannel.py` -> `yt_dlp/extractor/asobichannel.ts`
@@ -212,14 +213,14 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/beatbump.py` -> `yt_dlp/extractor/beatbump.ts`
 - [x] `yt_dlp/extractor/beatport.py` -> `yt_dlp/extractor/beatport.ts`
 - [ ] `yt_dlp/extractor/beeg.py` -> `yt_dlp/extractor/beeg.ts`
-- [ ] `yt_dlp/extractor/behindkink.py` -> `yt_dlp/extractor/behindkink.ts`
+- [x] `yt_dlp/extractor/behindkink.py` -> `yt_dlp/extractor/behindkink.ts`
 - [x] `yt_dlp/extractor/berufetv.py` -> `yt_dlp/extractor/berufetv.ts`
 - [ ] `yt_dlp/extractor/bet.py` -> `yt_dlp/extractor/bet.ts`
 - [x] `yt_dlp/extractor/bfi.py` -> `yt_dlp/extractor/bfi.ts`
 - [ ] `yt_dlp/extractor/bfmtv.py` -> `yt_dlp/extractor/bfmtv.ts`
 - [ ] `yt_dlp/extractor/bibeltv.py` -> `yt_dlp/extractor/bibeltv.ts`
 - [x] `yt_dlp/extractor/bigflix.py` -> `yt_dlp/extractor/bigflix.ts`
-- [ ] `yt_dlp/extractor/bigo.py` -> `yt_dlp/extractor/bigo.ts`
+- [x] `yt_dlp/extractor/bigo.py` -> `yt_dlp/extractor/bigo.ts`
 - [ ] `yt_dlp/extractor/bild.py` -> `yt_dlp/extractor/bild.ts`
 - [ ] `yt_dlp/extractor/bilibili.py` -> `yt_dlp/extractor/bilibili.ts`
 - [ ] `yt_dlp/extractor/biobiochiletv.py` -> `yt_dlp/extractor/biobiochiletv.ts`

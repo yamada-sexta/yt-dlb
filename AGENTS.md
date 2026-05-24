@@ -21,3 +21,5 @@ Downloader ports should use Bun `fetch`, WebSocket, Bun Shell, and file APIs dir
 When a command is already represented as an argv array, pass that array to Bun Shell as an interpolated expression, for example `await $\`${cmd}\`.nothrow().quiet()`. This preserves Bun Shell's escaping and avoids rebuilding command lines by hand.
 
 Use async only for IO/network/runtime work; keep pure transforms synchronous. Prefer typed schemas such as `zod` for external data, and avoid broad `any`. When translating Python `re.escape` or dynamic literal regex construction, use native `RegExp.escape()`.
+
+Runtime type predicates for parsed/external data should delegate to `zod` schemas instead of hand-written object checks. Direct TypeScript structural checks are acceptable for non-data constructs that Zod cannot model cleanly, such as class constructors or async iterable protocol checks; do not hide those behind `z.custom`.

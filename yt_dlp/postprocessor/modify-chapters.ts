@@ -2,6 +2,7 @@
 // Port note: chapter cutting uses the migrated FFmpeg concat helper and Bun file operations.
 
 import { rename, stat } from "node:fs/promises";
+import { z } from "zod";
 
 import { PostProcessingError, prependExtension } from "../utils/utils.ts";
 import { FFmpegPostProcessor, FFmpegSubtitlesConvertorPP } from "./ffmpeg.ts";
@@ -28,6 +29,13 @@ interface Chapter {
   cut_idx?: number;
   [key: string]: unknown;
 }
+
+const ChapterSchema = z.object({
+  start_time: z.number(),
+  end_time: z.number(),
+}).passthrough();
+
+const RecordSchema = z.record(z.string(), z.unknown());
 
 interface QueueItem {
   start: number;
@@ -437,11 +445,11 @@ function cloneChapter(value: Record<string, unknown>): Chapter {
 }
 
 function isChapter(value: unknown): value is Chapter {
-  return isRecord(value) && typeof value.start_time === "number" && typeof value.end_time === "number";
+  return ChapterSchema.safeParse(value).success;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }
 
 function requireString(value: unknown, message: string): string {

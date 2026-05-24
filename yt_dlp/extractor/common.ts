@@ -515,6 +515,30 @@ export abstract class InfoExtractor {
     return typeof result === "string" ? htmlUnescape(result) : null;
   }
 
+  protected rtaSearch(html: string): number | null {
+    if (/<meta\s+name=["']rating["']\s+content=["']RTA-5042-1996-1400-1577-RTA["']/i.test(html)) {
+      return 18;
+    }
+
+    let ageLimit: number | null = null;
+    const markers = [
+      /Proudly Labeled <a href="http:\/\/www\.rtalabel\.org\/" title="Restricted to Adults">RTA<\/a>/i,
+      />[^<]*you acknowledge you are at least (?<age>\d+) years old/i,
+      />\s*(?:18\s+U(?:\.S\.C\.|SC)\s+)?(?:§+\s*)?2257\b/i,
+    ];
+    for (const marker of markers) {
+      const match = marker.exec(html);
+      if (match) {
+        ageLimit = Math.max(ageLimit ?? 0, Number.parseInt(match.groups?.age ?? "18", 10));
+      }
+    }
+    return ageLimit;
+  }
+
+  protected _rta_search(html: string): number | null {
+    return this.rtaSearch(html);
+  }
+
   protected htmlExtractTitle(webpage: string): string | null {
     const title = this.searchRegex(/<title\b[^>]*>([^<]+)<\/title>/i, webpage, "title", { fatal: false });
     return typeof title === "string" ? htmlUnescape(title.trim()) : null;
@@ -556,6 +580,17 @@ export abstract class InfoExtractor {
       protocol: "f4m",
       format_id: options.f4mId ?? "hds",
       manifest_url: f4mUrl,
+    }];
+  }
+
+  protected extractSmilFormats(smilUrl: string, _videoId: string, options: { smilId?: string; fatal?: boolean } = {}): Array<Record<string, unknown>> {
+    // Logic note: full SMIL media traversal is not yet ported; expose the manifest as an explicit
+    // format so callers do not silently lose the URL while the parser layer is expanded.
+    return [{
+      url: smilUrl,
+      protocol: "smil",
+      format_id: options.smilId ?? "smil",
+      manifest_url: smilUrl,
     }];
   }
 

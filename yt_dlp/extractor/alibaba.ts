@@ -3,6 +3,9 @@
 
 import { intOrNone, strOrNone } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
+import { z } from "zod";
+
+const RecordSchema = z.record(z.string(), z.unknown());
 
 export class AlibabaIE extends InfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://(?:www\.)?alibaba\.com/product-detail/[\w-]+_(?<id>\d+)\.html`;
@@ -56,7 +59,7 @@ function getArray(value: unknown): unknown[] {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }
 
 function urlOrNone(value: unknown): string | null {

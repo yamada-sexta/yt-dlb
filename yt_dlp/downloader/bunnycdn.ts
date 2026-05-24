@@ -1,6 +1,7 @@
 // Source: yt_dlp/downloader/bunnycdn.py
 
 import { createHash } from "node:crypto";
+import { z } from "zod";
 
 import { FileDownloader, type DownloadInfo } from "./common.ts";
 import { HlsFD } from "./hls.ts";
@@ -11,6 +12,8 @@ interface BunnyPingData {
   secret: string;
   context_id: string;
 }
+
+const HeadersSchema = z.record(z.string(), z.string());
 
 export class BunnyCdnFD extends FileDownloader {
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -61,5 +64,5 @@ function parsePingData(value: unknown): BunnyPingData {
 }
 
 function isHeaders(value: unknown): value is Record<string, string> {
-  return Boolean(value && typeof value === "object" && Object.values(value).every((item) => typeof item === "string"));
+  return HeadersSchema.safeParse(value).success;
 }

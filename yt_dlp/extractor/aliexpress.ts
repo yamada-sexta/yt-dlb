@@ -2,6 +2,9 @@
 
 import { floatOrNone, tryGet } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
+import { z } from "zod";
+
+const StringSchema = z.string();
 
 export class AliExpressLiveIE extends InfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://live\.aliexpress\.com/live/(?<id>\d+)`;
@@ -31,5 +34,5 @@ export class AliExpressLiveIE extends InfoExtractor {
 }
 
 function isString(value: unknown): value is string {
-  return typeof value === "string";
+  return StringSchema.safeParse(value).success;
 }

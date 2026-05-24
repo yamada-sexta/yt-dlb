@@ -3,6 +3,7 @@
 
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
+import { z } from "zod";
 
 interface IsmDownloadParams {
   track_id?: number;
@@ -19,6 +20,8 @@ interface IsmDownloadParams {
   codec_private_data?: string;
   nal_unit_length_field?: number;
 }
+
+const StreamTypeSchema = z.enum(["audio", "video", "text"]);
 
 export class IsmFD extends FragmentFD {
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -81,7 +84,7 @@ function parseDownloadParams(value: unknown): IsmDownloadParams {
 }
 
 function isStreamType(value: string): value is IsmDownloadParams["stream_type"] {
-  return value === "audio" || value === "video" || value === "text";
+  return StreamTypeSchema.safeParse(value).success;
 }
 
 function writePiffHeader(params: IsmDownloadParams): Uint8Array {

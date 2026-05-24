@@ -3,10 +3,13 @@
 // otherwise ytdlb supports the simple %(field)s forms used by metadata parser actions.
 
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
+import { z } from "zod";
 
 type MetadataActionKind = "interpret" | "replace";
 type MetadataActionSpec = readonly [MetadataActionKind, string, string] | readonly [MetadataActionKind, string, string, string];
 type MetadataAction = (info: PostProcessorInfo) => void;
+
+const RecordSchema = z.record(z.string(), z.unknown());
 
 export class MetadataParserPP extends PostProcessor {
   static readonly Actions = {
@@ -166,5 +169,5 @@ function pythonRegexReplacementToJs(replacement: string): string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return RecordSchema.safeParse(value).success;
 }
