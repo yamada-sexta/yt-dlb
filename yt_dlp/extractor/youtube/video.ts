@@ -4,6 +4,18 @@
 
 import { JSInterpreter } from "../../jsinterp.ts";
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
+import { InfoExtractor, type ExtractorInfo } from "../common.ts";
+
+export class YoutubeIE extends InfoExtractor {
+  static override readonly _VALID_URL = String.raw`https?://(?:www\.|m\.|music\.)?youtube\.com/watch\?(?:[^#]+&)?v=(?<id>[0-9A-Za-z_-]{11})(?:[&#].*)?$`;
+
+  protected override async realExtract(url: string): Promise<ExtractorInfo> {
+    if (!isYoutubeDL(this.downloader)) {
+      throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
+    }
+    return { ...await extractYoutubeVideo(url, this.downloader) };
+  }
+}
 
 export interface YoutubeVideoInfo {
   id: string;
@@ -70,6 +82,15 @@ type EjsSolverOutput =
     };
 
 type EjsSolver = (input: EjsSolverInput) => EjsSolverOutput;
+
+function isYoutubeDL(value: unknown): value is YoutubeDL {
+  return typeof value === "object"
+    && value !== null
+    && "urlopen" in value
+    && "prepareFilename" in value
+    && typeof (value as { urlopen?: unknown }).urlopen === "function"
+    && typeof (value as { prepareFilename?: unknown }).prepareFilename === "function";
+}
 
 export function isYoutubeWatchUrl(url: string): boolean {
   try {

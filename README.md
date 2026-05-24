@@ -1,33 +1,39 @@
 # ytdlb
 
-`ytdlb` is an in-progress Bun/TypeScript rewrite of the yt-dlp runtime. The original Python source is kept in this repository for reference, but the new runtime is implemented as colocated TypeScript modules under `yt_dlp/` and is launched through `ytdlb.ts`.
+`ytdlb` is an in-progress Bun/TypeScript rewrite of the yt-dlp runtime. The original Python source remains in this repository as the porting reference; new TypeScript modules are colocated under `yt_dlp/` and the Bun entrypoint is `ytdlb.ts`.
 
-This is not currently a drop-in replacement for yt-dlp. The migration is being done layer by layer, with unfinished features throwing explicit `NotImplementedError`-style failures instead of silently falling back to Python or pretending to work.
+This is not a drop-in replacement for yt-dlp yet. The migration is layer-by-layer, and unsupported migrated behavior is expected to fail with explicit `NotImplementedError`-style errors instead of falling back to Python or silently pretending to work.
 
-YTDLB aims to be a more developer friendly version of YTDLP. Consider the fact that YTDLP is hard dependent on a JS runtime, a full JavaScript/TypeScript version is going to provide better DX/UX. But unfortunately I am unable to contribute to the upstream :(
+## Current CLI
 
-<img width="525" height="169" alt="image" src="https://github.com/user-attachments/assets/a6ca526d-4bce-4a8a-9912-c172f209ea0a" />
+The runnable CLI path is narrow:
 
-## What Works Now
+- `bun run ./ytdlb.ts ...`
+- direct URL downloads through the migrated downloader registry
+- focused YouTube watch URL extraction for progressive HTTP formats
+- YouTube JS challenge support through the installed `yt-dlp/ejs` package
+- Netscape cookie file loading and partial browser cookie extraction
+- basic options from `yt_dlp/options.ts`: output templates, simulate/skip download, quiet/verbose, cookies, headers, proxy, cache removal, update check, plugin dirs, and remote component args
 
-- Bun CLI entrypoint: `bun run ./ytdlb.ts ...`
-- YouTube watch URL extraction for progressive HTTP formats.
-- YouTube `n` challenge solving through the installed `yt-dlp/ejs` package.
-- Direct HTTP/HTTPS downloads through the native TypeScript downloader path.
-- Basic DASH fragment downloads.
-- Basic HLS media playlist downloads, including AES-128 media segment decryption.
-- Basic MHTML archive downloads.
-- Basic `ffmpeg` external downloader path when `ffmpeg` is available.
-- Netscape cookie file loading and partial browser cookie extraction using Bun APIs.
+The top-level CLI does not yet build postprocessor chains, perform full option validation, or use the async extractor registry for arbitrary sites.
+
+## Migrated Library Surfaces
+
+These TypeScript layers exist and typecheck, but many are still dependency subsets rather than full yt-dlp parity:
+
+- `yt_dlp/downloader`: HTTP/HTTPS, fragment handling, DASH, HLS, F4M, ISM, MHTML, RTMP/RTSP wrappers, WebSocket fragment sinks, YouTube live chat, Niconico/FC2/Soop/BunnyCDN, and external downloaders via Bun Shell.
+- `yt_dlp/networking`: Bun/Web `Request`/`Response` handlers, urllib-style handler, exceptions, proxy checks, impersonation target parsing, and explicit unsupported Python backend shims.
+- `yt_dlp/postprocessor`: exported postprocessor classes for ffmpeg probing/conversion/merge/fixups, metadata, subtitles, thumbnails, chapter splitting/modification, SponsorBlock metadata, exec, move-after-download, and xattrs. These are not wired into the CLI yet.
+- `yt_dlp/extractor`: async Bun Glob registry plus a small migrated extractor set, currently including YouTube watch URLs, common protocol/mistake handlers, unsupported-site handlers, AcademicEarth, AdobeConnect, Alibaba, AliExpress live, AtScaleConf, and Baidu.
+- YouTube JS challenge and PO token provider scaffolding under `yt_dlp/extractor/youtube`.
 
 ## Still In Progress
 
 - Full yt-dlp extractor coverage.
-- Full YouTube extractor parity, including all player clients, format selection, live streams, subtitles, playlists, and account-gated flows.
-- Full downloader parity for RTMP, RTSP, F4M, ISM, live chat, and site-specific live downloaders.
-- Full postprocessor support and media merging.
-- Full CLI option compatibility.
-- Complete test coverage.
+- Full YouTube parity, including all clients, format selection, live streams, subtitles, playlists, and account-gated flows.
+- CLI integration for postprocessors and multi-format media merging.
+- Complete yt-dlp option parsing and validation.
+- Broader tests beyond the current typecheck and smoke checks.
 
 See [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the migration inventory and current status.
 

@@ -2,29 +2,47 @@
 // Port note: external downloader process execution uses Bun Shell and Bun.write.
 
 import { $ } from "bun";
-import { basename, dirname, isAbsolute } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join } from "node:path";
 
 import { NotImplementedError } from "../errors.ts";
 import { FileDownloader, type DownloadInfo, type DownloaderHost } from "./common.ts";
+import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import { EXT_TO_OUT_FORMATS, FFmpegPostProcessor } from "../postprocessor/ffmpeg.ts";
 import { cliBoolOption, cliOption, cliValuelessOption, configurationArgs } from "../utils/utils.ts";
 
 interface CookieHost {
   cookies?: {
+    filename?: string | null;
     getCookieHeader(url: string): string | undefined;
+    getCookiesForUrl?(url: string): ExternalCookie[];
+    save?(filename?: string | null): Promise<void> | void;
   };
 }
 
-type ExternalDownloaderConstructor = {
+interface ExternalCookie {
+  name: string;
+  value: string;
+  path: string;
+  domain: string;
+}
+
+type ExternalFeature = "to_stdout" | "multiple_formats";
+
+export type ExternalDownloaderConstructor = {
   new (ydl: DownloaderHost, params?: Record<string, unknown>): FileDownloader;
   available?(path?: string | null): boolean;
   canDownload?(info: DownloadInfo, path?: string): boolean;
+  supportsManifest?(manifest: string): boolean;
 };
 
-export class ExternalFD extends FileDownloader {
+export class ExternalFD extends FragmentFD {
   static readonly AVAILABLE_OPT: string = "--version";
   static readonly EXE_NAME: string | null = null;
   static readonly SUPPORTED_PROTOCOLS = new Set(["http", "https", "ftp", "ftps"]);
+  static readonly SUPPORTED_FEATURES = new Set<ExternalFeature>();
+  #cookiesTempfile: string | null = null;
 
   static get basename(): string {
     return this.name.replace(/FD$/, "").toLowerCase();
@@ -41,7 +59,10 @@ export class ExternalFD extends FileDownloader {
 
   static supports(info: DownloadInfo): boolean {
     const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
-    return protocol.split("+").every((item) => this.SUPPORTED_PROTOCOLS.has(item));
+    return !(info.to_stdout && !this.SUPPORTED_FEATURES.has("to_stdout"))
+      && !(protocol.includes("+") && !this.SUPPORTED_FEATURES.has("multiple_formats"))
+      && !hasExternalFragmentModifiers(info)
+      && protocol.split("+").every((item) => this.SUPPORTED_PROTOCOLS.has(item));
   }
 
   static canDownload(info: DownloadInfo, path?: string): boolean {
@@ -50,24 +71,32 @@ export class ExternalFD extends FileDownloader {
 
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
     const tmpfilename = this.tempName(filename);
+    const fragments = Array.isArray(info.fragments) ? info.fragments.filter(isExternalFragment) : null;
     const cmd = await this.makeCmd(tmpfilename, info);
     this.writeDebug(`${this.fdName} command: ${cmd.join(" ")}`);
     const started = performance.now() / 1000;
-    const { stdout, stderr, exitCode } = await runShellCommand(cmd);
-    await this.cleanup(tmpfilename, info);
-    if (exitCode !== 0) {
-      throw new Error(`${cmd[0]} exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
+    try {
+      const { stdout, stderr, exitCode } = await runShellCommand(cmd);
+      if (exitCode !== 0) {
+        throw new Error(`${cmd[0]} exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
+      }
+      if (fragments) {
+        await this.concatFragmentFiles(tmpfilename, info, fragments);
+      }
+      await this.tryRename(tmpfilename, filename);
+      const size = await this.filesizeOrZero(filename);
+      await this.hookProgress({
+        status: "finished",
+        filename,
+        downloaded_bytes: size,
+        total_bytes: size,
+        elapsed: performance.now() / 1000 - started,
+      }, info);
+      return true;
+    } finally {
+      await this.cleanup(tmpfilename, info);
+      await this.cleanupCookieTempfile();
     }
-    await this.tryRename(tmpfilename, filename);
-    const size = await this.filesizeOrZero(filename);
-    await this.hookProgress({
-      status: "finished",
-      filename,
-      downloaded_bytes: size,
-      total_bytes: size,
-      elapsed: performance.now() / 1000 - started,
-    }, info);
-    return true;
   }
 
   protected async makeCmd(_tmpfilename: string, _info: DownloadInfo): Promise<string[]> {
@@ -76,6 +105,31 @@ export class ExternalFD extends FileDownloader {
 
   protected async cleanup(_tmpfilename: string, _info: DownloadInfo): Promise<void> {
     return;
+  }
+
+  protected async concatFragmentFiles(tmpfilename: string, info: DownloadInfo, fragments: readonly FragmentInfo[]): Promise<void> {
+    const writer = Bun.file(tmpfilename).writer({ highWaterMark: Number(this.params.buffersize ?? 64 * 1024) });
+    const skipUnavailable = this.params.skip_unavailable_fragments !== false;
+    try {
+      for (const [index, fragment] of fragments.entries()) {
+        const fragmentFilename = `${tmpfilename}-Frag${index}`;
+        const file = Bun.file(fragmentFilename);
+        if (!await file.exists()) {
+          if (skipUnavailable && index > 1) {
+            this.reportSkipFragment(index, `fragment file ${fragmentFilename} was not created`);
+            continue;
+          }
+          throw new Error(`Unable to open fragment ${index}: ${fragmentFilename}`);
+        }
+        const bytes = await this.decryptFragment(fragment, await file.bytes(), info);
+        writer.write(bytes);
+        if (!this.params.keep_fragments) {
+          await rm(fragmentFilename, { force: true });
+        }
+      }
+    } finally {
+      await writer.end();
+    }
   }
 
   protected exe(): string {
@@ -106,6 +160,32 @@ export class ExternalFD extends FileDownloader {
 
   protected cookieHeader(url: string): string | undefined {
     return (this.ydl as CookieHost).cookies?.getCookieHeader(url);
+  }
+
+  protected async cookieFile(url: string): Promise<string | null> {
+    const cookies = (this.ydl as CookieHost).cookies;
+    if (!cookies?.getCookieHeader(url)) {
+      return null;
+    }
+    if (cookies.filename) {
+      return cookies.filename;
+    }
+    if (!cookies.save) {
+      return null;
+    }
+    const dir = await mkdtemp(join(tmpdir(), "ytdlb-cookies-"));
+    this.#cookiesTempfile = join(dir, "cookies.txt");
+    this.toScreen(`[download] Writing temporary cookies file to "${this.#cookiesTempfile}"`);
+    await cookies.save(this.#cookiesTempfile);
+    return this.#cookiesTempfile;
+  }
+
+  private async cleanupCookieTempfile(): Promise<void> {
+    if (!this.#cookiesTempfile) {
+      return;
+    }
+    await rm(dirname(this.#cookiesTempfile), { recursive: true, force: true });
+    this.#cookiesTempfile = null;
   }
 }
 
@@ -155,6 +235,10 @@ export class AxelFD extends ExternalFD {
 export class WgetFD extends ExternalFD {
   protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
     const cmd = [this.exe(), "-O", tmpfilename, "-nv", "--compression=auto"];
+    const cookieFile = await this.cookieFile(info.url);
+    if (cookieFile) {
+      cmd.push("--load-cookies", cookieFile);
+    }
     pushHeaders(cmd, "--header", info.http_headers);
     cmd.push(...this.option("--limit-rate", "ratelimit"));
     const retry = this.option("--tries", "retries");
@@ -199,6 +283,10 @@ export class Aria2cFD extends ExternalFD {
       cmd.push("--allow-overwrite=true", "--allow-piece-length-change=true");
     } else {
       cmd.push("--min-split-size", "1M");
+    }
+    const cookieFile = await this.cookieFile(info.url);
+    if (cookieFile) {
+      cmd.push(`--load-cookies=${cookieFile}`);
     }
     pushHeaders(cmd, "--header", info.http_headers);
     cmd.push(...this.option("--max-overall-download-limit", "ratelimit"));
@@ -252,16 +340,23 @@ export class HttpieFD extends ExternalFD {
 }
 
 export class FFmpegFD extends FileDownloader {
+  static readonly SUPPORTED_PROTOCOLS = new Set(["http", "https", "ftp", "ftps", "m3u8", "m3u8_native", "rtsp", "rtmp", "rtmp_ffmpeg", "mms", "http_dash_segments"]);
+
   static available(): boolean {
     return Boolean(Bun.which("ffmpeg"));
   }
 
-  static canDownload(_info: DownloadInfo, _externalDownloader?: string): boolean {
-    return this.available();
+  static canDownload(info: DownloadInfo, _externalDownloader?: string): boolean {
+    const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
+    return this.available() && protocol.split("+").every((item) => this.SUPPORTED_PROTOCOLS.has(item));
   }
 
   static canMergeFormats(_info: DownloadInfo, _params: Record<string, unknown> = {}): boolean {
-    return this.available();
+    return Boolean(_info.requested_formats)
+      && typeof _info.protocol === "string"
+      && !_params.allow_unplayable_formats
+      && !(Array.isArray(_params.compat_opts) && _params.compat_opts.includes("no-direct-merge"))
+      && this.canDownload(_info);
   }
 
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -273,22 +368,29 @@ export class FFmpegFD extends FileDownloader {
     }
     const tmpfilename = this.tempName(filename);
     const selectedFormats = selectedFfmpegFormats(info);
+    const cookieGetter = (this.ydl as CookieHost).cookies?.getCookiesForUrl?.bind((this.ydl as CookieHost).cookies);
     const args = [
       "-hide_banner",
       "-nostdin",
       "-y",
-      ...inputArgs(selectedFormats, info),
+      ...inputArgs(selectedFormats, info, this.params, cookieGetter),
       "-c",
       "copy",
       ...mapArgs(selectedFormats, info),
       ...testArgs(this.params),
       "-f",
       outputFormatForInfo(filename, info),
+      ...stringListFromPath(info, "downloader_options", "ffmpeg_args_out"),
       FFmpegPostProcessor.ffmpegFilenameArgument(tmpfilename),
     ];
     this.writeDebug(`ffmpeg command: ${[exe, ...args].join(" ")}`);
+    const proxy = typeof this.params.proxy === "string" ? this.params.proxy : null;
+    if (proxy?.startsWith("socks")) {
+      this.ydl.reportWarning?.("ffmpeg does not support SOCKS proxies. Downloading is likely to fail.");
+    }
+    const env = proxy ? ffmpegProxyEnv(proxy) : undefined;
     const started = performance.now() / 1000;
-    const { stdout, stderr, exitCode } = await runShellCommand([exe, ...args]);
+    const { stdout, stderr, exitCode } = await runShellCommand([exe, ...args], env);
     if (exitCode !== 0) {
       throw new Error(`ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
     }
@@ -305,12 +407,38 @@ export class FFmpegFD extends FileDownloader {
   }
 }
 
-export function getExternalDownloader(_externalDownloader: string): ExternalDownloaderConstructor {
+export function getExternalDownloader(_externalDownloader: string): ExternalDownloaderConstructor | null {
   const name = _externalDownloader.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
-  return EXTERNAL_BY_NAME[name] ?? FFmpegFD;
+  return EXTERNAL_BY_NAME[name] ?? Object.values(EXTERNAL_BY_NAME).find((ctor) => ctor === FFmpegFD && name.includes("ffmpeg")) ?? null;
 }
 
 export const get_external_downloader = getExternalDownloader;
+
+export function listExternalDownloaders(): string[] {
+  return Object.keys(EXTERNAL_BY_NAME).sort();
+}
+
+export const list_external_downloaders = listExternalDownloaders;
+
+export function getExternalFragmentDownloader(
+  params: Record<string, unknown>,
+  protocolKey: string,
+  info: DownloadInfo,
+  manifest?: string,
+): ExternalDownloaderConstructor | null {
+  const selected = selectedExternalDownloader(params.external_downloader, protocolKey);
+  if (!selected || selected.toLowerCase() === "native") {
+    return null;
+  }
+  const ExternalDownloader = getExternalDownloader(selected);
+  if (!ExternalDownloader?.canDownload?.(info, selected)) {
+    return null;
+  }
+  if (manifest && ExternalDownloader.supportsManifest && !ExternalDownloader.supportsManifest(manifest)) {
+    return null;
+  }
+  return ExternalDownloader;
+}
 
 export function headersToFfmpegArgs(headers: Record<string, string> | undefined): string[] {
   if (!headers || !Object.keys(headers).length) {
@@ -357,10 +485,16 @@ function isDownloadInfo(value: unknown): value is DownloadInfo {
   return Boolean(value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string");
 }
 
-function inputArgs(formats: readonly DownloadInfo[], info: DownloadInfo): string[] {
+function inputArgs(
+  formats: readonly DownloadInfo[],
+  info: DownloadInfo,
+  params: Record<string, unknown>,
+  cookieGetter?: (url: string) => ExternalCookie[],
+): string[] {
   const args: string[] = [];
   const sectionStart = numberOrNull(info.section_start);
   const sectionEnd = numberOrNull(info.section_end);
+  const fallbackInputArgs = stringListFromPath(info, "downloader_options", "ffmpeg_args");
   for (const format of formats) {
     if (sectionStart !== null) {
       args.push("-ss", String(sectionStart));
@@ -368,12 +502,24 @@ function inputArgs(formats: readonly DownloadInfo[], info: DownloadInfo): string
     if (sectionStart !== null && sectionEnd !== null) {
       args.push("-t", String(sectionEnd - sectionStart));
     }
+    let inputUrl = format.url;
+    const isHttp = /^https?:\/\//.test(inputUrl);
+    if (isHttp && cookieGetter) {
+      const cookies = cookieGetter(inputUrl);
+      if (cookies.length) {
+        args.push("-cookies", cookies.map((cookie) => `${cookie.name}=${cookie.value}; path=${cookie.path}; domain=${cookie.domain};\r\n`).join(""));
+      }
+    }
     args.push(...headersToFfmpegArgs(format.http_headers ?? info.http_headers));
     args.push(...rtmpArgs(format));
     if (format.protocol === "http_dash_segments" && format.is_live) {
       args.push("-re");
     }
-    args.push("-i", format.url);
+    if (params.enable_file_urls && inputUrl.startsWith("file:")) {
+      args.push("-protocol_whitelist", "file,crypto,data,http,https,tcp,tls");
+      inputUrl = inputUrl.replace(/^file:\/\/(?:localhost)?\//, process.platform === "win32" ? "file:" : "file:/");
+    }
+    args.push(...stringListFromPath(format, "downloader_options", "ffmpeg_args", fallbackInputArgs), "-i", inputUrl);
   }
   return args;
 }
@@ -428,6 +574,14 @@ function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function ffmpegProxyEnv(proxy: string): Record<string, string> {
+  const normalized = /^[\da-z]+:\/\//i.test(proxy) ? proxy : `http://${proxy}`;
+  return {
+    HTTP_PROXY: normalized,
+    http_proxy: normalized,
+  };
+}
+
 const EXTERNAL_BY_NAME: Record<string, ExternalDownloaderConstructor> = {
   curl: CurlFD,
   axel: AxelFD,
@@ -451,8 +605,43 @@ function aria2cFilename(filename: string): string {
   return isAbsolute(filename) ? filename : `./${filename}`;
 }
 
-async function runShellCommand(cmd: readonly string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const output = await $`${[...cmd]}`.nothrow().quiet();
+function stringListFromPath(record: Record<string, unknown>, key: string, childKey: string, fallback: readonly string[] = []): string[] {
+  const child = record[key];
+  if (!child || typeof child !== "object") {
+    return [...fallback];
+  }
+  const value = (child as Record<string, unknown>)[childKey];
+  return Array.isArray(value) ? value.map(String) : [...fallback];
+}
+
+function hasExternalFragmentModifiers(info: DownloadInfo): boolean {
+  return Boolean(info.hls_aes)
+    || typeof info.extra_param_to_segment_url === "string"
+    || typeof info.extra_param_to_key_url === "string";
+}
+
+function selectedExternalDownloader(value: unknown, protocolKey: string): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const selected = record[protocolKey] ?? record.default;
+  return typeof selected === "string" ? selected : null;
+}
+
+function isExternalFragment(value: unknown): value is FragmentInfo {
+  return Boolean(value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string");
+}
+
+async function runShellCommand(
+  cmd: readonly string[],
+  env?: Record<string, string | undefined>,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const shell = $`${[...cmd]}`.nothrow().quiet();
+  const output = await (env ? shell.env({ ...process.env, ...env }) : shell);
   return {
     stdout: output.stdout.toString(),
     stderr: output.stderr.toString(),

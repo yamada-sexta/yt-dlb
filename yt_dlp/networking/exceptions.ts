@@ -2,7 +2,7 @@
 
 export class RequestError extends Error {
   readonly causeValue: Error | string | null;
-  readonly handler: unknown;
+  handler: unknown;
 
   constructor(message?: string | null, options: { cause?: Error | string | null; handler?: unknown } = {}) {
     super(message ?? (options.cause ? String(options.cause) : ""));

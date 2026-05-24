@@ -3,13 +3,17 @@
 import { NotImplementedError } from "../errors.ts";
 import { ReExtractInfo, updateUrlQuery } from "../utils/utils.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
+import { FFmpegFD, getExternalFragmentDownloader } from "./external.ts";
 import type { DownloadInfo } from "./common.ts";
 
 export class DashSegmentsFD extends FragmentFD {
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
     const formats = Array.isArray(info.requested_formats) ? info.requested_formats as DownloadInfo[] : [info];
     if (info.is_live) {
-      throw new NotImplementedError("live DASH videos");
+      if (FFmpegFD.available()) {
+        return await new FFmpegFD(this.ydl, this.params).download(filename, info);
+      }
+      throw new NotImplementedError("live DASH videos require ffmpeg");
     }
     let result = true;
     for (const [index, format] of formats.entries()) {
@@ -46,6 +50,15 @@ export class DashSegmentsFD extends FragmentFD {
       };
     });
     this.toScreen("[dashsegments] Total fragments: " + fragments.length);
+    const external = getExternalFragmentDownloader(this.params, "dash", { ...format, protocol: "dash_frag_urls", fragments });
+    if (external) {
+      this.toScreen(`[dashsegments] Fragment downloads will be delegated to ${external.name.replace(/FD$/, "").toLowerCase()}`);
+      return await new external(this.ydl, this.params).download(filename, {
+        ...format,
+        protocol: "dash_frag_urls",
+        fragments,
+      });
+    }
     try {
       return await this.downloadFragments(filename, format, fragments);
     } catch (error) {

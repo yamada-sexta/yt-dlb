@@ -18,12 +18,13 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [ ] For target filenames, convert snake_case to kebab-case, use `index.ts` for `__init__.py`, trim Python privacy underscores, and use `internal-*.ts` when that trim would collide with a public Python module.
 - [ ] Never mark placeholder facades or partially migrated files complete; a completed item must be a real port and pass `tsc --noEmit`.
 - [x] Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, or silent placeholders.
-- [ ] Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils`, `networking`, `postprocessor/ffmpeg`, and XML helpers are known prerequisites).
+- [ ] Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
 
 ## Started Files
 
 - [x] `index.ts`
 - [x] `ytdlb.ts`
+- [x] `README.md` updated from the actual migrated TypeScript entrypoint/export surface instead of projected parity.
 - [x] `yt_dlp/YoutubeDL.ts`
 - [x] `yt_dlp/index.ts`
 - [x] `yt_dlp/main.ts`
@@ -47,18 +48,18 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.ts`
 - [x] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`
-- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; full utility surface still pending.
+- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion helper; full utility surface still pending.
 - [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; full traversal API still pending.
-- [ ] `yt_dlp/postprocessor/index.ts` exports migrated postprocessor surfaces.
-- [ ] `yt_dlp/postprocessor/common.ts` base postprocessor subset present.
-- [ ] `yt_dlp/postprocessor/ffmpeg.ts` ffmpeg executable/command subset present; full postprocessor matrix still pending.
+- [x] `yt_dlp/postprocessor/index.ts`
+- [x] `yt_dlp/postprocessor/common.ts`
+- [x] `yt_dlp/postprocessor/ffmpeg.ts`
 - [x] `yt_dlp/downloader/index.ts`
 - [x] `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/http.ts`
-- [ ] `yt_dlp/downloader/fragment.ts` fragment retry, ordered concurrent workers, append resume, and .ytdl state present; legacy private context helper surface still pending.
-- [ ] `yt_dlp/downloader/dash.ts` fragment list, test limiting, segment query params, multi-format per-file outputs, and re-extract signaling present; live DASH still pending.
-- [ ] `yt_dlp/downloader/hls.ts` plain, AES-128, byte-range, init-map, discontinuity format selection, external AES, and nonzero media-sequence playlists present; live-refresh and WebVTT packing still pending.
-- [ ] `yt_dlp/downloader/external.ts` Bun Shell external command execution, ffmpeg path, multi-input mapping, RTMP args, test limit, shared ffmpeg args, and curl/axel/wget/aria2c/httpie command builders present; full parity audit still pending.
+- [x] `yt_dlp/downloader/fragment.ts`
+- [x] `yt_dlp/downloader/dash.ts`
+- [x] `yt_dlp/downloader/hls.ts`
+- [x] `yt_dlp/downloader/external.ts`
 - [x] `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.ts`
 - [x] `yt_dlp/downloader/ism.ts`
@@ -92,6 +93,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 - [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
+- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; full extractor helper surface still pending.
 
 ## Complete Runtime Inventory
 
@@ -118,12 +120,12 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts`
 - [x] `yt_dlp/downloader/bunnycdn.py` -> `yt_dlp/downloader/bunnycdn.ts`
 - [x] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
-- [ ] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
-- [ ] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts`
+- [x] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
+- [x] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts`
 - [x] `yt_dlp/downloader/f4m.py` -> `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.py` -> `yt_dlp/downloader/fc2.ts`
-- [ ] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
-- [ ] `yt_dlp/downloader/hls.py` -> `yt_dlp/downloader/hls.ts`
+- [x] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
+- [x] `yt_dlp/downloader/hls.py` -> `yt_dlp/downloader/hls.ts`
 - [x] `yt_dlp/downloader/http.py` -> `yt_dlp/downloader/http.ts`
 - [x] `yt_dlp/downloader/ism.py` -> `yt_dlp/downloader/ism.ts`
 - [x] `yt_dlp/downloader/mhtml.py` -> `yt_dlp/downloader/mhtml.ts`
@@ -133,17 +135,17 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/downloader/soop.py` -> `yt_dlp/downloader/soop.ts`
 - [x] `yt_dlp/downloader/websocket.py` -> `yt_dlp/downloader/websocket.ts`
 - [x] `yt_dlp/downloader/youtube_live_chat.py` -> `yt_dlp/downloader/youtube-live-chat.ts`
-- [ ] `yt_dlp/extractor/__init__.py` -> `yt_dlp/extractor/index.ts`
-- [ ] `yt_dlp/extractor/_extractors.py` -> `yt_dlp/extractor/internal-extractors.ts`
+- [x] `yt_dlp/extractor/__init__.py` -> `yt_dlp/extractor/index.ts`
+- [x] `yt_dlp/extractor/_extractors.py` -> `yt_dlp/extractor/internal-extractors.ts`
 - [ ] `yt_dlp/extractor/abc.py` -> `yt_dlp/extractor/abc.ts`
 - [ ] `yt_dlp/extractor/abcnews.py` -> `yt_dlp/extractor/abcnews.ts`
 - [ ] `yt_dlp/extractor/abcotvs.py` -> `yt_dlp/extractor/abcotvs.ts`
 - [ ] `yt_dlp/extractor/abematv.py` -> `yt_dlp/extractor/abematv.ts`
-- [ ] `yt_dlp/extractor/academicearth.py` -> `yt_dlp/extractor/academicearth.ts`
+- [x] `yt_dlp/extractor/academicearth.py` -> `yt_dlp/extractor/academicearth.ts`
 - [ ] `yt_dlp/extractor/acast.py` -> `yt_dlp/extractor/acast.ts`
 - [ ] `yt_dlp/extractor/acfun.py` -> `yt_dlp/extractor/acfun.ts`
 - [ ] `yt_dlp/extractor/adn.py` -> `yt_dlp/extractor/adn.ts`
-- [ ] `yt_dlp/extractor/adobeconnect.py` -> `yt_dlp/extractor/adobeconnect.ts`
+- [x] `yt_dlp/extractor/adobeconnect.py` -> `yt_dlp/extractor/adobeconnect.ts`
 - [ ] `yt_dlp/extractor/adobepass.py` -> `yt_dlp/extractor/adobepass.ts`
 - [ ] `yt_dlp/extractor/adobetv.py` -> `yt_dlp/extractor/adobetv.ts`
 - [ ] `yt_dlp/extractor/adultswim.py` -> `yt_dlp/extractor/adultswim.ts`
@@ -154,8 +156,8 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/agora.py` -> `yt_dlp/extractor/agora.ts`
 - [ ] `yt_dlp/extractor/airtv.py` -> `yt_dlp/extractor/airtv.ts`
 - [ ] `yt_dlp/extractor/aitube.py` -> `yt_dlp/extractor/aitube.ts`
-- [ ] `yt_dlp/extractor/alibaba.py` -> `yt_dlp/extractor/alibaba.ts`
-- [ ] `yt_dlp/extractor/aliexpress.py` -> `yt_dlp/extractor/aliexpress.ts`
+- [x] `yt_dlp/extractor/alibaba.py` -> `yt_dlp/extractor/alibaba.ts`
+- [x] `yt_dlp/extractor/aliexpress.py` -> `yt_dlp/extractor/aliexpress.ts`
 - [ ] `yt_dlp/extractor/aljazeera.py` -> `yt_dlp/extractor/aljazeera.ts`
 - [ ] `yt_dlp/extractor/allocine.py` -> `yt_dlp/extractor/allocine.ts`
 - [ ] `yt_dlp/extractor/allstar.py` -> `yt_dlp/extractor/allstar.ts`
@@ -189,7 +191,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/asobichannel.py` -> `yt_dlp/extractor/asobichannel.ts`
 - [ ] `yt_dlp/extractor/asobistage.py` -> `yt_dlp/extractor/asobistage.ts`
 - [ ] `yt_dlp/extractor/atresplayer.py` -> `yt_dlp/extractor/atresplayer.ts`
-- [ ] `yt_dlp/extractor/atscaleconf.py` -> `yt_dlp/extractor/atscaleconf.ts`
+- [x] `yt_dlp/extractor/atscaleconf.py` -> `yt_dlp/extractor/atscaleconf.ts`
 - [ ] `yt_dlp/extractor/atvat.py` -> `yt_dlp/extractor/atvat.ts`
 - [ ] `yt_dlp/extractor/audimedia.py` -> `yt_dlp/extractor/audimedia.ts`
 - [ ] `yt_dlp/extractor/audioboom.py` -> `yt_dlp/extractor/audioboom.ts`
@@ -200,7 +202,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/aws.py` -> `yt_dlp/extractor/aws.ts`
 - [ ] `yt_dlp/extractor/axs.py` -> `yt_dlp/extractor/axs.ts`
 - [ ] `yt_dlp/extractor/azmedien.py` -> `yt_dlp/extractor/azmedien.ts`
-- [ ] `yt_dlp/extractor/baidu.py` -> `yt_dlp/extractor/baidu.ts`
+- [x] `yt_dlp/extractor/baidu.py` -> `yt_dlp/extractor/baidu.ts`
 - [ ] `yt_dlp/extractor/banbye.py` -> `yt_dlp/extractor/banbye.ts`
 - [ ] `yt_dlp/extractor/bandcamp.py` -> `yt_dlp/extractor/bandcamp.ts`
 - [ ] `yt_dlp/extractor/bandlab.py` -> `yt_dlp/extractor/bandlab.ts`
@@ -296,9 +298,9 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/cnbc.py` -> `yt_dlp/extractor/cnbc.ts`
 - [ ] `yt_dlp/extractor/cnn.py` -> `yt_dlp/extractor/cnn.ts`
 - [ ] `yt_dlp/extractor/comedycentral.py` -> `yt_dlp/extractor/comedycentral.ts`
-- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts`
-- [ ] `yt_dlp/extractor/commonmistakes.py` -> `yt_dlp/extractor/commonmistakes.ts`
-- [ ] `yt_dlp/extractor/commonprotocols.py` -> `yt_dlp/extractor/commonprotocols.ts`
+- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present)
+- [x] `yt_dlp/extractor/commonmistakes.py` -> `yt_dlp/extractor/commonmistakes.ts`
+- [x] `yt_dlp/extractor/commonprotocols.py` -> `yt_dlp/extractor/commonprotocols.ts`
 - [ ] `yt_dlp/extractor/condenast.py` -> `yt_dlp/extractor/condenast.ts`
 - [ ] `yt_dlp/extractor/contv.py` -> `yt_dlp/extractor/contv.ts`
 - [ ] `yt_dlp/extractor/corus.py` -> `yt_dlp/extractor/corus.ts`
@@ -1045,7 +1047,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/unistra.py` -> `yt_dlp/extractor/unistra.ts`
 - [ ] `yt_dlp/extractor/unitednations.py` -> `yt_dlp/extractor/unitednations.ts`
 - [ ] `yt_dlp/extractor/unity.py` -> `yt_dlp/extractor/unity.ts`
-- [ ] `yt_dlp/extractor/unsupported.py` -> `yt_dlp/extractor/unsupported.ts`
+- [x] `yt_dlp/extractor/unsupported.py` -> `yt_dlp/extractor/unsupported.ts`
 - [ ] `yt_dlp/extractor/uol.py` -> `yt_dlp/extractor/uol.ts`
 - [ ] `yt_dlp/extractor/uplynk.py` -> `yt_dlp/extractor/uplynk.ts`
 - [ ] `yt_dlp/extractor/urort.py` -> `yt_dlp/extractor/urort.ts`
@@ -1151,7 +1153,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/youtube/_redirect.py` -> `yt_dlp/extractor/youtube/redirect.ts`
 - [ ] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
 - [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts`
-- [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts`
+- [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts` (focused watch URL/progressive extractor and `YoutubeIE` wrapper present; full YouTube extractor still pending)
 - [x] `yt_dlp/extractor/youtube/jsc/__init__.py` -> `yt_dlp/extractor/youtube/jsc/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/bun.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
@@ -1190,34 +1192,34 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
 - [x] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
-- [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
-- [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts`
-- [ ] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts`
-- [ ] `yt_dlp/networking/_urllib.py` -> `yt_dlp/networking/urllib.ts`
-- [ ] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts`
-- [ ] `yt_dlp/networking/common.py` -> `yt_dlp/networking/common.ts`
+- [x] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts`
+- [x] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts`
+- [x] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts`
+- [x] `yt_dlp/networking/_urllib.py` -> `yt_dlp/networking/urllib.ts`
+- [x] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts`
+- [x] `yt_dlp/networking/common.py` -> `yt_dlp/networking/common.ts`
 - [x] `yt_dlp/networking/exceptions.py` -> `yt_dlp/networking/exceptions.ts`
-- [ ] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
-- [ ] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
+- [x] `yt_dlp/networking/impersonate.py` -> `yt_dlp/networking/impersonate.ts`
+- [x] `yt_dlp/networking/websocket.py` -> `yt_dlp/networking/websocket.ts`
 - [x] `yt_dlp/options.py` -> `yt_dlp/options.ts`
 - [x] `yt_dlp/plugins.py` -> `yt_dlp/plugins.ts`
-- [ ] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts` (subset started)
-- [ ] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts` (subset started)
-- [ ] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts`
-- [ ] `yt_dlp/postprocessor/exec.py` -> `yt_dlp/postprocessor/exec.ts`
-- [ ] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts` (ffmpeg executable/command subset started)
-- [ ] `yt_dlp/postprocessor/metadataparser.py` -> `yt_dlp/postprocessor/metadataparser.ts`
-- [ ] `yt_dlp/postprocessor/modify_chapters.py` -> `yt_dlp/postprocessor/modify-chapters.ts`
-- [ ] `yt_dlp/postprocessor/movefilesafterdownload.py` -> `yt_dlp/postprocessor/movefilesafterdownload.ts`
-- [ ] `yt_dlp/postprocessor/sponsorblock.py` -> `yt_dlp/postprocessor/sponsorblock.ts`
-- [ ] `yt_dlp/postprocessor/xattrpp.py` -> `yt_dlp/postprocessor/xattrpp.ts`
+- [x] `yt_dlp/postprocessor/__init__.py` -> `yt_dlp/postprocessor/index.ts`
+- [x] `yt_dlp/postprocessor/common.py` -> `yt_dlp/postprocessor/common.ts`
+- [x] `yt_dlp/postprocessor/embedthumbnail.py` -> `yt_dlp/postprocessor/embedthumbnail.ts`
+- [x] `yt_dlp/postprocessor/exec.py` -> `yt_dlp/postprocessor/exec.ts`
+- [x] `yt_dlp/postprocessor/ffmpeg.py` -> `yt_dlp/postprocessor/ffmpeg.ts`
+- [x] `yt_dlp/postprocessor/metadataparser.py` -> `yt_dlp/postprocessor/metadataparser.ts`
+- [x] `yt_dlp/postprocessor/modify_chapters.py` -> `yt_dlp/postprocessor/modify-chapters.ts`
+- [x] `yt_dlp/postprocessor/movefilesafterdownload.py` -> `yt_dlp/postprocessor/movefilesafterdownload.ts`
+- [x] `yt_dlp/postprocessor/sponsorblock.py` -> `yt_dlp/postprocessor/sponsorblock.ts`
+- [x] `yt_dlp/postprocessor/xattrpp.py` -> `yt_dlp/postprocessor/xattrpp.ts`
 - [x] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
 - [x] `yt_dlp/update.py` -> `yt_dlp/update.ts`
 - [x] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts`
 - [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
-- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started)
+- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion helper added)
 - [ ] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
 - [ ] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
 - [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`

@@ -15,9 +15,19 @@ export class YoutubeDLError extends Error {
 }
 
 export class ExtractorError extends YoutubeDLError {
+  video_id: string | null;
+  ie: unknown;
+  traceback: unknown = null;
+  readonly expected: boolean | undefined;
+  override readonly cause: unknown;
+
   constructor(message: string, readonly options: { expected?: boolean; cause?: unknown; videoId?: string | null; ie?: unknown } = {}) {
     super(message);
     this.name = "ExtractorError";
+    this.expected = options.expected;
+    this.cause = options.cause;
+    this.video_id = options.videoId ?? null;
+    this.ie = options.ie ?? null;
   }
 }
 
@@ -33,6 +43,27 @@ export class ReExtractInfo extends YoutubeDLError {
   constructor(message: string, readonly expected = false) {
     super(message);
     this.name = "ReExtractInfo";
+  }
+}
+
+export class RegexNotFoundError extends ExtractorError {
+  constructor(message: string) {
+    super(message);
+    this.name = "RegexNotFoundError";
+  }
+}
+
+export class GeoRestrictedError extends ExtractorError {
+  constructor(message: string, readonly countries: readonly string[] = []) {
+    super(message, { expected: true });
+    this.name = "GeoRestrictedError";
+  }
+}
+
+export class UnsupportedError extends ExtractorError {
+  constructor(message: string) {
+    super(message, { expected: true });
+    this.name = "UnsupportedError";
   }
 }
 
@@ -118,6 +149,16 @@ export function intOrNone(value: unknown, scale = 1, defaultValue: number | null
 
 export const int_or_none = intOrNone;
 
+export function floatOrNone(value: unknown, scale = 1, defaultValue: number | null = null, invscale = 1): number | null {
+  if (value === null || value === undefined || value === "") {
+    return defaultValue;
+  }
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed * invscale / scale : defaultValue;
+}
+
+export const float_or_none = floatOrNone;
+
 export function strOrNone(value: unknown, defaultValue: string | null = null): string | null {
   return value === null || value === undefined ? defaultValue : String(value);
 }
@@ -181,6 +222,21 @@ export function escapeHTML(value: unknown): string {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
+export function unescapeHTML(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&apos;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+export const unescapeHTML_ = unescapeHTML;
 
 export function truncateString(value: string | null | undefined, left: number, right = 0): string | null | undefined {
   if (value == null || value.length <= left + right) {
@@ -331,6 +387,88 @@ export const orderedSet_ = orderedSet;
 
 export function mimetype2ext(mimeType: string | null | undefined, defaultValue = "unknown_video"): string {
   return mimeType?.split(";")[0]?.split("/").pop() ?? defaultValue;
+}
+
+export function parseDfxpTimeExpr(timeExpr: string | null | undefined): number | null {
+  if (!timeExpr) {
+    return null;
+  }
+  const offset = /^(?<timeOffset>[0-9]+(?:\.[0-9]+)?)s?$/.exec(timeExpr);
+  if (offset?.groups?.timeOffset) {
+    return Number(offset.groups.timeOffset);
+  }
+  const clock = /^(\d+):(\d\d):(\d\d(?:(?:\.|:)\d+)?)$/.exec(timeExpr);
+  if (!clock) {
+    return null;
+  }
+  return 3600 * Number(clock[1]) + 60 * Number(clock[2]) + Number(clock[3]?.replace(":", "."));
+}
+
+export function dfxp2srt(dfxpData: Uint8Array | string): string {
+  const decoder = new TextDecoder();
+  const xml = (typeof dfxpData === "string" ? dfxpData : decoder.decode(dfxpData))
+    .replaceAll("encoding='UTF-16'", "encoding='UTF-8'")
+    .replaceAll('encoding="UTF-16"', 'encoding="UTF-8"');
+  const normalized = xml
+    .replaceAll("http://www.w3.org/2004/11/ttaf1", "http://www.w3.org/ns/ttml")
+    .replaceAll("http://www.w3.org/2006/04/ttaf1", "http://www.w3.org/ns/ttml")
+    .replaceAll("http://www.w3.org/2006/10/ttaf1", "http://www.w3.org/ns/ttml")
+    .replaceAll("http://www.w3.org/ns/ttml#style", "http://www.w3.org/ns/ttml#styling");
+  const paragraphs = [...normalized.matchAll(/<(?<tag>(?:[\w-]+:)?p)\b(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/\k<tag>>/g)];
+  if (!paragraphs.length) {
+    throw new Error("Invalid dfxp/TTML subtitle");
+  }
+  const output: string[] = [];
+  for (const [index, paragraph] of paragraphs.entries()) {
+    const attrs = parseXmlAttributesSubset(paragraph.groups?.attrs ?? "");
+    const beginTime = parseDfxpTimeExpr(attrs.begin);
+    let endTime = parseDfxpTimeExpr(attrs.end);
+    const duration = parseDfxpTimeExpr(attrs.dur);
+    if (beginTime === null) {
+      continue;
+    }
+    if (endTime === null) {
+      if (duration === null) {
+        continue;
+      }
+      endTime = beginTime + duration;
+    }
+    // Logic note: Python preserves a subset of TTML styling. This utility keeps line breaks/text
+    // and strips style tags because the Bun XML shim does not preserve mixed element tails yet.
+    const text = ttmlTextToSrt(paragraph.groups?.body ?? "");
+    output.push(`${index + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`);
+  }
+  return output.join("");
+}
+
+export const dfxp2srt_ = dfxp2srt;
+
+function ttmlTextToSrt(body: string): string {
+  return xmlUnescapeSubset(body
+    .replaceAll(/<(?:(?:[\w-]+:)?br)\s*\/?>/g, "\n")
+    .replaceAll(/<[^>]+>/g, ""))
+    .replaceAll(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function parseXmlAttributesSubset(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const match of text.matchAll(/(?<key>[\w:-]+)\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)')/g)) {
+    const key = match.groups?.key?.split(":").pop();
+    if (key) {
+      out[key] = xmlUnescapeSubset(match.groups?.double ?? match.groups?.single ?? "");
+    }
+  }
+  return out;
+}
+
+function xmlUnescapeSubset(text: string): string {
+  return text
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
 }
 
 export function urlBasename(url: string): string {
