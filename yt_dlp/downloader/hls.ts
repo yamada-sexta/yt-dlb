@@ -1,5 +1,5 @@
 // Source: yt_dlp/downloader/hls.py
-// Port note: this implements plain media-segment HLS. AES-128, DRM, byte ranges, and live HLS throw explicitly.
+// Port note: this implements plain/AES-128 media-segment HLS with byte ranges. Live-refresh HLS throws explicitly.
 
 import { NotImplementedError } from "../errors.ts";
 import { aesCbcDecryptBytes, unpadPkcs7 } from "../aes.ts";
@@ -16,8 +16,7 @@ export class HlsFD extends FragmentFD {
       return false;
     }
     return !/#EXT-X-KEY:METHOD=(?!(?:NONE|AES-128)\b)/.test(manifest)
-      && !/#EXT-X-BYTERANGE:/m.test(manifest)
-      && !/#EXT-X-MEDIA-SEQUENCE:(?!0$)/m.test(manifest);
+      && /#EXT-X-ENDLIST/m.test(manifest);
   }
 
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -33,10 +32,7 @@ export class HlsFD extends FragmentFD {
       if (/#EXT-X-KEY:METHOD=(?!(?:NONE|AES-128)\b)/.test(manifest)) {
         throw new NotImplementedError("non-AES-128 encrypted HLS segments");
       }
-      if (/#EXT-X-BYTERANGE:/m.test(manifest)) {
-        throw new NotImplementedError("HLS byte ranges");
-      }
-      if (/#EXT-X-MEDIA-SEQUENCE:(?!0$)/m.test(manifest)) {
+      if (!/#EXT-X-ENDLIST/m.test(manifest)) {
         throw new NotImplementedError("live HLS");
       }
       throw new NotImplementedError("unsupported HLS manifest");
@@ -46,12 +42,22 @@ export class HlsFD extends FragmentFD {
     let adFragment = false;
     let decryptInfo: HlsDecryptInfo = { method: "NONE" };
     let mediaSequence = 0;
+    let byteRange: { length: number; offset: number } | null = null;
+    let nextByteRangeOffset = 0;
     for (const rawLine of manifest.split(/\r?\n/)) {
       const line = rawLine.trim();
       if (!line) {
         continue;
       }
       if (line.startsWith("#")) {
+        if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
+          mediaSequence = Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length)) || 0;
+        }
+        if (line.startsWith("#EXT-X-BYTERANGE:")) {
+          const parsed = parseByteRange(line.slice("#EXT-X-BYTERANGE:".length), nextByteRangeOffset);
+          byteRange = parsed;
+          nextByteRangeOffset = parsed.offset + parsed.length;
+        }
         if (line.startsWith("#EXT-X-KEY:")) {
           decryptInfo = await this.parseDecryptInfo(line.slice("#EXT-X-KEY:".length), manifestUrl);
         }
@@ -70,10 +76,15 @@ export class HlsFD extends FragmentFD {
         fragments.push({
           frag_index: fragments.length + 1,
           url: new URL(line, manifestUrl).toString(),
+          http_headers: byteRange ? {
+            ...info.http_headers,
+            Range: `bytes=${byteRange.offset}-${byteRange.offset + byteRange.length - 1}`,
+          } : undefined,
           transformData,
         });
       }
       mediaSequence += 1;
+      byteRange = null;
     }
     if (!fragments.length) {
       throw new Error("HLS manifest has no media fragments");
@@ -105,6 +116,19 @@ export class HlsFD extends FragmentFD {
       iv: attributes.IV ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0")) : undefined,
     };
   }
+}
+
+function parseByteRange(value: string, nextOffset: number): { length: number; offset: number } {
+  const match = /^(?<length>\d+)(?:@(?<offset>\d+))?$/.exec(value.trim());
+  if (!match?.groups) {
+    throw new Error(`Invalid HLS byte range: ${value}`);
+  }
+  const length = Number(match.groups.length);
+  const offset = match.groups.offset ? Number(match.groups.offset) : nextOffset;
+  if (!Number.isSafeInteger(length) || !Number.isSafeInteger(offset)) {
+    throw new Error(`Invalid HLS byte range: ${value}`);
+  }
+  return { length, offset };
 }
 
 export const can_download = HlsFD.canDownload;

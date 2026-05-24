@@ -18,15 +18,28 @@ export class DashSegmentsFD extends FragmentFD {
       throw new Error("DASH format has no fragments");
     }
     const base = typeof format.fragment_base_url === "string" ? format.fragment_base_url : format.url;
-    const fragments = format.fragments.map((fragment, index): FragmentInfo => {
+    const extraQuery = typeof info.extra_param_to_segment_url === "string"
+      ? new URLSearchParams(info.extra_param_to_segment_url)
+      : null;
+    const sourceFragments = this.params.test ? format.fragments.slice(0, 1) : format.fragments;
+    const fragments = sourceFragments.map((fragment, index): FragmentInfo => {
       const item = fragment as { url?: string; path?: string; fragment_count?: number };
+      const rawUrl = item.url ?? new URL(item.path ?? "", base).toString();
       return {
         frag_index: index + 1,
         fragment_count: item.fragment_count,
-        url: item.url ?? new URL(item.path ?? "", base).toString(),
+        url: extraQuery ? updateUrlQuery(rawUrl, extraQuery) : rawUrl,
       };
     });
     this.toScreen("[dashsegments] Total fragments: " + fragments.length);
     return await this.downloadFragments(filename, format, fragments);
   }
+}
+
+function updateUrlQuery(url: string, extraQuery: URLSearchParams): string {
+  const parsed = new URL(url);
+  for (const [key, value] of extraQuery) {
+    parsed.searchParams.append(key, value);
+  }
+  return parsed.toString();
 }

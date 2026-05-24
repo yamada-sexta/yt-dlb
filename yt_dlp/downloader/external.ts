@@ -68,14 +68,14 @@ export function getExternalDownloader(_externalDownloader: string): typeof FFmpe
 
 export const get_external_downloader = getExternalDownloader;
 
-function headersToFfmpegArgs(headers: Record<string, string> | undefined): string[] {
+export function headersToFfmpegArgs(headers: Record<string, string> | undefined): string[] {
   if (!headers || !Object.keys(headers).length) {
     return [];
   }
   return ["-headers", Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join("\r\n") + "\r\n"];
 }
 
-function outputFormat(filename: string): string {
+export function outputFormat(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase();
   if (ext === "mp4" || ext === "m4a") {
     return "mp4";
