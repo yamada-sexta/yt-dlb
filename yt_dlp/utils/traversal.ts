@@ -1,7 +1,7 @@
 // Source: yt_dlp/utils/traversal.py
 // Port note: this implements the traversal forms used by migrated downloader/extractor code.
 
-import { NO_DEFAULT, variadic } from "./utils.ts";
+import { variadic } from "./utils.ts";
 import { z } from "zod";
 
 export type TraverseKey =
@@ -39,10 +39,14 @@ export function traverseObj<T = unknown>(
     const values = applyPath(obj, Array.isArray(path) ? path as readonly TraverseKey[] : [path as TraverseKey]);
     const filtered = options.expected_type ? values.filter(options.expected_type) : values as T[];
     if (filtered.length) {
-      return options.get_all === false ? filtered[0]! : pathHasBranch(path) ? filtered : filtered.length === 1 ? filtered[0]! : filtered;
+      const first = filtered[0];
+      if (first === undefined) {
+        continue;
+      }
+      return options.get_all === false ? first : pathHasBranch(path) ? filtered : filtered.length === 1 ? first : filtered;
     }
   }
-  return "default" in options ? options.default! : null;
+  return "default" in options ? options.default : null;
 }
 
 export const traverse_obj = traverseObj;

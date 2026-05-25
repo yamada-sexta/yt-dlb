@@ -83,7 +83,11 @@ function parseRange(rangeHeader: string | null): { start: number; end: number } 
   if (!match) {
     return null;
   }
-  const start = Number.parseInt(match[1]!, 10);
-  const end = match[2] ? Number.parseInt(match[2], 10) : TEST_SIZE - 1;
+  const [, startText, endText] = match;
+  if (startText === undefined) {
+    return null;
+  }
+  const start = Number.parseInt(startText, 10);
+  const end = endText ? Number.parseInt(endText, 10) : TEST_SIZE - 1;
   return Number.isFinite(start) && Number.isFinite(end) && end >= start ? { start, end } : null;
 }

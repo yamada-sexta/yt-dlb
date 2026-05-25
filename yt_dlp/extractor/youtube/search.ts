@@ -2,7 +2,7 @@
 // Port note: search extraction uses the shared tab renderer walkers and Bun/Web request primitives.
 
 import { joinNonempty, parseQs } from "../../utils/index.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { z } from "zod";
 import { YoutubeTabBaseInfoExtractor } from "./tab.ts";
 

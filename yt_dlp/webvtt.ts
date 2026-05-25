@@ -106,7 +106,7 @@ export class Block {
   static readonly regex: RegExp;
 
   static parse(parser: MatchParser): Block | null {
-    const match = parser.match(this.regex);
+    const match = parser.match(Block.regex);
     if (!match || typeof match === "number") {
       return null;
     }

@@ -5,7 +5,7 @@ import { NotImplementedError } from "../errors.ts";
 import { aesCbcDecryptBytes, unpadPkcs7 } from "../aes.ts";
 import { HTTPHeaderDict } from "../utils/networking.ts";
 import { parseM3u8Attributes, updateUrlQuery } from "../utils/utils.ts";
-import { Block, CueBlock, type CueJson, HeaderBlock, Magic, parseFragment } from "../webvtt.ts";
+import { CueBlock, type CueJson, HeaderBlock, Magic, parseFragment } from "../webvtt.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import { getExternalFragmentDownloader } from "./external.ts";
 import type { DownloadInfo } from "./common.ts";
@@ -16,7 +16,7 @@ export class HlsFD extends FragmentFD {
   }
 
   static canDownload(manifest: string, allowUnplayableFormats = false): boolean {
-    if (!allowUnplayableFormats && this.hasDrm(manifest)) {
+    if (!allowUnplayableFormats && HlsFD.hasDrm(manifest)) {
       return false;
     }
     return !/#EXT-X-KEY:METHOD=(?!(?:NONE|AES-128)\b)/.test(manifest);
@@ -266,8 +266,12 @@ function buildUrl(path: string, base: string, extraQuery: URLSearchParams | null
 function queryToRecord(extraQuery: URLSearchParams): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [key, value] of extraQuery) {
-    out[key] ??= [];
-    out[key]!.push(value);
+    let values = out[key];
+    if (!values) {
+      values = [];
+      out[key] = values;
+    }
+    values.push(value);
   }
   return out;
 }
@@ -341,9 +345,14 @@ function packWebvttFragment(
       const ready: CueBlock[] = [];
       let isNew = true;
       for (let index = 0; index < state.dedupWindow.length;) {
-        const windowCue = CueBlock.fromJson(state.dedupWindow[index]!);
+        const windowEntry = state.dedupWindow[index];
+        if (!windowEntry) {
+          index += 1;
+          continue;
+        }
+        const windowCue = CueBlock.fromJson(windowEntry);
         if (windowCue.hinges(cue)) {
-          state.dedupWindow[index] = { ...state.dedupWindow[index]!, end: cue.end };
+          state.dedupWindow[index] = { ...windowEntry, end: cue.end };
           isNew = false;
           index += 1;
           continue;

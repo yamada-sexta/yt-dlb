@@ -4,7 +4,7 @@
 import { NotImplementedError } from "../../errors.ts";
 import { intOrNone, parseCount, parseDuration, parseQs, updateUrlQuery, urljoin } from "../../utils/index.ts";
 import { Ellipsis, traverseObj } from "../../utils/traversal.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { BadgeType, YoutubeBaseInfoExtractor } from "./base.ts";
 import { YoutubeIE } from "./video.ts";
 import { z } from "zod";
@@ -545,7 +545,7 @@ export class YoutubeTabBaseInfoExtractor extends YoutubeBaseInfoExtractor {
   }
 
   static _extract_selected_tab(tabs: readonly Record<string, unknown>[], fatal = true): Record<string, unknown> | null {
-    return this.extractSelectedTab(tabs, fatal);
+    return YoutubeTabBaseInfoExtractor.extractSelectedTab(tabs, fatal);
   }
 
   static extractTabRenderers(response: unknown): Record<string, unknown>[] {
@@ -557,7 +557,7 @@ export class YoutubeTabBaseInfoExtractor extends YoutubeBaseInfoExtractor {
   }
 
   static _extract_tab_renderers(response: unknown): Record<string, unknown>[] {
-    return this.extractTabRenderers(response);
+    return YoutubeTabBaseInfoExtractor.extractTabRenderers(response);
   }
 
   protected extractMetadataFromTabs(itemId: string, data: Record<string, unknown>): Record<string, unknown> {
@@ -706,7 +706,7 @@ export class YoutubeTabIE extends YoutubeTabBaseInfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://(?!consent\.)(?:\w+\.)?youtube(?:kids)?\.com/(?:(?<channel_type>channel|c|user|browse)/|(?<not_channel>feed/|hashtag/|(?:playlist|watch)\?.*?\blist=)|(?!(?:${YoutubeBaseInfoExtractor._RESERVED_NAMES})\b))(?<id>[^/?#&]+)`;
 
   static override suitable(url: string): boolean {
-    return YoutubeIE.suitable(url) ? false : super.suitable(url);
+    return YoutubeIE.suitable(url) ? false : YoutubeTabBaseInfoExtractor.suitable.call(this, url);
   }
 
   static override get IE_NAME(): string {
@@ -756,7 +756,7 @@ export class YoutubePlaylistIE extends YoutubeTabIE {
     if (YoutubeTabIE.suitable(url) || hasQueryValue(url, "v")) {
       return false;
     }
-    return super.suitable(url);
+    return YoutubeTabBaseInfoExtractor.suitable.call(this, url);
   }
 
   static override get IE_NAME(): string {

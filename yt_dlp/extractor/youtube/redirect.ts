@@ -1,7 +1,7 @@
 // Source: yt_dlp/extractor/youtube/_redirect.py
 
 import { ExtractorError, parseQs, updateUrlQuery, urlOrNone } from "../../utils/index.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { YoutubeBaseInfoExtractor } from "./base.ts";
 import { YoutubeTabIE } from "./tab.ts";
 
@@ -71,7 +71,7 @@ export class YoutubeFeedsInfoExtractor extends YoutubeBaseInfoExtractor {
   static readonly _FEED_NAME: string = "feeds";
 
   static override get IE_NAME(): string {
-    return `youtube:${this._FEED_NAME}`;
+    return `youtube:${YoutubeFeedsInfoExtractor._FEED_NAME}`;
   }
 
   protected override async realExtract(_url: string): Promise<ExtractorInfo> {

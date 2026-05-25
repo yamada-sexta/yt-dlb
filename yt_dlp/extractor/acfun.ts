@@ -150,7 +150,7 @@ export class AcFunBangumiIE extends AcFunVideoBaseIE {
 
     const videoInfo = jsonBangumiData.currentVideoInfo;
     const seasonId = jsonBangumiData.bangumiId;
-    let seasonNumber: number | undefined = undefined;
+    let seasonNumber: number | undefined ;
 
     if (seasonId) {
       const relatedBangumis = (jsonBangumiData.relatedBangumis || []) as any[];
@@ -167,7 +167,7 @@ export class AcFunBangumiIE extends AcFunVideoBaseIE {
     ) || {};
 
     const videoInternalId = intOrNone(traverseObj(jsonBangumiData, ["currentVideoInfo", "id"]));
-    let episodeNumber: number | undefined = undefined;
+    let episodeNumber: number | undefined ;
     if (videoInternalId) {
       const items = (jsonBangumiList.items || []) as any[];
       const idx = items.findIndex((v) => intOrNone(v?.videoId) === videoInternalId);

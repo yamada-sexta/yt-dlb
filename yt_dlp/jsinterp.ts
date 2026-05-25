@@ -76,15 +76,15 @@ export class LocalNameSpace {
         return;
       }
     }
-    this.#scopes[0]![key] = value;
+    this.#scopes[0][key] = value;
   }
 
   setLocal(key: string, value: unknown): void {
-    this.#scopes[0]![key] = value;
+    this.#scopes[0][key] = value;
   }
 
   getLocal(key: string): unknown {
-    return key in this.#scopes[0]! ? this.#scopes[0]![key] : JS_Undefined;
+    return key in this.#scopes[0] ? this.#scopes[0][key] : JS_Undefined;
   }
 
   toObject(): Record<string, unknown> {
@@ -203,7 +203,7 @@ export class JSInterpreter {
       if (!match.groups) {
         continue;
       }
-      const bodyStart = match.index! + match[0].length - 1;
+      const bodyStart = (match.index ?? 0) + match[0].length - 1;
       const [body] = separateAtParen(objectMatch.groups.fields.slice(bodyStart));
       const name = removeQuotes(match.groups.key ?? "");
       const args = (match.groups.args ?? "").split(",").map((arg) => arg.trim()).filter(Boolean);
@@ -236,7 +236,10 @@ function separateAtParen(expression: string, delimiter?: string): [string, strin
   let escaping = false;
 
   for (let index = 0; index < expression.length; index += 1) {
-    const char = expression[index]!;
+    const char = expression[index];
+    if (char === undefined) {
+      break;
+    }
     if (quote) {
       escaping = !escaping && char === "\\";
       if (!escaping && char === quote) {

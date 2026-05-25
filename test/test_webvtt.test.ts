@@ -7,8 +7,10 @@ import { CueBlock, Magic, ParseError, formatTs, parseFragment, parseTs } from ".
 describe("WebVTT parser", () => {
   test("timestamp parse/format", () => {
     const match = /(?:([0-9]{1,}):)?([0-9]{2}):([0-9]{2})\.([0-9]{3})?/.exec("01:02:03.456");
-    expect(match).not.toBeNull();
-    expect(parseTs(match!)).toBe(335_111_040);
+    if (!match) {
+      throw new Error("expected timestamp regex to match");
+    }
+    expect(parseTs(match)).toBe(335_111_040);
     expect(formatTs(335_111_040)).toBe("01:02:03.456");
   });
 

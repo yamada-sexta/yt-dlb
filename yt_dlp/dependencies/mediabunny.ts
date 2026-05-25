@@ -3,7 +3,6 @@
 
 import { registerMediabunnyServer } from "@mediabunny/server";
 import {
-  ADTS,
   ALL_FORMATS,
   AdtsOutputFormat,
   Conversion,

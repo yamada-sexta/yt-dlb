@@ -74,8 +74,12 @@ export class DashSegmentsFD extends FragmentFD {
 function queryToRecord(extraQuery: URLSearchParams): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [key, value] of extraQuery) {
-    out[key] ??= [];
-    out[key]!.push(value);
+    let values = out[key];
+    if (!values) {
+      values = [];
+      out[key] = values;
+    }
+    values.push(value);
   }
   return out;
 }

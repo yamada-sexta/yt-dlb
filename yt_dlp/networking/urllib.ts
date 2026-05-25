@@ -2,7 +2,7 @@
 // Port note: urllib backend is replaced by a Bun fetch request handler.
 
 import { HTTPError, TransportError } from "./exceptions.ts";
-import { Features, Request, RequestHandler } from "./common.ts";
+import { Features, type Request, RequestHandler } from "./common.ts";
 
 export class UrllibRH extends RequestHandler {
   static override readonly SUPPORTED_URL_SCHEMES = ["http", "https", "file", "data"];

@@ -2,7 +2,7 @@
 // Port note: uses Bun's native WebSocket instead of Python websocket libraries.
 
 import { NotImplementedError } from "../errors.ts";
-import { Request, RequestHandler } from "./common.ts";
+import { type Request, RequestHandler } from "./common.ts";
 
 export class WebSocketResponse {
   constructor(readonly socket: WebSocket) {}

@@ -2,7 +2,7 @@
 // Port note: target validation is ported; actual browser impersonation requires a handler backend.
 
 import { UnsupportedRequest } from "./exceptions.ts";
-import { Request, RequestHandler, registerPreference } from "./common.ts";
+import { type Request, RequestHandler, registerPreference } from "./common.ts";
 
 export class ImpersonateTarget {
   constructor(

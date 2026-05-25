@@ -5,7 +5,7 @@ import { EJSBaseJCP, EJS_WIKI_URL, ScriptSource, ScriptType, ScriptVariant } fro
 import type { Script } from "./ejs.ts";
 import { loadScript } from "./vendor/index.ts";
 import {
-  JsChallengeProvider,
+  type JsChallengeProvider,
   registerPreference,
   registerProvider,
 } from "../provider.ts";

@@ -217,7 +217,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       delete chapter.cut_idx;
       let excess = 0;
       for (let index = cutIndex; index < cuts.length; index += 1) {
-        const cut = cuts[index]!;
+        const cut = cuts[index];
+        if (!cut) {
+          continue;
+        }
         if (cut.start_time >= chapter.end_time) {
           break;
         }
@@ -247,9 +250,17 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
     if (!queue.length) {
       return [[], cuts];
     }
-    let { index: currentIndex, chapter: currentChapter } = queue.shift()!;
+    const firstQueueItem = queue.shift();
+    if (!firstQueueItem) {
+      return [[], cuts];
+    }
+    let { index: currentIndex, chapter: currentChapter } = firstQueueItem;
     while (queue.length) {
-      const { index, chapter } = queue.shift()!;
+      const queueItem = queue.shift();
+      if (!queueItem) {
+        break;
+      }
+      const { index, chapter } = queueItem;
       if (currentChapter.end_time <= chapter.start_time) {
         currentChapter.remove ? appendCut(currentChapter) : appendChapter(currentChapter);
         currentIndex = index;
@@ -282,7 +293,7 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
               currentCategories.push(category);
             }
             if (category[2] > chapter.end_time) {
-              afterChapter._categories!.push(category);
+              afterChapter._categories.push(category);
             }
           }
           currentChapter._categories = currentCategories;
@@ -336,13 +347,22 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       if ((chapter._was_cut || chapter._categories) && chapter.end_time - chapter.start_time < TINY_CHAPTER_DURATION) {
         if (!newChapters.length) {
           if (index < chapters.length - 1) {
-            chapters[index + 1]!.start_time = chapter.start_time;
+            const next = chapters[index + 1];
+            if (next) {
+              next.start_time = chapter.start_time;
+            }
             continue;
           }
         } else {
-          const previous = newChapters.at(-1)!;
+          const previous = newChapters.at(-1);
+          if (!previous) {
+            continue;
+          }
           if (index < chapters.length - 1) {
-            const next = chapters[index + 1]!;
+            const next = chapters[index + 1];
+            if (!next) {
+              continue;
+            }
             const prevIsSponsor = "categories" in previous;
             const nextIsSponsor = Boolean(next._categories);
             if ((!chapter._categories && prevIsSponsor && !nextIsSponsor) || (chapter._categories && !prevIsSponsor && nextIsSponsor)) {
@@ -359,14 +379,19 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       const categories = chapter._categories;
       delete chapter._categories;
       if (categories?.length) {
-        const [category, , , categoryName] = [...categories].sort((left, right) => (left[2] - left[1]) - (right[2] - right[1]))[0]!;
+        const categoryTuple = [...categories].sort((left, right) => (left[2] - left[1]) - (right[2] - right[1]))[0];
+        if (!categoryTuple) {
+          continue;
+        }
+        const [category, , , categoryName] = categoryTuple;
         chapter.category = category;
         chapter.categories = orderedUnique(categories.map((item) => item[0]));
         chapter.name = categoryName;
         chapter.category_names = orderedUnique(categories.map((item) => item[3]));
         chapter.title = this.evaluateChapterTitle(this.sponsorblockChapterTitle, chapter);
-        if (newChapters.length && "categories" in newChapters.at(-1)! && newChapters.at(-1)!.title === chapter.title) {
-          newChapters.at(-1)!.end_time = chapter.end_time;
+        const previous = newChapters.at(-1);
+        if (previous && "categories" in previous && previous.title === chapter.title) {
+          previous.end_time = chapter.end_time;
           continue;
         }
       }
@@ -392,11 +417,15 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
   static makeConcatOpts(chaptersToRemove: readonly Chapter[], duration: number): Array<Record<string, string>> {
     const opts: Array<Record<string, string>> = [{}];
     for (const segment of chaptersToRemove) {
+      const current = opts.at(-1);
+      if (!current) {
+        throw new Error("Missing concat options entry");
+      }
       if (segment.start_time === 0) {
-        opts.at(-1)!.inpoint = segment.end_time.toFixed(6);
+        current.inpoint = segment.end_time.toFixed(6);
         continue;
       }
-      opts.at(-1)!.outpoint = segment.start_time.toFixed(6);
+      current.outpoint = segment.start_time.toFixed(6);
       if (segment.end_time < duration) {
         opts.push({ inpoint: segment.end_time.toFixed(6) });
       }

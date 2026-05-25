@@ -27,9 +27,9 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 
 Latest local validation:
 
-- `bun check`: passes; typecheck, Biome lint, source-header linting, and extractor smoke import all complete.
-- `bun run typecheck`: passes.
-- `bun run test:bun`: 356 pass, 38 todo, 0 fail, 723 `expect()` calls, 394 tests across 25 files.
+- Focused YouTube validation passes: `bun test test/test_downloader_external.test.ts test/test_all_urls.test.ts test/test_youtube_misc.test.ts test/test_youtube_pot.test.ts`.
+- `bun run typecheck`: currently blocked by unrelated in-progress extractor ports under `yt_dlp/extractor/yandex*`, `yapfiles.ts`, `yappy.ts`, `yle-areena.ts`, `youjizz.ts`, `youku.ts`, `younow.ts`, plus one `yt_dlp/utils/traversal.ts` typing issue.
+- `bun run test:bun`: expected 357 pass, 38 todo after the YouTube notification coverage addition; the current full run did not emit a final summary in this sandbox session.
 
 Recently ported Python test coverage:
 
@@ -117,6 +117,7 @@ Remaining TypeScript test TODOs should stay local to the matching test file and 
 - [ ] `yt_dlp/extractor/youtube/base.ts` shared YouTube client/context/API helpers are partially ported; cookie-auth checks, ytcfg loading retries, and full response validation remain pending.
 - [x] `yt_dlp/extractor/youtube/search.ts` YouTube search, search URL, and YouTube Music search URL extraction are ported through Innertube search pagination and shared tab renderer dispatch.
 - [ ] `yt_dlp/extractor/youtube/tab.ts` renderer helper coverage now includes video/channel/grid items, playlist videos, music responsive rows, shelves, rich grid items, lockup view models, shorts lockups, community post attachments, report-history URLs, continuations, and entry dispatch; initial webpage extraction and basic Innertube continuation pagination work, while channel redirect/extra-tab flows and unavailable-video reloads remain pending.
+- [ ] `yt_dlp/extractor/youtube/notifications.ts` notification renderer and menu pagination are ported through Innertube; full authenticated ytcfg bootstrap/auth checks remain pending.
 - [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; JSC director and PO-token dependency hooks are wired; full multi-client player extraction, metadata, subtitles, comments, live handling, manifests, and complete format processing remain pending.
 - [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization for ported real-world cases, Next.js data/v13 flight extraction, Nuxt rich JSON payload extraction, and m3u8 format/subtitle parsing for migrated extractors; full extractor helper surface still pending.
 
@@ -1172,7 +1173,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/youtube/_base.py` -> `yt_dlp/extractor/youtube/base.ts` (shared Innertube client table, context/API headers, ytcfg/session/visitor helpers, continuations, alerts, badges, text/count, relative-time, and thumbnails are partially ported; full initialization/auth/retry response flow remains pending)
 - [ ] `yt_dlp/extractor/youtube/_clip.py` -> `yt_dlp/extractor/youtube/clip.ts`
 - [x] `yt_dlp/extractor/youtube/_mistakes.py` -> `yt_dlp/extractor/youtube/mistakes.ts`
-- [ ] `yt_dlp/extractor/youtube/_notifications.py` -> `yt_dlp/extractor/youtube/notifications.ts`
+- [ ] `yt_dlp/extractor/youtube/_notifications.py` -> `yt_dlp/extractor/youtube/notifications.ts` (notification renderer and menu pagination are ported; full authenticated ytcfg bootstrap/auth checks remain pending)
 - [x] `yt_dlp/extractor/youtube/_redirect.py` -> `yt_dlp/extractor/youtube/redirect.ts`
 - [x] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
 - [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts` (renderer helper subset now covers playlists, music rows, shelves, rich grid/lockup/shorts entries, community post attachments, report-history URLs, continuations, and entry dispatch; initial webpage extraction and basic Innertube continuation pagination work, while channel redirect/extra-tab flows and unavailable-video reloads remain pending)

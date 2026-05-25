@@ -61,6 +61,11 @@ class TestYoutubeNotificationsIE extends YoutubeNotificationsIE {
   extractNotificationRendererForTest(notification: unknown) {
     return this._extract_notification_renderer(notification);
   }
+
+  extractNotificationMenuForTest(response: unknown) {
+    const continuation: Array<Record<string, unknown> | null> = [null];
+    return { entries: [...this._extract_notification_menu(response, continuation)], continuation: continuation[0] };
+  }
 }
 
 class TestYoutubeTabIE extends YoutubeTabBaseInfoExtractor {
@@ -707,6 +712,53 @@ describe("YouTube clip and notifications extractors", () => {
       channel_id: "UC2_KI6RB__jGdlnK6dvFEZA",
       channel: "Channel",
     });
+  });
+
+  test("notification menu extraction follows continuations", async () => {
+    const extractor = new YoutubeNotificationsIE({
+      params: {},
+      async urlopen() {
+        return new Response(JSON.stringify(notificationResponses.shift() ?? notificationResponses.at(-1)));
+      },
+      toScreen() {},
+      reportWarning() {},
+      reportError() {},
+    });
+    const notificationResponses = [
+      {
+        actions: [{
+          openPopupAction: {
+            popup: {
+              multiPageMenuRenderer: {
+                sections: [{
+                  multiPageMenuNotificationSectionRenderer: {
+                    items: [
+                      { notificationRenderer: { navigationEndpoint: { watchEndpoint: { videoId: "BaW_jenozKc" } }, shortMessage: { simpleText: "Channel uploaded: First" } } },
+                      { continuationItemRenderer: { continuationEndpoint: { getNotificationMenuEndpoint: { ctoken: "next" } } } },
+                    ],
+                  },
+                }],
+              },
+            },
+          },
+        }],
+      },
+      {
+        actions: [{
+          appendContinuationItemsAction: {
+            continuationItems: [
+              { notificationRenderer: { navigationEndpoint: { watchEndpoint: { videoId: "yeWKywCrFtk" } }, shortMessage: { simpleText: "Channel uploaded: Second" } } },
+            ],
+          },
+        }],
+      },
+    ];
+    const result = await extractor.extract(":ytnotif");
+    expect(result).toMatchObject({ _type: "playlist", id: "notifications", title: "notifications" });
+    expect([...(result?.entries as Iterable<unknown>)]).toMatchObject([
+      { url: "https://www.youtube.com/watch?v=BaW_jenozKc" },
+      { url: "https://www.youtube.com/watch?v=yeWKywCrFtk" },
+    ]);
   });
 });
 

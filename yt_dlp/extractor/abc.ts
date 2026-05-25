@@ -77,7 +77,7 @@ export class ABCIE extends InfoExtractor {
       ) === "video/mp4";
     }
 
-    let urlsInfoList = Array.isArray(urlsInfo) ? urlsInfo : [urlsInfo];
+    const urlsInfoList = Array.isArray(urlsInfo) ? urlsInfo : [urlsInfo];
 
     if (youtube) {
       return this.playlistResult(

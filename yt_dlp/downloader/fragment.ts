@@ -68,7 +68,11 @@ export class FragmentFD extends FileDownloader {
     ...downloads: Array<[FragmentDownloadContext, Iterable<FragmentInfo> | AsyncIterable<FragmentInfo>, DownloadInfo]>
   ): Promise<boolean> {
     if (downloads.length === 1) {
-      const [ctx, fragments, info] = downloads[0]!;
+      const firstDownload = downloads[0];
+      if (!firstDownload) {
+        throw new Error("expected one fragment download");
+      }
+      const [ctx, fragments, info] = firstDownload;
       return await this.downloadAndAppendFragments(ctx, fragments, info);
     }
     const maxWorkers = Math.max(1, Number(this.params.concurrent_fragment_downloads ?? 1));
@@ -78,7 +82,11 @@ export class FragmentFD extends FileDownloader {
       while (cursor < downloads.length) {
         const position = cursor;
         cursor += 1;
-        const [ctx, fragments, info] = downloads[position]!;
+        const download = downloads[position];
+        if (!download) {
+          continue;
+        }
+        const [ctx, fragments, info] = download;
         ctx.max_progress = downloads.length;
         ctx.progress_idx = position;
         result = await this.downloadAndAppendFragments(ctx, fragments, info) && result;
@@ -281,7 +289,11 @@ export class FragmentFD extends FileDownloader {
       while (cursor < items.length) {
         const position = cursor;
         cursor += 1;
-        out[position] = await this.downloadFragmentItem(items[position]!, info);
+        const item = items[position];
+        if (!item) {
+          continue;
+        }
+        out[position] = await this.downloadFragmentItem(item, info);
       }
     };
     await Promise.all(Array.from({ length: Math.min(maxWorkers, items.length) }, () => worker()));

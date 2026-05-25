@@ -7,9 +7,9 @@ import { z } from "zod";
 import { bugReportsMessage, formatField, joinNonempty } from "../../../utils/index.ts";
 import {
   CacheProviderWritePolicy,
-  PoTokenCacheProvider,
+  type PoTokenCacheProvider,
   PoTokenCacheProviderError,
-  PoTokenCacheSpecProvider,
+  type PoTokenCacheSpecProvider,
   type CacheProviderPreference,
   type PoTokenCacheProviderConstructor,
   type PoTokenCacheSpec,
@@ -31,7 +31,7 @@ import {
   ptpPreferences,
 } from "./registry.ts";
 import {
-  PoTokenProvider,
+  type PoTokenProvider,
   PoTokenProviderError,
   PoTokenProviderRejectedRequest,
   type PoTokenPreference,

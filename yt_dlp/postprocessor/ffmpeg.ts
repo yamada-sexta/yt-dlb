@@ -801,8 +801,8 @@ export class FFmpegMetadataPP extends FFmpegPostProcessor {
         continue;
       }
       const index = match.groups.index ?? "common";
-      metadata[index] ??= {};
-      metadata[index]![match.groups.key ?? ""] = value;
+      const section = metadata[index] ??= {};
+      section[match.groups.key ?? ""] = value;
     }
 
     const opts = ["-write_id3v1", "1"];
@@ -816,11 +816,11 @@ export class FFmpegMetadataPP extends FFmpegPostProcessor {
       const streamCount = format.vcodec !== "none" && format.acodec !== "none" ? 2 : 1;
       const language = typeof format.language === "string" ? format.language : null;
       for (let index = streamIndex; index < streamIndex + streamCount; index += 1) {
-        metadata[String(index)] ??= {};
+        const section = metadata[String(index)] ??= {};
         if (language) {
-          metadata[String(index)]!.language ??= normalizeFfmpegLanguage(language);
+          section.language ??= normalizeFfmpegLanguage(language);
         }
-        for (const [name, value] of Object.entries(metadata[String(index)]!)) {
+        for (const [name, value] of Object.entries(section)) {
           opts.push(`-metadata:s:${index}`, `${name}=${value}`);
         }
       }
@@ -1236,10 +1236,14 @@ export class FFmpegConcatPP extends FFmpegPostProcessor {
 
   async concatFilesForPostprocessor(inputFiles: readonly string[], outFile: string): Promise<string[]> {
     if (inputFiles.length === 1) {
-      if (await canonicalPath(inputFiles[0]!) !== await canonicalPath(outFile)) {
-        this.toScreen(`Moving "${inputFiles[0]}" to "${outFile}"`);
+      const inputFile = inputFiles[0];
+      if (inputFile === undefined) {
+        throw new PostProcessingError("Missing input file");
       }
-      await rename(inputFiles[0]!, outFile);
+      if (await canonicalPath(inputFile) !== await canonicalPath(outFile)) {
+        this.toScreen(`Moving "${inputFile}" to "${outFile}"`);
+      }
+      await rename(inputFile, outFile);
       return [];
     }
 
@@ -1279,7 +1283,8 @@ export class FFmpegConcatPP extends FFmpegPostProcessor {
     const exts = requestedDownloads
       .map((download, index) => typeof download?.ext === "string" ? download.ext : typeof entries[index]?.ext === "string" ? entries[index]?.ext : null)
       .filter((ext) => z.string().safeParse(ext).success) as string[];
-    const outExt = exts.length && new Set(exts).size === 1 ? exts[0]! : "mkv";
+    const firstExt = exts[0];
+    const outExt = firstExt && new Set(exts).size === 1 ? firstExt : "mkv";
     const outputInfo: PostProcessorInfo = { ...info, ext: outExt };
     const outFile = preparePostprocessorFilename(this.downloader, outputInfo, "pl_video");
     const filesToDelete = await this.concatFilesForPostprocessor(inFiles, outFile);

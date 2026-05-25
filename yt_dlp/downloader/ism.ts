@@ -92,7 +92,6 @@ function writePiffHeader(params: IsmDownloadParams): Uint8Array {
   if (!trackId) {
     throw new Error("ISM track id is missing");
   }
-  const fourcc = params.fourcc;
   const duration = params.duration;
   const timescale = params.timescale ?? 10_000_000;
   const language = (params.language ?? "und").slice(0, 3).padEnd(3, "d");
@@ -224,16 +223,19 @@ function sampleEntry(params: IsmDownloadParams): Uint8Array {
       throw new Error("Invalid AVC codec private data");
     }
     const [sps, pps] = parts;
+    if (!sps || !pps) {
+      throw new Error("Invalid AVC codec private data");
+    }
     const avcc = box("avcC", concatBytes([
       u8(1),
-      sps!.slice(1, 4),
+      sps.slice(1, 4),
       u8(0xfc | ((params.nal_unit_length_field ?? 4) - 1)),
       u8(1),
-      u16(sps!.byteLength),
-      sps!,
+      u16(sps.byteLength),
+      sps,
       u8(1),
-      u16(pps!.byteLength),
-      pps!,
+      u16(pps.byteLength),
+      pps,
     ]));
     return box("avc1", concatBytes([
       base,

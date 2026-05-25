@@ -3,7 +3,7 @@
 
 import { NotImplementedError } from "../../../../errors.ts";
 import { EJSBaseJCP, type Script } from "./ejs.ts";
-import { JsChallengeProvider, registerPreference, registerProvider } from "../provider.ts";
+import { type JsChallengeProvider, registerPreference, registerProvider } from "../provider.ts";
 import type { JsChallengeRequest } from "../provider.ts";
 
 type EjsInput = Parameters<EJSBaseJCP["runJsRuntime"]>[2];

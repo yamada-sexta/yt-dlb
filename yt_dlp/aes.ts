@@ -148,7 +148,12 @@ function xorBytes(data: Uint8Array | readonly number[], key: Uint8Array | readon
   const length = Math.min(data.length, key.length);
   const out = new Uint8Array(length);
   for (let index = 0; index < length; index += 1) {
-    out[index] = data[index]! ^ key[index]!;
+    const dataByte = data[index];
+    const keyByte = key[index];
+    if (dataByte === undefined || keyByte === undefined) {
+      throw new Error("xor byte input ended unexpectedly");
+    }
+    out[index] = dataByte ^ keyByte;
   }
   return out;
 }

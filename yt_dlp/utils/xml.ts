@@ -11,7 +11,10 @@ export const fix_xml_ampersands = fixXmlAmpersands;
 export function xpathWithNs(path: string, nsMap: Record<string, string>): string {
   return path.split("/").map((component) => {
     const [prefix, tag] = component.split(":", 2);
-    return tag ? `{${nsMap[prefix!]}}${tag}` : component;
+    if (!tag || prefix === undefined) {
+      return component;
+    }
+    return `{${nsMap[prefix]}}${tag}`;
   }).join("/");
 }
 

@@ -359,7 +359,7 @@ export class ZDFChannelIE extends ZDFBaseIE {
   private static readonly PAGE_SIZE = 24;
 
   static override suitable(url: string): boolean {
-    return ZDFIE.suitable(url) ? false : super.suitable(url);
+    return ZDFIE.suitable(url) ? false : ZDFBaseIE.suitable(url);
   }
 
   private async fetchPage(playlistId: string, canonicalId: string, seasonIdx: number, seasonNumber: number, pageNumber: number, cursor: string | null = null): Promise<Record<string, unknown>> {

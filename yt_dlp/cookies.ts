@@ -2,7 +2,7 @@
 // Port note: browser extraction uses Bun APIs where practical. OS keyring integrations are explicit
 // unsupported errors until their platform-specific Bun equivalents are implemented.
 
-import { createHash, pbkdf2Sync } from "node:crypto";
+import { pbkdf2Sync } from "node:crypto";
 import { copyFile, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -151,7 +151,10 @@ export class YoutubeDLCookieJar implements Iterable<Cookie> {
       return;
     }
     for (let index = this.#cookies.length - 1; index >= 0; index -= 1) {
-      const cookie = this.#cookies[index]!;
+      const cookie = this.#cookies[index];
+      if (!cookie) {
+        continue;
+      }
       if (cookie.domain === domain && (path === undefined || cookie.path === path) && (name === undefined || cookie.name === name)) {
         this.#cookies.splice(index, 1);
       }
@@ -201,7 +204,7 @@ export class YoutubeDLCookieJar implements Iterable<Cookie> {
       try {
         this.setCookie(parseNetscapeCookieLine(line));
       } catch (error) {
-        if (/^[\[{"]/.test(line.trim())) {
+        if (/^[[{"]/.test(line.trim())) {
           throw new Error("Cookies file must be Netscape formatted, not JSON. See https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp");
         }
         console.warn(`WARNING: skipping cookie file entry due to ${error}: ${JSON.stringify(line)}`);
@@ -975,7 +978,11 @@ function parseSafariCookiesPage(data: Uint8Array, jar: YoutubeDLCookieJar, logge
     logger.debug(`a cookies page of size ${data.length} has no cookies`);
     return;
   }
-  parser.skipTo(offsets[0]!, "unknown page header field");
+  const firstOffset = offsets[0];
+  if (firstOffset === undefined) {
+    throw new Error("Safari cookies page has no first cookie offset");
+  }
+  parser.skipTo(firstOffset, "unknown page header field");
   for (const offset of offsets) {
     parser.skipTo(offset, "space between records");
     const recordLength = parseSafariCookiesRecord(data.subarray(offset), jar, logger);

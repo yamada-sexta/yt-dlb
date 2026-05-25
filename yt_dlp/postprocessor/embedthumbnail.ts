@@ -27,7 +27,7 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
   override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
     const filename = requireString(info.filepath, "EmbedThumbnailPP requires info.filepath");
     const ext = requireString(info.ext, "EmbedThumbnailPP requires info.ext");
-    let tempFilename = `${filename.slice(0, -extname(filename).length)}.temp${extname(filename)}`;
+    const tempFilename = `${filename.slice(0, -extname(filename).length)}.temp${extname(filename)}`;
 
     const thumbnails = Array.isArray(info.thumbnails) ? info.thumbnails.filter(isRecord) : [];
     if (!thumbnails.length) {

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { ExtractorError } from "../../utils/index.ts";
 import { Ellipsis, traverseObj } from "../../utils/traversal.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { YoutubeTabBaseInfoExtractor } from "./tab.ts";
 import { YoutubeIE } from "./video.ts";
 

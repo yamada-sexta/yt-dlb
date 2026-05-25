@@ -91,14 +91,18 @@ export class F4mFD extends FragmentFD {
     let index = 0;
     while (queue.length) {
       while (queue.length) {
-        const pair = queue.shift()!;
+        const pair = queue.shift();
+        if (!pair) {
+          break;
+        }
         latestFragment = pair[1];
         index += 1;
         yield makeFragment(pair, index);
       }
       queue = await this.updateLiveFragments(new URL(bootstrapUrl, manifestBaseUrl).toString(), latestFragment);
-      if (queue.length && queue[0]![1] > latestFragment + 1) {
-        this.ydl.reportWarning?.(`Missed ${queue[0]![1] - (latestFragment + 1)} fragments`);
+      const nextFragment = queue[0]?.[1];
+      if (nextFragment !== undefined && nextFragment > latestFragment + 1) {
+        this.ydl.reportWarning?.(`Missed ${nextFragment - (latestFragment + 1)} fragments`);
       }
     }
   }
@@ -164,7 +168,11 @@ function chooseMedia(media: MediaNode[], requestedBitrate: number | null, allowU
       return exact;
     }
   }
-  return [...playable].sort((left, right) => Number(left.attributes.bitrate ?? -1) - Number(right.attributes.bitrate ?? -1)).at(-1)!;
+  const best = [...playable].sort((left, right) => Number(left.attributes.bitrate ?? -1) - Number(right.attributes.bitrate ?? -1)).at(-1);
+  if (!best) {
+    throw new Error("F4M manifest has no playable media");
+  }
+  return best;
 }
 
 function readBootstrapInfo(data: Uint8Array): BootstrapInfo {
@@ -183,7 +191,11 @@ function buildFragmentsList(info: BootstrapInfo): [number, number][] {
   if (!segmentRunTable || !fragmentRunEntryTable?.length) {
     throw new Error("F4M bootstrap has no fragments");
   }
-  let fragmentCounter = fragmentRunEntryTable[0]!.first;
+  const firstFragment = fragmentRunEntryTable[0];
+  if (!firstFragment) {
+    throw new Error("F4M bootstrap has no first fragment");
+  }
+  let fragmentCounter = firstFragment.first;
   for (const [segment, count] of segmentRunTable.segment_run) {
     const fragmentCount = count === 0xffffffff && info.live ? 2 : count;
     for (let index = 0; index < fragmentCount; index += 1) {
@@ -270,7 +282,11 @@ class FlvReader {
   }
 
   readUint8(): number {
-    return this.readBytes(1)[0]!;
+    const value = this.readBytes(1)[0];
+    if (value === undefined) {
+      throw new Error("FLV reader expected a byte");
+    }
+    return value;
   }
 
   readUint32(): number {

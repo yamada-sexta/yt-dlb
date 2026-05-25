@@ -99,7 +99,13 @@ export class MhtmlFD extends FragmentFD {
 }
 
 function escapeMime(value: string): string {
-  return `=?utf-8?Q?${value.replaceAll(/[^\x20-\x7e]|[=?_]/g, (char) => `=${char.codePointAt(0)!.toString(16).toUpperCase().padStart(2, "0")}`).replaceAll(" ", "_")}?=`;
+  return `=?utf-8?Q?${value.replaceAll(/[^\x20-\x7e]|[=?_]/g, (char) => {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      throw new Error("empty MIME character");
+    }
+    return `=${codePoint.toString(16).toUpperCase().padStart(2, "0")}`;
+  }).replaceAll(" ", "_")}?=`;
 }
 
 function escapeHtml(value: string): string {

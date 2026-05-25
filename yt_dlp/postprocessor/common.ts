@@ -36,7 +36,7 @@ export class PostProcessor {
   }
 
   static ppKey(): string {
-    const name = this.name.endsWith("PP") ? this.name.slice(0, -2) : this.name;
+    const name = PostProcessor.name.endsWith("PP") ? PostProcessor.name.slice(0, -2) : PostProcessor.name;
     return name.toLowerCase().startsWith("ffmpeg") ? name.slice("ffmpeg".length) : name;
   }
 

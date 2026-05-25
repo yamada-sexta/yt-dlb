@@ -1,8 +1,6 @@
 // Source: yt_dlp/dependencies/__init__.py
 // Port note: Python optional dependencies are mapped to Bun-native capabilities or explicit unavailable records.
 
-import { Database } from "bun:sqlite";
-
 import * as Brotli from "./brotli.ts";
 import * as Cryptodome from "./Cryptodome.ts";
 import * as Mediabunny from "./mediabunny.ts";

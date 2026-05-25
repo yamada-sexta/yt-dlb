@@ -8,11 +8,11 @@ abstract class UnsupportedInfoExtractor extends InfoExtractor {
   static readonly URLS: readonly string[] = [];
 
   static override get IE_NAME(): string {
-    return super.IE_NAME.startsWith("Known") ? super.IE_NAME.slice("Known".length) : super.IE_NAME;
+    return InfoExtractor.IE_NAME.startsWith("Known") ? InfoExtractor.IE_NAME.slice("Known".length) : InfoExtractor.IE_NAME;
   }
 
   static override get _VALID_URL(): string {
-    return `https?://(?:www\\.)?(?:${this.URLS.join("|")})`;
+    return `https?://(?:www\\.)?(?:${UnsupportedInfoExtractor.URLS.join("|")})`;
   }
 }
 

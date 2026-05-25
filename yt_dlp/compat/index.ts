@@ -51,12 +51,15 @@ function parseXml(text: string): XmlElement {
   const tagPattern = /<(?<closing>\/)?(?<name>[^\s/>]+)(?<attrs>[^>]*?)(?<self>\/)?>/g;
   let lastIndex = 0;
   for (const match of cleaned.matchAll(tagPattern)) {
-    const current = stack.at(-1)!;
+    const current = stack.at(-1);
+    if (!current) {
+      throw new Error("XML parser stack unexpectedly empty");
+    }
     const textChunk = cleaned.slice(lastIndex, match.index);
     if (textChunk.trim()) {
       current.element.text = (current.element.text ?? "") + xmlUnescape(textChunk);
     }
-    lastIndex = match.index! + match[0].length;
+    lastIndex = (match.index ?? 0) + match[0].length;
     const name = match.groups?.name;
     if (!name) {
       continue;

@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  Indirect,
+  type Indirect,
   allPluginsLoaded,
   pluginDirs,
   pluginSpecs,

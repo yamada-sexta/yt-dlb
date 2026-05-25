@@ -559,7 +559,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static _make_sid_authorization(scheme: string, sid: string, origin: string, additionalParts: Record<string, string> = {}): string {
-    return this.makeSidAuthorization(scheme, sid, origin, additionalParts);
+    return YoutubeBaseInfoExtractor.makeSidAuthorization(scheme, sid, origin, additionalParts);
   }
 
   protected getYoutubeCookies() {
@@ -620,7 +620,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static _extract_session_index(...data: unknown[]): number | null {
-    return this.extractSessionIndex(...data);
+    return YoutubeBaseInfoExtractor.extractSessionIndex(...data);
   }
 
   static parseDataSyncId(dataSyncId: unknown): [string | null, string | null] {
@@ -632,7 +632,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static _parse_data_sync_id(dataSyncId: unknown): [string | null, string | null] {
-    return this.parseDataSyncId(dataSyncId);
+    return YoutubeBaseInfoExtractor.parseDataSyncId(dataSyncId);
   }
 
   protected extractDataSyncId(...args: unknown[]): string | null {
@@ -798,7 +798,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static _build_api_continuation_query(continuation: string, ctp: string | null = null): Record<string, unknown> {
-    return this.buildApiContinuationQuery(continuation, ctp);
+    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
   }
 
   static extractNextContinuationData(renderer: unknown): Record<string, unknown> | null {
@@ -814,11 +814,11 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
       return null;
     }
     const ctp = typeof nextContinuation.clickTrackingParams === "string" ? nextContinuation.clickTrackingParams : null;
-    return this.buildApiContinuationQuery(continuation, ctp);
+    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
   }
 
   static _extract_next_continuation_data(renderer: unknown): Record<string, unknown> | null {
-    return this.extractNextContinuationData(renderer);
+    return YoutubeBaseInfoExtractor.extractNextContinuationData(renderer);
   }
 
   static extractContinuationEpData(continuationEp: unknown): Record<string, unknown> | null {
@@ -830,21 +830,21 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
         continue;
       }
       const ctp = typeof command.clickTrackingParams === "string" ? command.clickTrackingParams : null;
-      return this.buildApiContinuationQuery(continuation, ctp);
+      return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
     }
     return null;
   }
 
   static _extract_continuation_ep_data(continuationEp: unknown): Record<string, unknown> | null {
-    return this.extractContinuationEpData(continuationEp);
+    return YoutubeBaseInfoExtractor.extractContinuationEpData(continuationEp);
   }
 
   static extractContinuation(renderer: unknown): Record<string, unknown> | null {
-    return this.extractNextContinuationData(renderer) ?? this.extractContinuationEpData(findContinuationEndpoint(renderer));
+    return YoutubeBaseInfoExtractor.extractNextContinuationData(renderer) ?? YoutubeBaseInfoExtractor.extractContinuationEpData(findContinuationEndpoint(renderer));
   }
 
   static _extract_continuation(renderer: unknown): Record<string, unknown> | null {
-    return this.extractContinuation(renderer);
+    return YoutubeBaseInfoExtractor.extractContinuation(renderer);
   }
 
   static extractAlerts(data: unknown): Array<[string, string]> {
@@ -866,7 +866,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static _extract_alerts(data: unknown): Array<[string, string]> {
-    return this.extractAlerts(data);
+    return YoutubeBaseInfoExtractor.extractAlerts(data);
   }
 
   protected reportAlerts(alerts: Iterable<[string, string]>, options: { expected?: boolean; fatal?: boolean; onlyOnce?: boolean } = {}): void {
@@ -930,7 +930,7 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   static extract_relative_time(relativeTimeText: string): Date | null {
-    return this.extractRelativeTime(relativeTimeText);
+    return YoutubeBaseInfoExtractor.extractRelativeTime(relativeTimeText);
   }
 
   protected parseTimeText(text: string | null | undefined, reportFailure = true): number | null {

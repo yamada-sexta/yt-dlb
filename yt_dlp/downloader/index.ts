@@ -2,10 +2,10 @@
 
 import { NotImplementedError } from "../errors.ts";
 import { BunnyCdnFD } from "./bunnycdn.ts";
-import {
+import type {
   FileDownloader,
-  type DownloadInfo,
-  type DownloaderHost,
+  DownloadInfo,
+  DownloaderHost,
 } from "./common.ts";
 import { DashSegmentsFD } from "./dash.ts";
 import { FFmpegFD, getExternalDownloader } from "./external.ts";

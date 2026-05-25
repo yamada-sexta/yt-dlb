@@ -273,7 +273,10 @@ function readBalanced(source: string, startIndex: number): string {
   let quote: string | null = null;
   let escaping = false;
   for (let index = startIndex; index < source.length; index += 1) {
-    const char = source[index]!;
+    const char = source[index];
+    if (char === undefined) {
+      break;
+    }
     if (quote) {
       escaping = !escaping && char === "\\";
       if (!escaping && char === quote) {

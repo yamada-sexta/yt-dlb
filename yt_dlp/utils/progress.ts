@@ -61,7 +61,7 @@ export class ProgressCalculator {
     this.#lastUpdate = currentTime;
     this.#times.push(currentTime);
     this.#downloadedSamples.push(this.downloaded);
-    while (this.#times.length && this.#times[0]! < currentTime - ProgressCalculator.SAMPLING_WINDOW) {
+    while (this.#times.length && this.#times[0] !== undefined && this.#times[0] < currentTime - ProgressCalculator.SAMPLING_WINDOW) {
       this.#times.shift();
       this.#downloadedSamples.shift();
     }
@@ -70,11 +70,16 @@ export class ProgressCalculator {
       this.eta.reset();
       return;
     }
-    const downloadTime = currentTime - this.#times[0]!;
+    const firstTime = this.#times[0];
+    const firstSample = this.#downloadedSamples[0];
+    if (firstTime === undefined || firstSample === undefined) {
+      return;
+    }
+    const downloadTime = currentTime - firstTime;
     if (!downloadTime) {
       return;
     }
-    this.speed.set((this.downloaded - this.#downloadedSamples[0]!) / downloadTime);
+    this.speed.set((this.downloaded - firstSample) / downloadTime);
     if (this.total && this.speed.value && this.elapsed > ProgressCalculator.GRACE_PERIOD) {
       this.eta.set((this.total - this.downloaded) / this.speed.value);
     } else {

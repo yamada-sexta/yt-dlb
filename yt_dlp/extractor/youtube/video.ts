@@ -4,7 +4,7 @@
 
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
 import { intOrNone } from "../../utils/index.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { z } from "zod";
 import { initializeJscDirector, JsChallengeType, type JsChallengeRequest, type NChallengeOutput, type SigChallengeOutput } from "./jsc/index.ts";
 import { YoutubeBaseInfoExtractor } from "./base.ts";
@@ -20,7 +20,7 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     if (hasQueryValue(url, "list")) {
       return false;
     }
-    return super.suitable(url);
+    return YoutubeBaseInfoExtractor.suitable.call(this, url);
   }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
@@ -35,7 +35,7 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
   }
 
   static _get_checkok_params(): Record<string, true> {
-    return this.getCheckOkParams();
+    return YoutubeIE.getCheckOkParams();
   }
 
   static generatePlayerContext(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
@@ -54,12 +54,12 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     }
     return {
       playbackContext,
-      ...this.getCheckOkParams(),
+      ...YoutubeIE.getCheckOkParams(),
     };
   }
 
   static _generate_player_context(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
-    return this.generatePlayerContext(sts, useAdPlaybackContext, encryptedContext);
+    return YoutubeIE.generatePlayerContext(sts, useAdPlaybackContext, encryptedContext);
   }
 
   protected async extractSignatureTimestamp(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false): Promise<number | null> {

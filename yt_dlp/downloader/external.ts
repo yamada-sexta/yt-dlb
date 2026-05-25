@@ -54,28 +54,28 @@ export class ExternalFD extends FragmentFD {
   #cookiesTempfile: string | null = null;
 
   static get basename(): string {
-    return this.name.replace(/FD$/, "").toLowerCase();
+    return ExternalFD.name.replace(/FD$/, "").toLowerCase();
   }
 
   static get exeName(): string {
-    return this.EXE_NAME ?? this.basename;
+    return ExternalFD.EXE_NAME ?? ExternalFD.basename;
   }
 
   static available(path?: string | null): boolean {
-    const exe = path && path !== this.basename ? path : this.exeName;
+    const exe = path && path !== ExternalFD.basename ? path : ExternalFD.exeName;
     return Boolean(Bun.which(exe));
   }
 
   static supports(info: DownloadInfo): boolean {
     const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
-    return !(info.to_stdout && !this.SUPPORTED_FEATURES.has("to_stdout"))
-      && !(protocol.includes("+") && !this.SUPPORTED_FEATURES.has("multiple_formats"))
+    return !(info.to_stdout && !ExternalFD.SUPPORTED_FEATURES.has("to_stdout"))
+      && !(protocol.includes("+") && !ExternalFD.SUPPORTED_FEATURES.has("multiple_formats"))
       && !hasExternalFragmentModifiers(info)
-      && protocol.split("+").every((item) => this.SUPPORTED_PROTOCOLS.has(item));
+      && protocol.split("+").every((item) => ExternalFD.SUPPORTED_PROTOCOLS.has(item));
   }
 
   static canDownload(info: DownloadInfo, path?: string): boolean {
-    return this.available(path) && this.supports(info);
+    return ExternalFD.available(path) && ExternalFD.supports(info);
   }
 
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -357,7 +357,7 @@ export class FFmpegFD extends FileDownloader {
 
   static canDownload(info: DownloadInfo, _externalDownloader?: string): boolean {
     const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
-    return this.available() && protocol.split("+").every((item) => this.SUPPORTED_PROTOCOLS.has(item));
+    return FFmpegFD.available() && protocol.split("+").every((item) => FFmpegFD.SUPPORTED_PROTOCOLS.has(item));
   }
 
   static canMergeFormats(_info: DownloadInfo, _params: Record<string, unknown> = {}): boolean {
@@ -365,7 +365,7 @@ export class FFmpegFD extends FileDownloader {
       && typeof _info.protocol === "string"
       && !_params.allow_unplayable_formats
       && !(Array.isArray(_params.compat_opts) && _params.compat_opts.includes("no-direct-merge"))
-      && this.canDownload(_info);
+      && FFmpegFD.canDownload(_info);
   }
 
   override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {

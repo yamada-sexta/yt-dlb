@@ -90,7 +90,7 @@ export class ACastChannelIE extends ACastBaseIE {
   static override readonly _VALID_URL = String.raw`https?://(?:(?:(?:www|shows)\.)?acast\.com/|play\.acast\.com/s/)(?<id>[^/#?]+)`;
 
   static override suitable(url: string): boolean {
-    return ACastIE.suitable(url) ? false : super.suitable(url);
+    return ACastIE.suitable(url) ? false : ACastBaseIE.suitable(url);
   }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {

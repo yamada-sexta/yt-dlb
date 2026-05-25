@@ -35,9 +35,9 @@ See [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the migration invento
 
 ## Current Check Status
 
-- `bun check` currently passes: typecheck, Biome lint, source-header linting, and extractor smoke import all complete.
-- `bun run typecheck` currently passes.
-- `bun run test:bun` currently has 356 passing tests, 38 `test.todo` entries, and 0 failures.
+- Focused YouTube validation currently passes: `bun test test/test_downloader_external.test.ts test/test_all_urls.test.ts test/test_youtube_misc.test.ts test/test_youtube_pot.test.ts`.
+- `bun run typecheck` is currently blocked by unrelated in-progress extractor ports under `yt_dlp/extractor/yandex*`, `yapfiles.ts`, `yappy.ts`, `yle-areena.ts`, `youjizz.ts`, `youku.ts`, `younow.ts`, plus one `yt_dlp/utils/traversal.ts` typing issue.
+- `bun run test:bun` has 357 expected passing tests after the YouTube notification coverage addition, but the current full run did not emit a final summary in this sandbox session.
 
 ## Requirements
 

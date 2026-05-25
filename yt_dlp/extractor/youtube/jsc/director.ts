@@ -1,7 +1,7 @@
 // Source: yt_dlp/extractor/youtube/jsc/_director.py
 
 import {
-  JsChallengeProvider,
+  type JsChallengeProvider,
   JsChallengeProviderError,
   JsChallengeProviderRejectedRequest,
   JsChallengeType,

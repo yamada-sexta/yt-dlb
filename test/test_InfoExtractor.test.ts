@@ -789,7 +789,7 @@ describe("InfoExtractor common helpers", () => {
     }));
     const result = await teapot.downloadWebpageHandlePublic("https://example.com/teapot", "id", { expected_status: 418 });
     expect(result).not.toBe(false);
-    expect(result && result[0]).toBe("<h1>418 I'm a teapot</h1>");
+    expect(result === false ? undefined : result[0]).toBe("<h1>418 I'm a teapot</h1>");
   });
 
   test("extractJwplayerData handles real-world setup objects", () => {

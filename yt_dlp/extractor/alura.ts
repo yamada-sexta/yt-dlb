@@ -172,7 +172,7 @@ export class AluraCourseIE extends AluraIE {
   }
 
   static override suitable(url: string): boolean {
-    return AluraIE.suitable(url) ? false : super.suitable(url);
+    return AluraIE.suitable(url) ? false : AluraIE.suitable(url);
   }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {

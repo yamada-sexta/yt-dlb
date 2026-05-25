@@ -1,7 +1,7 @@
 // Source: yt_dlp/extractor/youtube/_mistakes.py
 
 import { ExtractorError } from "../../utils/index.ts";
-import { type ExtractorInfo } from "../common.ts";
+import type { ExtractorInfo } from "../common.ts";
 import { YoutubeBaseInfoExtractor } from "./base.ts";
 
 export class YoutubeTruncatedURLIE extends YoutubeBaseInfoExtractor {

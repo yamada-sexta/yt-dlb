@@ -89,10 +89,12 @@ export function encodeArgument(value: string | Uint8Array): string {
 export const encodeArgument_ = encodeArgument;
 
 export function determineExt(url: string | null | undefined, defaultExt = "unknown_video"): string {
-  if (!url || !url.includes(".")) {
+  if (!url?.includes(".")) {
     return defaultExt;
   }
-  const guess = url.split("?")[0]!.split("#")[0]!.split(".").pop() ?? "";
+  const [withoutQuery = ""] = url.split("?");
+  const [withoutHash = ""] = withoutQuery.split("#");
+  const guess = withoutHash.split(".").pop() ?? "";
   return /^[A-Za-z0-9]+$/.test(guess) ? guess : defaultExt;
 }
 
@@ -162,7 +164,10 @@ export function updateUrl(
   }
   const parsed = new URL(url);
   if (options.scheme || options.protocol) {
-    parsed.protocol = `${(options.scheme ?? options.protocol)!.replace(/:$/, "")}:`;
+    const protocol = options.scheme ?? options.protocol;
+    if (protocol) {
+      parsed.protocol = `${protocol.replace(/:$/, "")}:`;
+    }
   }
   if (options.hostname) {
     parsed.hostname = options.hostname;
@@ -171,7 +176,10 @@ export function updateUrl(
     parsed.host = options.host;
   }
   if (options.pathname || options.path) {
-    parsed.pathname = options.pathname ?? options.path!;
+    const pathname = options.pathname ?? options.path;
+    if (pathname) {
+      parsed.pathname = pathname;
+    }
   }
   if (options.search !== undefined || options.query !== undefined) {
     parsed.search = options.search ?? options.query ?? "";
@@ -298,7 +306,6 @@ export function tryGet<T>(source: unknown, getter: ((value: unknown) => T) | Arr
         return value;
       }
     } catch {
-      continue;
     }
   }
   return null;
@@ -318,7 +325,6 @@ export function tryCall<T>(...funcsAndOptions: Array<(() => T) | { expected_type
         return value;
       }
     } catch {
-      continue;
     }
   }
   return null;
@@ -748,7 +754,8 @@ export function parseCount(value: string | null | undefined): number | null {
       b: 1_000_000_000,
       B: 1_000_000_000,
     };
-    return Math.trunc(number * multipliers[unitMatch.groups.unit]!);
+    const multiplier = multipliers[unitMatch.groups.unit];
+    return multiplier === undefined ? null : Math.trunc(number * multiplier);
   }
   const leading = /^([\d,.]+)(?:$|\s)/.exec(text);
   return leading ? strToInt(leading[1]) : null;
@@ -1285,36 +1292,13 @@ function roundDate(date: Date, precision: "microsecond" | "second" | "minute" | 
   return out;
 }
 
-function objectToParams(query: Record<string, string | readonly string[]>): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (Array.isArray(value)) {
-      for (const item of value as readonly string[]) {
-        params.append(key, item);
-      }
-    } else if (typeof value === "string") {
-      params.set(key, value);
-    }
-  }
-  return params;
-}
-
-function paramsToRecord(params: URLSearchParams): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const [key, value] of params) {
-    out[key] ??= [];
-    out[key].push(value);
-  }
-  return out;
-}
-
 function pad2(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
 export function stripJsonp(code: string): string {
   const match = /^(?:window\.)?([a-zA-Z0-9_.$]*)(?:\s*&&\s*\1)?\s*\(\s*([\s\S]*)\);?\s*(?:\/\/[^\n]*)*$/.exec(code.trim());
-  return match ? match[2]!.trim() : code;
+  return match?.[2]?.trim() ?? code;
 }
 
 export const strip_jsonp = stripJsonp;

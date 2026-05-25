@@ -93,7 +93,6 @@ function parsePlaylist(value: string | null | undefined): ZapiksPlaylist {
       }
       return parsed && typeof parsed === "object" ? parsed as ZapiksPlaylist : {};
     } catch {
-      continue;
     }
   }
   return {};
