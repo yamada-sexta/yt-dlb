@@ -385,6 +385,12 @@ export function getElementByClass(className: string, html: string): string | nul
 
 export const get_element_by_class = getElementByClass;
 
+export function getElementByAttribute(attribute: string, value: string, html: string): string | null {
+  return getElementText(`[${attribute}="${cssString(value)}"]`, html);
+}
+
+export const get_element_by_attribute = getElementByAttribute;
+
 export function extractAttributes(htmlElement: string): Record<string, string | null> {
   const attrs: Record<string, string | null> = {};
   const assignedAttributes = scanAssignedAttributes(htmlElement);

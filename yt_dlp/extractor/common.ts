@@ -1328,7 +1328,7 @@ export abstract class InfoExtractor {
     const [formats, subtitles] = this.parseMpdFormatsAndSubtitles(manifest, { mpdUrl });
     if (options.mpdId) {
       for (const format of formats) {
-        format.format_id = joinNonempty(options.mpdId, format.format_id);
+        format.format_id = joinNonempty(options.mpdId, strOrNone(format.format_id));
       }
     }
     return [formats, subtitles];

@@ -3,7 +3,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { ExtractorError } from "../yt_dlp/utils/index.ts";
+import { BadgeType, YoutubeBaseInfoExtractor } from "../yt_dlp/extractor/youtube/base.ts";
+import { YoutubeClipIE } from "../yt_dlp/extractor/youtube/clip.ts";
 import { YoutubeTruncatedIDIE, YoutubeTruncatedURLIE } from "../yt_dlp/extractor/youtube/mistakes.ts";
+import { YoutubeNotificationsIE } from "../yt_dlp/extractor/youtube/notifications.ts";
 import {
   YoutubeConsentRedirectIE,
   YoutubeFavouritesIE,
@@ -17,6 +20,24 @@ import {
 } from "../yt_dlp/extractor/youtube/redirect.ts";
 import { YoutubeTabIE } from "../yt_dlp/extractor/youtube/tab.ts";
 import { isYoutubeWatchUrl } from "../yt_dlp/extractor/youtube/video.ts";
+
+class TestYoutubeBaseIE extends YoutubeBaseInfoExtractor {
+  getTextForTest(data: unknown, ...paths: Parameters<YoutubeBaseInfoExtractor["_get_text"]> extends [unknown, ...infer Rest] ? Rest : never): string | null {
+    return this._get_text(data, ...paths);
+  }
+
+  getCountForTest(data: unknown, ...paths: Parameters<YoutubeBaseInfoExtractor["_get_count"]> extends [unknown, ...infer Rest] ? Rest : never): number | null {
+    return this._get_count(data, ...paths);
+  }
+
+  extractThumbnailsForTest(data: unknown, ...paths: Parameters<YoutubeBaseInfoExtractor["_extract_thumbnails"]> extends [unknown, ...infer Rest] ? Rest : never) {
+    return this._extract_thumbnails(data, ...paths);
+  }
+
+  extractBadgesForTest(data: unknown) {
+    return this._extract_badges(data);
+  }
+}
 
 describe("YouTube URL helpers", () => {
   test.each([
@@ -32,6 +53,43 @@ describe("YouTube URL helpers", () => {
   test("rejects non-watch URLs", () => {
     expect(isYoutubeWatchUrl("https://www.youtube.com/playlist?list=LL")).toBe(false);
     expect(isYoutubeWatchUrl("BaW_jenozKc")).toBe(false);
+  });
+});
+
+describe("YouTube base renderer helpers", () => {
+  const ie = new TestYoutubeBaseIE();
+
+  test("extracts text from simpleText and runs", () => {
+    expect(ie.getTextForTest({ simpleText: "Plain" })).toBe("Plain");
+    expect(ie.getTextForTest({ runs: [{ text: "A" }, { text: "B" }] })).toBe("AB");
+    expect(ie.getTextForTest({ title: { runs: [{ text: "Nested" }] } }, "title")).toBe("Nested");
+  });
+
+  test("extracts counts from YouTube text", () => {
+    expect(ie.getCountForTest({ simpleText: "50K views" })).toBe(50_000);
+    expect(ie.getCountForTest({ simpleText: "1,234 subscribers" })).toBe(1234);
+  });
+
+  test("extracts thumbnails and strips maxres query", () => {
+    expect(ie.extractThumbnailsForTest({
+      thumbnail: {
+        thumbnails: [
+          { url: "https://i.ytimg.com/vi/x/maxresdefault.jpg?foo=1", width: 1280, height: 720 },
+        ],
+      },
+    }, "thumbnail")).toEqual([{ url: "https://i.ytimg.com/vi/x/maxresdefault.jpg", height: 720, width: 1280 }]);
+  });
+
+  test("extracts known badges", () => {
+    expect(ie.extractBadgesForTest([
+      { metadataBadgeRenderer: { icon: { iconType: "CHECK" } } },
+      { metadataBadgeRenderer: { style: "BADGE_STYLE_TYPE_LIVE_NOW" } },
+      { metadataBadgeRenderer: { label: "Members only" } },
+    ])).toEqual([
+      { type: BadgeType.VERIFIED },
+      { type: BadgeType.LIVE_NOW },
+      { type: BadgeType.AVAILABILITY_SUBSCRIPTION },
+    ]);
   });
 });
 
@@ -92,6 +150,16 @@ describe("YouTube redirect extractors", () => {
       _type: "url",
       url: "https://www.youtube.com/watch?v=BaW_jenozKc",
     });
+  });
+});
+
+describe("YouTube clip and notifications extractors", () => {
+  test("clip URL matching", () => {
+    expect(YoutubeClipIE.suitable("https://www.youtube.com/clip/UgytZKpehg-hEMBSn3F4AaABCQ")).toBe(true);
+  });
+
+  test.each([":ytnotif", ":ytnotifications"])("notifications keyword matching %s", (url) => {
+    expect(YoutubeNotificationsIE.suitable(url)).toBe(true);
   });
 });
 

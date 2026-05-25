@@ -144,7 +144,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/abematv.py` -> `yt_dlp/extractor/abematv.ts`
 - [x] `yt_dlp/extractor/academicearth.py` -> `yt_dlp/extractor/academicearth.ts`
 - [x] `yt_dlp/extractor/acast.py` -> `yt_dlp/extractor/acast.ts`
-- [ ] `yt_dlp/extractor/acfun.py` -> `yt_dlp/extractor/acfun.ts`
+- [x] `yt_dlp/extractor/acfun.py` -> `yt_dlp/extractor/acfun.ts`
 - [ ] `yt_dlp/extractor/adn.py` -> `yt_dlp/extractor/adn.ts`
 - [x] `yt_dlp/extractor/adobeconnect.py` -> `yt_dlp/extractor/adobeconnect.ts`
 - [ ] `yt_dlp/extractor/adobepass.py` -> `yt_dlp/extractor/adobepass.ts`
@@ -153,14 +153,14 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/aenetworks.py` -> `yt_dlp/extractor/aenetworks.ts`
 - [x] `yt_dlp/extractor/aeonco.py` -> `yt_dlp/extractor/aeonco.ts`
 - [ ] `yt_dlp/extractor/afreecatv.py` -> `yt_dlp/extractor/afreecatv.ts`
-- [ ] `yt_dlp/extractor/agalega.py` -> `yt_dlp/extractor/agalega.ts`
+- [x] `yt_dlp/extractor/agalega.py` -> `yt_dlp/extractor/agalega.ts`
 - [ ] `yt_dlp/extractor/agora.py` -> `yt_dlp/extractor/agora.ts`
 - [x] `yt_dlp/extractor/airtv.py` -> `yt_dlp/extractor/airtv.ts`
 - [x] `yt_dlp/extractor/aitube.py` -> `yt_dlp/extractor/aitube.ts`
 - [x] `yt_dlp/extractor/alibaba.py` -> `yt_dlp/extractor/alibaba.ts`
 - [x] `yt_dlp/extractor/aliexpress.py` -> `yt_dlp/extractor/aliexpress.ts`
 - [x] `yt_dlp/extractor/aljazeera.py` -> `yt_dlp/extractor/aljazeera.ts`
-- [ ] `yt_dlp/extractor/allocine.py` -> `yt_dlp/extractor/allocine.ts`
+- [x] `yt_dlp/extractor/allocine.py` -> `yt_dlp/extractor/allocine.ts`
 - [ ] `yt_dlp/extractor/allstar.py` -> `yt_dlp/extractor/allstar.ts`
 - [x] `yt_dlp/extractor/alphaporno.py` -> `yt_dlp/extractor/alphaporno.ts`
 - [x] `yt_dlp/extractor/alsace20tv.py` -> `yt_dlp/extractor/alsace20tv.ts`

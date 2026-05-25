@@ -6,7 +6,7 @@
   "scripts": {
     "ytdl": "$npm_execpath run ./ytdlb.ts",
     "start": "$npm_execpath run ./ytdlb.ts",
-    "build": "$npm_execpath build --compile ./ytdlb.ts --outfile=./dist/ytdlb",
+    "compile": "$npm_execpath build --compile ./ytdlb.ts --outfile=./dist/ytdlb",
     "bundle": "$npm_execpath build ./ytdlb.ts --target=bun --outfile=./dist/ytdlb.js",
     "typecheck": "tsc --noEmit",
     "lint:headers": "rg --files -g '*.ts' yt_dlp ytdlb.ts | xargs -r awk 'FNR==1 && $0 !~ /^\\/\\/ Source:/ { print FILENAME \":\" FNR \":\" $0; failed=1 } END { exit failed }'",
@@ -14,7 +14,7 @@
     "smoke:help": "$npm_execpath run ./ytdlb.ts --help",
     "test:bun": "$npm_execpath test test",
     "check": "$npm_execpath run typecheck && $npm_execpath run lint:headers && $npm_execpath run smoke:extractors",
-    "test": "$npm_execpath run check && $npm_execpath run test:bun",
+    "ci": "$npm_execpath run check && $npm_execpath run test:bun",
     "clean": "rm -rf dist"
   },
   "devDependencies": {

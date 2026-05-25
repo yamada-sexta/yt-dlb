@@ -8,7 +8,17 @@ import { InfoExtractor, type ExtractorInfo } from "../common.ts";
 import { z } from "zod";
 
 export class YoutubeIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.|m\.|music\.)?youtube\.com/watch\?(?:[^#]+&)?v=(?<id>[0-9A-Za-z_-]{11})(?:[&#].*)?$`;
+  static override readonly _VALID_URL = [
+    String.raw`^(?:(?:https?:)?//(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com|(?:www\.)?deturl\.com/www\.youtube\.com|(?:www\.)?pwnyoutube\.com|(?:www\.)?hooktube\.com|(?:www\.)?yourepeat\.com|tube\.majestyc\.net|youtube\.googleapis\.com)/(?:.*?#/)?(?:(?:v|embed|e|shorts|live)/(?!videoseries|live_stream)|(?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?(?:\?|#!?)(?:.*?[&;])?v=)|(?:(?:youtu\.be|vid\.plus|zwearz\.com/watch)/)|(?:(?:www\.)?cleanvideosearch\.com/media/action/yt/watch\?videoId=)))(?<id>[0-9A-Za-z_-]{11})(?:[^\s]*)?(?:#|$)`,
+    String.raw`^(?<id>[0-9A-Za-z_-]{11})(?:#|$)`,
+  ] as const;
+
+  static override suitable(url: string): boolean {
+    if (hasQueryValue(url, "list")) {
+      return false;
+    }
+    return super.suitable(url);
+  }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     if (!isYoutubeDL(this.downloader)) {
@@ -467,11 +477,19 @@ function extractPlayerUrl(webpage: string): string | null {
 }
 
 function extractVideoId(url: string): string {
-  const videoId = new URL(url).searchParams.get("v");
+  const videoId = YoutubeIE.matchValidUrl(url)?.groups?.id;
   if (!videoId) {
-    throw new DownloadError("YouTube watch URL has no v parameter");
+    throw new DownloadError("Unable to extract YouTube video ID");
   }
   return videoId;
+}
+
+function hasQueryValue(url: string, key: string): boolean {
+  try {
+    return Boolean(new URL(url).searchParams.get(key));
+  } catch {
+    return false;
+  }
 }
 
 function readBalanced(source: string, startIndex: number): string {
