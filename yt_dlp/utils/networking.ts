@@ -168,7 +168,7 @@ export function normalizeUrl(url: string): string {
   const parsed = new URL(url);
   parsed.hostname = parsed.hostname ? new URL(`http://${parsed.hostname}`).hostname : parsed.hostname;
   parsed.pathname = escapeRfc3986(removeDotSegments(parsed.pathname));
-  parsed.search = parsed.search ? `?${escapeRfc3986(parsed.search.slice(1))}` : "";
+  parsed.search = parsed.search ? `?${escapeRfc3986(decodeURIComponent(parsed.search.slice(1)))}` : "";
   parsed.hash = parsed.hash ? `#${escapeRfc3986(parsed.hash.slice(1))}` : "";
   return parsed.toString();
 }

@@ -13,7 +13,7 @@ import { BunWebSocketRH, WebSocketResponse } from "../yt_dlp/networking/websocke
 describe("networking common request objects", () => {
   test("Request applies query and protocol-relative normalization", () => {
     const request = new Request("//example.com/path", { query: { a: "1", b: ["2", "3"] } });
-    expect(request.url).toBe("http://example.com/path?a=1&b=3");
+    expect(request.url).toBe("http://example.com/path?a=1&b=2&b=3");
   });
 
   test("method request subclasses", () => {

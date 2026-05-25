@@ -159,9 +159,10 @@ export class Request extends globalThis.Request {
     query?: Record<string, string | readonly string[]>;
     extensions?: Record<string, unknown>;
   } = {}) {
-    const url = typeof input === "string" || input instanceof URL ? normalizeUrl(input.toString()) : input.url;
+    const inputUrl = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+    const url = normalizeUrl(inputUrl.startsWith("//") ? `http:${inputUrl}` : inputUrl);
     const finalUrl = init.query ? updateUrlQuery(url, init.query) : url;
-    super(finalUrl.startsWith("//") ? `http:${finalUrl}` : finalUrl, init);
+    super(finalUrl, init);
     this.proxies = init.proxies ?? {};
     this.extensions = init.extensions ?? {};
   }

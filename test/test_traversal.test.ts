@@ -44,7 +44,7 @@ describe("traverseObj", () => {
   });
 
   test("expected type and get_all", () => {
-    expect(traverseObj(testData, [Ellipsis], { expected_type: (value): value is string => typeof value === "string" })).toBe("str");
+    expect(traverseObj(testData, [Ellipsis], { expected_type: (value): value is string => typeof value === "string" })).toEqual(["str"]);
     expect(traverseObj(testData, [Ellipsis], { expected_type: (value): value is string => typeof value === "string", get_all: false })).toBe("str");
   });
 });

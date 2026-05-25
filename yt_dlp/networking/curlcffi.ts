@@ -5,6 +5,8 @@ import { NotImplementedError } from "../errors.ts";
 import { Request, RequestHandler } from "./common.ts";
 
 export class CurlCFFIRH extends RequestHandler {
+  static override readonly SUPPORTED_URL_SCHEMES = ["http", "https"];
+
   protected override async doSend(_request: Request): Promise<Response> {
     throw new NotImplementedError("curl_cffi networking backend");
   }

@@ -134,9 +134,12 @@ export const url_or_none = urlOrNone;
 
 export function updateUrlQuery(url: string, query: URLSearchParams | Record<string, string | readonly string[]>): string {
   const parsed = new URL(url);
-  const params = query instanceof URLSearchParams ? query : objectToParams(query);
-  for (const [key, value] of params) {
-    parsed.searchParams.set(key, value);
+  const params = query instanceof URLSearchParams ? paramsToRecord(query) : query;
+  for (const [key, value] of Object.entries(params)) {
+    parsed.searchParams.delete(key);
+    for (const item of Array.isArray(value) ? value : [value]) {
+      parsed.searchParams.append(key, item);
+    }
   }
   return parsed.toString();
 }
@@ -351,9 +354,12 @@ export function getElementById(id: string, html: string): string | null {
 export const get_element_by_id = getElementById;
 
 export function getElementByClass(className: string, html: string): string | null {
-  const escaped = RegExp.escape(className);
-  const match = new RegExp(`<(?<tag>[\\w:-]+)[^>]+class=["'][^"']*(?:^|\\s)${escaped}(?:\\s|$)[^"']*["'][^>]*>(?<body>[\\s\\S]*?)<\\/\\k<tag>>`, "i").exec(html);
-  return match?.groups?.body ? cleanHtml(match.groups.body) : null;
+  for (const match of html.matchAll(/<(?<tag>[\w:-]+)[^>]+class=["'](?<classes>[^"']*)["'][^>]*>(?<body>[\s\S]*?)<\/\k<tag>>/gi)) {
+    if (match.groups?.classes?.split(/\s+/).includes(className)) {
+      return match.groups.body ? cleanHtml(match.groups.body) : null;
+    }
+  }
+  return null;
 }
 
 export const get_element_by_class = getElementByClass;
@@ -457,7 +463,7 @@ export function parseDuration(value: string | number | null | undefined): number
   if (colonParts.length > 1 && colonParts.every(Number.isFinite)) {
     return colonParts.reduce((total, part) => total * 60 + part, 0);
   }
-  const unitMatch = /(?:(?<hours>\d+(?:\.\d+)?)\s*h)?\s*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in)?)?\s*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec)?)?/i.exec(value);
+  const unitMatch = /(?:(?<hours>\d+(?:\.\d+)?)\s*h(?:ours?)?)?\s*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?)?\s*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec(?:onds?)?)?)?/i.exec(value);
   if (unitMatch?.[0]?.trim()) {
     return (Number(unitMatch.groups?.hours ?? 0) * 3600)
       + (Number(unitMatch.groups?.minutes ?? 0) * 60)
@@ -797,6 +803,15 @@ function objectToParams(query: Record<string, string | readonly string[]>): URLS
     }
   }
   return params;
+}
+
+function paramsToRecord(params: URLSearchParams): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of params) {
+    out[key] ??= [];
+    out[key].push(value);
+  }
+  return out;
 }
 
 function pad2(value: number): string {
