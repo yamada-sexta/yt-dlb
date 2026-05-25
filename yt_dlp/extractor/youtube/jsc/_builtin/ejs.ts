@@ -87,7 +87,7 @@ type EjsOutput = z.infer<typeof EjsOutputSchema>;
 export abstract class EJSBaseJCP extends JsChallengeProvider {
   static override readonly providerName: string = "ejs";
 
-  protected readonly jsRuntimeName = "bun";
+  protected readonly jsRuntimeName: string = "bun";
   protected override readonly supportedTypes = [JsChallengeType.N, JsChallengeType.SIG] as const;
   protected readonly cacheSection = "challenge-solver";
   protected readonly scriptVersion = VERSION;

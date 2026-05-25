@@ -143,7 +143,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/_extractors.py` -> `yt_dlp/extractor/internal-extractors.ts`
 - [ ] `yt_dlp/extractor/abc.py` -> `yt_dlp/extractor/abc.ts`
 - [ ] `yt_dlp/extractor/abcnews.py` -> `yt_dlp/extractor/abcnews.ts`
-- [ ] `yt_dlp/extractor/abcotvs.py` -> `yt_dlp/extractor/abcotvs.ts`
+- [x] `yt_dlp/extractor/abcotvs.py` -> `yt_dlp/extractor/abcotvs.ts`
 - [ ] `yt_dlp/extractor/abematv.py` -> `yt_dlp/extractor/abematv.ts`
 - [x] `yt_dlp/extractor/academicearth.py` -> `yt_dlp/extractor/academicearth.ts`
 - [x] `yt_dlp/extractor/acast.py` -> `yt_dlp/extractor/acast.ts`
@@ -1152,19 +1152,19 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/youtube/__init__.py` -> `yt_dlp/extractor/youtube/index.ts`
 - [ ] `yt_dlp/extractor/youtube/_base.py` -> `yt_dlp/extractor/youtube/base.ts`
 - [ ] `yt_dlp/extractor/youtube/_clip.py` -> `yt_dlp/extractor/youtube/clip.ts`
-- [ ] `yt_dlp/extractor/youtube/_mistakes.py` -> `yt_dlp/extractor/youtube/mistakes.ts`
+- [x] `yt_dlp/extractor/youtube/_mistakes.py` -> `yt_dlp/extractor/youtube/mistakes.ts`
 - [ ] `yt_dlp/extractor/youtube/_notifications.py` -> `yt_dlp/extractor/youtube/notifications.ts`
-- [ ] `yt_dlp/extractor/youtube/_redirect.py` -> `yt_dlp/extractor/youtube/redirect.ts`
+- [x] `yt_dlp/extractor/youtube/_redirect.py` -> `yt_dlp/extractor/youtube/redirect.ts`
 - [ ] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
 - [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts`
 - [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts` (focused watch URL/progressive extractor and `YoutubeIE` wrapper present; full YouTube extractor still pending)
 - [x] `yt_dlp/extractor/youtube/jsc/__init__.py` -> `yt_dlp/extractor/youtube/jsc/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/bun.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/deno.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/deno.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/deno.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/deno.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/ejs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/ejs.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/node.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/node.ts`
-- [ ] `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/node.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/node.ts`
+- [x] `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/quickjs.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/vendor/info.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_director.py` -> `yt_dlp/extractor/youtube/jsc/director.ts`
@@ -1220,12 +1220,12 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/socks.py` -> `yt_dlp/socks.ts`
 - [x] `yt_dlp/update.py` -> `yt_dlp/update.ts`
 - [ ] `yt_dlp/utils/__init__.py` -> `yt_dlp/utils/index.ts` (staged exports are present; full utility package surface remains pending)
-- [ ] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
+- [x] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
-- [ ] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
+- [x] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
 - [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion, ACast extractor utility prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id` added)
-- [ ] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
-- [ ] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
+- [x] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
+- [x] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
 - [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.py` -> `yt_dlp/utils/progress.ts`
 - [ ] `yt_dlp/utils/traversal.py` -> `yt_dlp/utils/traversal.ts` (dependency subset started)

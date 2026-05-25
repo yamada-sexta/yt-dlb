@@ -5,6 +5,7 @@
 import { JSInterpreter } from "../../jsinterp.ts";
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
 import { InfoExtractor, type ExtractorInfo } from "../common.ts";
+import { z } from "zod";
 
 export class YoutubeIE extends InfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://(?:www\.|m\.|music\.)?youtube\.com/watch\?(?:[^#]+&)?v=(?<id>[0-9A-Za-z_-]{11})(?:[&#].*)?$`;
@@ -60,6 +61,37 @@ interface YoutubeFormat {
   audioQuality?: string;
   contentLength?: string;
 }
+
+const YoutubeFormatSchema = z.object({
+  itag: z.number().optional(),
+  url: z.string().optional(),
+  signatureCipher: z.string().optional(),
+  cipher: z.string().optional(),
+  mimeType: z.string().optional(),
+  bitrate: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  quality: z.string().optional(),
+  qualityLabel: z.string().optional(),
+  audioQuality: z.string().optional(),
+  contentLength: z.string().optional(),
+}).passthrough();
+
+const YoutubePlayerResponseSchema = z.object({
+  playabilityStatus: z.object({
+    status: z.string().optional(),
+    reason: z.string().optional(),
+  }).passthrough().optional(),
+  videoDetails: z.object({
+    videoId: z.string().optional(),
+    title: z.string().optional(),
+    lengthSeconds: z.string().optional(),
+  }).passthrough().optional(),
+  streamingData: z.object({
+    formats: z.array(YoutubeFormatSchema).optional(),
+    adaptiveFormats: z.array(YoutubeFormatSchema).optional(),
+  }).passthrough().optional(),
+}).passthrough();
 
 type EjsSolverInput = {
   type: "player";
@@ -420,7 +452,7 @@ function extractInitialPlayerResponse(webpage: string): YoutubePlayerResponse {
   if (braceIndex === -1) {
     throw new DownloadError("Could not parse ytInitialPlayerResponse");
   }
-  return JSON.parse(readBalanced(webpage, braceIndex)) as YoutubePlayerResponse;
+  return YoutubePlayerResponseSchema.parse(JSON.parse(readBalanced(webpage, braceIndex)));
 }
 
 function extractPlayerUrl(webpage: string): string | null {

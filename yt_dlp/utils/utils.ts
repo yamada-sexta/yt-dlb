@@ -261,6 +261,24 @@ export function mergeDicts<T extends Record<string, unknown>>(...dicts: Array<T 
 
 export const merge_dicts = mergeDicts;
 
+export function joinNonempty(...valuesAndOptions: Array<unknown | { delim?: string; from_dict?: Record<string, unknown> }>): string {
+  const maybeOptions = valuesAndOptions.at(-1);
+  const hasOptions = Boolean(maybeOptions && typeof maybeOptions === "object" && !Array.isArray(maybeOptions));
+  const options = hasOptions ? valuesAndOptions.pop() as { delim?: string; from_dict?: Record<string, unknown> } : {};
+  const values = valuesAndOptions.map((value) => {
+    if (typeof value === "string" && options.from_dict) {
+      return options.from_dict[value];
+    }
+    return value;
+  });
+  return values
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map(String)
+    .join(options.delim ?? "-");
+}
+
+export const join_nonempty = joinNonempty;
+
 export function variadic<T>(value: T | readonly T[] | null | undefined): T[] {
   if (value === null || value === undefined) {
     return [];
