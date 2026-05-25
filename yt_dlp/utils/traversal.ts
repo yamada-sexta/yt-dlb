@@ -1,6 +1,7 @@
 // Source: yt_dlp/utils/traversal.py
 // Port note: this implements the traversal forms used by migrated downloader/extractor code.
 
+import type { XmlElement } from "../compat/index.ts";
 import {
   ExtractorError,
   getElementByAttribute,
@@ -24,6 +25,10 @@ export type TraverseKey =
   | number
   | null
   | typeof Ellipsis
+  | typeof ANY
+  | typeof ALL
+  | typeof FILTER
+  | Slice
   | Set<
       | ((value: unknown) => unknown)
       | StringConstructor
@@ -37,11 +42,40 @@ export type TraverseKey =
   | Record<string, unknown>;
 
 export type TraversePath = TraverseKey | readonly unknown[];
+type TraverseOptions = {
+  default?: unknown;
+  expected_type?: (value: unknown) => unknown;
+  get_all?: boolean;
+  casesense?: boolean;
+  traverse_string?: boolean;
+};
+type ApplyKeyResult = { branching: boolean; values: unknown[] };
+type ApplyPathResult = {
+  hasBranched: boolean;
+  lastKeyIsRecord: boolean;
+  values: unknown[];
+};
 
 export const Ellipsis = Symbol("Ellipsis");
 export const ANY = Symbol("any");
 export const ALL = Symbol("all");
 export const FILTER = Symbol("filter");
+
+export class Slice {
+  constructor(
+    readonly start: number | null = null,
+    readonly stop: number | null = null,
+    readonly step: number | null = null,
+  ) {}
+}
+
+export function slice(
+  start: number | null = null,
+  stop: number | null = null,
+  step: number | null = null,
+): Slice {
+  return new Slice(start, stop, step);
+}
 
 const RecordSchema = z.record(z.string(), z.unknown());
 const GroupsSchema = z
@@ -58,6 +92,8 @@ export function traverseObj<T = unknown>(
         default?: T;
         expected_type?: (value: unknown) => value is T;
         get_all?: boolean;
+        casesense?: boolean;
+        traverse_string?: boolean;
       }
   >
 ): T | T[] | null {
@@ -68,19 +104,25 @@ export function traverseObj<T = unknown>(
         default?: T;
         expected_type?: (value: unknown) => value is T;
         get_all?: boolean;
+        casesense?: boolean;
+        traverse_string?: boolean;
       })
     : {};
   const paths = pathsAndOptions as TraversePath[];
+  let lastPathBranched = false;
   for (const path of paths) {
-    const values = applyPath(
+    const result = applyPathDetailed(
       obj,
       Array.isArray(path)
         ? (path as readonly TraverseKey[])
         : [path as TraverseKey],
+      options,
     );
-    const filtered = options.expected_type
-      ? values.filter(options.expected_type)
-      : (values as T[]);
+    lastPathBranched = result.hasBranched;
+    const typed = result.lastKeyIsRecord
+      ? result.values
+      : applyExpectedType(result.values, options);
+    const filtered = typed.filter(isPresentTraversalResult) as T[];
     if (filtered.length) {
       const first = filtered[0];
       if (first === undefined) {
@@ -88,14 +130,21 @@ export function traverseObj<T = unknown>(
       }
       return options.get_all === false
         ? first
-        : pathHasBranch(path)
+        : result.hasBranched
           ? filtered
           : filtered.length === 1
             ? first
             : filtered;
     }
+    if (result.lastKeyIsRecord) {
+      return {} as T;
+    }
   }
-  return "default" in options ? (options.default as T) : null;
+  return "default" in options
+    ? (options.default as T)
+    : lastPathBranched
+      ? []
+      : null;
 }
 
 export const traverse_obj = traverseObj;
@@ -120,11 +169,7 @@ export function dictGet<T>(
 
 export const dict_get = dictGet;
 
-function isTraverseOptions(value: unknown): value is {
-  default?: unknown;
-  expected_type?: (value: unknown) => boolean;
-  get_all?: boolean;
-} {
+function isTraverseOptions(value: unknown): value is TraverseOptions {
   if (
     !value ||
     typeof value !== "object" ||
@@ -133,43 +178,66 @@ function isTraverseOptions(value: unknown): value is {
   ) {
     return false;
   }
-  return "default" in value || "expected_type" in value || "get_all" in value;
+  return "default" in value || "expected_type" in value || "get_all" in value || "casesense" in value || "traverse_string" in value;
 }
 
-function pathHasBranch(path: TraversePath): boolean {
-  const keys = Array.isArray(path)
-    ? (path as readonly TraverseKey[])
-    : [path as TraverseKey];
-  return keys.some(
-    (key) =>
-      key === Ellipsis || typeof key === "function" || Array.isArray(key),
-  );
+function applyPath(
+  obj: unknown,
+  path: readonly TraverseKey[],
+  options: TraverseOptions = {},
+): unknown[] {
+  return applyPathDetailed(obj, path, options).values;
 }
 
-function applyPath(obj: unknown, path: readonly TraverseKey[]): unknown[] {
+function applyPathDetailed(
+  obj: unknown,
+  path: readonly TraverseKey[],
+  options: TraverseOptions = {},
+): ApplyPathResult {
   let values = [obj];
-  for (const [index, key] of path.entries()) {
-    values = values.flatMap((value) => applyKey(value, key));
-    if (!(path[index + 1] instanceof Set)) {
-      values = values.filter((value) => value !== null && value !== undefined);
+  let hasBranched = false;
+  let lastKey: TraverseKey | undefined;
+  for (const key of path) {
+    lastKey = key;
+    if (key === ANY) {
+      hasBranched = false;
+      const first = values.find((value) => value !== null && value !== undefined && (!isRecord(value) || Object.keys(value).length));
+      values = first === undefined ? [] : [first];
+      continue;
     }
+    if (key === ALL) {
+      hasBranched = false;
+      values = [values.filter((value) => value !== null && value !== undefined && (!isRecord(value) || Object.keys(value).length))];
+      continue;
+    }
+    if (key === FILTER) {
+      values = values.filter(pythonTruthy);
+      continue;
+    }
+    const nextValues: unknown[] = [];
+    for (const value of values) {
+      const result = applyKeyDetailed(value, key, options);
+      hasBranched ||= result.branching;
+      nextValues.push(...result.values);
+    }
+    values = nextValues;
     if (!values.length) {
       break;
     }
   }
-  return values;
+  return { hasBranched, lastKeyIsRecord: isRecord(lastKey), values };
 }
 
 export function value<T>(constant: T): () => T {
   return () => constant;
 }
 
-class RequiredError extends ExtractorError {}
+export class _RequiredError extends ExtractorError {}
 
 export function require(name: string, options: { expected?: boolean } = {}): (value: unknown) => unknown {
   return (input) => {
     if (input === null || input === undefined) {
-      throw new RequiredError(`Unable to extract ${name}`, { expected: options.expected });
+      throw new _RequiredError(`Unable to extract ${name}`, { expected: options.expected });
     }
     return input;
   };
@@ -259,7 +327,7 @@ export function traversalGetFirst<T = unknown>(obj: unknown, ...pathsAndOptions:
   for (const keys of pathsAndOptions as TraversePath[]) {
     const path = [Ellipsis, ...variadic(keys as TraverseKey | readonly TraverseKey[])];
     const result = traverseObj<T>(obj, path, { ...options, get_all: false });
-    if (result !== null) {
+    if (result !== null && (!Array.isArray(result) || result.length)) {
       return result as T;
     }
   }
@@ -267,6 +335,7 @@ export function traversalGetFirst<T = unknown>(obj: unknown, ...pathsAndOptions:
 }
 
 export const traversal_get_first = traversalGetFirst;
+export const get_first = traversalGetFirst;
 
 export function findElement(options: {
   tag?: string;
@@ -330,84 +399,423 @@ export function findElements(options: {
 
 export const find_elements = findElements;
 
-function applyKey(value: unknown, key: TraverseKey): unknown[] {
+function applyKey(
+  value: unknown,
+  key: TraverseKey,
+  options: TraverseOptions = {},
+): unknown[] {
+  return applyKeyDetailed(value, key, options).values;
+}
+
+function applyKeyDetailed(
+  value: unknown,
+  key: TraverseKey,
+  options: TraverseOptions = {},
+): ApplyKeyResult {
   if (key === null) {
-    return [value];
+    return { branching: false, values: [value] };
   }
   if (key === Ellipsis) {
+    if (isCookieMorselLike(value)) {
+      return { branching: true, values: Object.values(value.toTraversalRecord()) };
+    }
+    if (isRegExpMatch(value)) {
+      return { branching: true, values: value.slice(1) };
+    }
     if (Array.isArray(value)) {
-      return value;
+      return { branching: true, values: value };
+    }
+    if (isXmlElement(value)) {
+      return { branching: true, values: value.children };
+    }
+    if (isIterableLike(value)) {
+      return { branching: true, values: [...value] };
     }
     if (isRecord(value)) {
-      return Object.values(value);
+      return { branching: true, values: Object.values(value) };
     }
-    return [];
+    if (options.traverse_string) {
+      return { branching: false, values: [String(value)] };
+    }
+    return { branching: true, values: [] };
   }
   if (Array.isArray(key)) {
-    return key.flatMap((branch) => applyKey(value, branch));
+    return {
+      branching: true,
+      values: key.flatMap((branch) =>
+        Array.isArray(branch)
+          ? applyPath(value, branch as readonly TraverseKey[], options)
+          : applyKey(value, branch as TraverseKey, options),
+      ),
+    };
+  }
+  if (key instanceof Slice) {
+    if (Array.isArray(value)) {
+      return { branching: true, values: applySlice(value, key) };
+    }
+    if (options.traverse_string) {
+      return { branching: false, values: [applySlice([...String(value)], key).join("")] };
+    }
+    return { branching: false, values: [undefined] };
   }
   if (key instanceof Set) {
-    const item = [...key][0];
-    if (!item) {
-      return [];
+    const items = [...key];
+    const item = items[0];
+    if (!items.length || !item) {
+      throw new Error("Set traversal key must contain a type filter or transform");
     }
-    if (item === String) {
-      return typeof value === "string" ? [value] : [];
+    if (items.every(isConstructorFilter)) {
+      return {
+        branching: false,
+        values: items.some((constructorFilter) => matchesConstructor(value, constructorFilter)) ? [value] : [],
+      };
     }
-    if (item === Number) {
-      return typeof value === "number" ? [value] : [];
-    }
-    if (item === Boolean) {
-      return typeof value === "boolean" ? [value] : [];
-    }
-    if (item === Object) {
-      return isRecord(value) ? [value] : [];
-    }
-    if (item === Array) {
-      return Array.isArray(value) ? [value] : [];
+    if (items.length > 1 || items.some(isConstructorFilter)) {
+      throw new Error("Set traversal keys must be either all type filters or one transform");
     }
     const transform = item as (input: unknown) => unknown;
-    return [transform(value)].filter(
-      (result) => result !== null && result !== undefined,
-    );
+    try {
+      return {
+        branching: false,
+        values: [transform(value)].filter(
+          (result) => result !== null && result !== undefined,
+        ),
+      };
+    } catch (error) {
+      if (error instanceof ExtractorError) {
+        throw error;
+      }
+      return { branching: false, values: [] };
+    }
   }
   if (typeof key === "function") {
-    const entries = Array.isArray(value)
-      ? value.map((item, index) => [index, item] as const)
+    const isStringTraversal = options.traverse_string && !isBranchIterable(value) && !isRegExpMatch(value);
+    const entries = isCookieMorselLike(value)
+      ? Object.entries(value.toTraversalRecord())
+      : Array.isArray(value)
+      ? isRegExpMatch(value)
+        ? regexMatchEntries(value)
+        : value.map((item, index) => [index, item] as const)
+      : isXmlElement(value)
+        ? value.children.map((item, index) => [index, item] as const)
+      : isIterableLike(value)
+        ? [...value].map((item, index) => [index, item] as const)
       : isRecord(value)
         ? Object.entries(value)
-        : [];
-    return entries
-      .filter(([entryKey, entryValue]) => key(entryKey, entryValue))
+        : isStringTraversal
+          ? [...String(value)].map((item, index) => [index, item] as const)
+          : [];
+    const filtered = entries
+      .filter(([entryKey, entryValue]) => tryTraversalPredicate(key, entryKey, entryValue))
       .map(([, entryValue]) => entryValue);
+    if (isStringTraversal) {
+      return { branching: false, values: [filtered.join("")] };
+    }
+    return { branching: entries.length > 0 || !options.traverse_string, values: filtered };
   }
   if (isRecord(key)) {
     const out: Record<string, unknown> = {};
     for (const [outKey, outPath] of Object.entries(key)) {
-      const result = applyPath(
+      const result = traverseSubpathForMapping(
         value,
         Array.isArray(outPath)
           ? (outPath as readonly TraverseKey[])
           : [outPath as TraverseKey],
-      )[0];
-      if (result !== undefined && result !== null) {
+        options,
+      );
+      if (isPresentTraversalResult(result)) {
         out[outKey] = result;
+      } else if ("default" in options) {
+        out[outKey] = options.default;
       }
     }
-    return Object.keys(out).length ? [out] : [];
+    return { branching: false, values: Object.keys(out).length ? [out] : [] };
   }
   if (typeof key === "number") {
-    return Array.isArray(value) ? [value[key]] : [];
+    if (Array.isArray(value)) return { branching: false, values: [value[key]] };
+    if (isXmlElement(value)) return { branching: false, values: [value.children[key]] };
+    if (isRecord(value)) return { branching: false, values: [value[String(key)]] };
+    if (options.traverse_string) return { branching: false, values: [String(value)[key]] };
+    return { branching: false, values: [undefined] };
   }
   if (typeof key === "string") {
+    if (isCookieMorselLike(value)) {
+      const record = value.toTraversalRecord();
+      if (options.casesense === false) {
+        const folded = key.toLocaleLowerCase();
+        return { branching: false, values: [Object.entries(record).find(([entryKey]) => entryKey.toLocaleLowerCase() === folded)?.[1]] };
+      }
+      return { branching: false, values: [record[key]] };
+    }
+    if (isXmlElement(value)) {
+      return { branching: false, values: xmlApplyString(value, key) };
+    }
+    if (isRegExpMatch(value)) {
+      if (options.casesense === false) {
+        const folded = key.toLocaleLowerCase();
+        return { branching: false, values: [Object.entries(value.groups ?? {}).find(([entryKey]) => entryKey.toLocaleLowerCase() === folded)?.[1]] };
+      }
+      return { branching: false, values: [value.groups?.[key]] };
+    }
     if (isRecord(value)) {
-      return [value[key]];
+      if (options.casesense === false) {
+        const folded = key.toLocaleLowerCase();
+        return { branching: false, values: [Object.entries(value).find(([entryKey]) => entryKey.toLocaleLowerCase() === folded)?.[1]] };
+      }
+      return { branching: false, values: [value[key]] };
     }
     if (hasGroups(value)) {
-      return [value.groups[key]];
+      return { branching: false, values: [value.groups[key]] };
     }
   }
-  return [];
+  return { branching: false, values: [undefined] };
+}
+
+function isPresentTraversalResult(value: unknown): boolean {
+  return value !== null && value !== undefined && (!isRecord(value) || Object.keys(value).length > 0);
+}
+
+function pythonTruthy(value: unknown): boolean {
+  if (value === null || value === undefined || value === false || value === "") {
+    return false;
+  }
+  if (typeof value === "number") {
+    return value !== 0 && !Number.isNaN(value);
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (isRecord(value)) {
+    return Object.keys(value).length > 0;
+  }
+  return true;
+}
+
+function traverseSubpathForMapping(
+  value: unknown,
+  path: readonly TraverseKey[],
+  options: TraverseOptions,
+): unknown {
+  const result = applyPathDetailed(value, path, options);
+  const values = result.lastKeyIsRecord
+    ? result.values
+    : applyExpectedType(result.values, options);
+  const filtered = values.filter(isPresentTraversalResult);
+  if (result.hasBranched) {
+    return filtered.length ? filtered : null;
+  }
+  if (filtered.length) {
+    return filtered[0];
+  }
+  return result.lastKeyIsRecord ? {} : null;
+}
+
+function applyExpectedType(values: readonly unknown[], options: TraverseOptions): unknown[] {
+  if (!options.expected_type) {
+    return [...values];
+  }
+  return values.flatMap((value) => {
+    try {
+      const typed = options.expected_type?.(value);
+      if (typed === true) {
+        return [value];
+      }
+      if (typed === false || typed === null || typed === undefined) {
+        return [];
+      }
+      return [typed];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function tryTraversalPredicate(
+  predicate: (key: string | number, value: unknown) => boolean,
+  key: string | number,
+  value: unknown,
+): boolean {
+  try {
+    return Boolean(predicate(key, value));
+  } catch {
+    return false;
+  }
+}
+
+function isRegExpMatch(value: unknown): value is RegExpMatchArray {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  const match = value as Partial<RegExpMatchArray>;
+  return typeof match.index === "number" && typeof match.input === "string";
+}
+
+function isIterableLike(value: unknown): value is Iterable<unknown> {
+  return Boolean(
+    value !== null &&
+      value !== undefined &&
+      typeof value !== "string" &&
+      !(value instanceof Uint8Array) &&
+      !(value instanceof Map) &&
+      typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function",
+  );
+}
+
+function isBranchIterable(value: unknown): boolean {
+  return Array.isArray(value) || isXmlElement(value) || isIterableLike(value) || isRecord(value);
+}
+
+function regexMatchEntries(value: RegExpMatchArray): Array<readonly [string | number, unknown]> {
+  return [
+    ...value.map((item, index) => [index, item] as const),
+    ...Object.entries(value.groups ?? {}),
+  ];
+}
+
+function isCookieMorselLike(
+  value: unknown,
+): value is { toTraversalRecord: () => Record<string, unknown> } {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as { toTraversalRecord?: unknown }).toTraversalRecord === "function",
+  );
+}
+
+function isConstructorFilter(
+  item: unknown,
+): item is StringConstructor | NumberConstructor | BooleanConstructor | ObjectConstructor | ArrayConstructor {
+  return item === String || item === Number || item === Boolean || item === Object || item === Array;
+}
+
+function matchesConstructor(
+  value: unknown,
+  constructorFilter: StringConstructor | NumberConstructor | BooleanConstructor | ObjectConstructor | ArrayConstructor,
+): boolean {
+  if (constructorFilter === String) return typeof value === "string";
+  if (constructorFilter === Number) return typeof value === "number";
+  if (constructorFilter === Boolean) return typeof value === "boolean";
+  if (constructorFilter === Object) return isRecord(value);
+  return Array.isArray(value);
+}
+
+function applySlice<T>(values: readonly T[], sliceSpec: Slice): T[] {
+  const length = values.length;
+  const step = sliceSpec.step ?? 1;
+  if (step === 0) {
+    return [];
+  }
+  const normalize = (index: number | null, fallback: number) => {
+    const value = index ?? fallback;
+    return value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
+  };
+  const start = normalize(sliceSpec.start, step > 0 ? 0 : length - 1);
+  const stop = normalize(sliceSpec.stop, step > 0 ? length : -1);
+  const out: T[] = [];
+  if (step > 0) {
+    for (let index = start; index < stop; index += step) out.push(values[index] as T);
+  } else {
+    for (let index = start; index > stop; index += step) out.push(values[index] as T);
+  }
+  return out;
+}
+
+function isXmlElement(value: unknown): value is XmlElement {
+  return z
+    .object({
+      tag: z.string(),
+      attrib: z.record(z.string(), z.string()),
+      text: z.string().nullable(),
+      children: z.array(z.unknown()),
+    })
+    .safeParse(value).success;
+}
+
+function xmlApplyString(element: XmlElement, key: string): unknown[] {
+  const slashIndex = key.lastIndexOf("/");
+  let xpath = slashIndex >= 0 ? key.slice(0, slashIndex) : "";
+  let special: string | null = slashIndex >= 0 ? key.slice(slashIndex + 1) : key;
+
+  if (!special.startsWith("@") && !special.endsWith("()")) {
+    xpath = key;
+    special = null;
+  }
+
+  const targets = xmlFind(element, xpath);
+  const results = targets.map((target) => xmlApplySpecial(target, special));
+  return xpath ? [results] : results;
+}
+
+function xmlApplySpecial(element: XmlElement, special: string | null): unknown {
+  if (special === null) {
+    return element;
+  }
+  if (special === "@") {
+    return element.attrib;
+  }
+  if (special.startsWith("@")) {
+    return element.attrib[special.slice(1)] ?? null;
+  }
+  if (special === "text()") {
+    return element.text;
+  }
+  throw new SyntaxError(`Unsupported XML traversal special ${special}`);
+}
+
+function xmlFind(element: XmlElement, xpath: string): XmlElement[] {
+  if (!xpath) {
+    return [element];
+  }
+  let expression = xpath;
+  if (expression.startsWith("/")) {
+    expression = `.${expression}`;
+  } else if (!expression.startsWith("./") && !expression.startsWith(".//")) {
+    expression = `./${expression}`;
+  }
+
+  if (expression.startsWith(".//")) {
+    return xmlFilterExpression(xmlDescendants(element), expression.slice(3));
+  }
+  if (expression.startsWith("./")) {
+    return xmlFilterExpression(element.children, expression.slice(2));
+  }
+  throw new SyntaxError(`Unsupported XML traversal xpath ${xpath}`);
+}
+
+function xmlFilterExpression(
+  elements: readonly XmlElement[],
+  expression: string,
+): XmlElement[] {
+  const attrPredicate = expression.match(/^\*\[@(?<attr>[\w:-]+)\]$/);
+  const attr = attrPredicate?.groups?.attr;
+  if (attr) {
+    return elements.filter((element) => attr in element.attrib);
+  }
+  if (!expression.includes("/") && expression !== "*") {
+    return elements.filter((element) => xmlTagMatches(element, expression));
+  }
+  throw new SyntaxError(`Unsupported XML traversal xpath expression ${expression}`);
+}
+
+function xmlDescendants(element: XmlElement): XmlElement[] {
+  const out: XmlElement[] = [];
+  const visit = (node: XmlElement) => {
+    for (const child of node.children) {
+      out.push(child);
+      visit(child);
+    }
+  };
+  visit(element);
+  return out;
+}
+
+function xmlTagMatches(element: XmlElement, tag: string): boolean {
+  return tag === "*" || element.tag === tag || xmlLocalName(element.tag) === tag;
+}
+
+function xmlLocalName(tag: string): string {
+  const namespaceEnd = tag.lastIndexOf("}");
+  return namespaceEnd >= 0 ? tag.slice(namespaceEnd + 1) : tag;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,14 +1,19 @@
 // Source: yt_dlp/utils/networking.py
 
+type HeaderValue = string | number | boolean | Uint8Array;
+type HeaderSource =
+  | Record<string, HeaderValue>
+  | Iterable<readonly [string, HeaderValue]>
+  | Headers
+  | HTTPHeaderDict
+  | null
+  | undefined;
+
 export class HTTPHeaderDict {
   readonly #values = new Map<string, string>();
   readonly #sensitive = new Map<string, string>();
 
-  constructor(
-    ...sources: Array<
-      Record<string, string> | Headers | HTTPHeaderDict | null | undefined
-    >
-  ) {
+  constructor(...sources: HeaderSource[]) {
     for (const source of sources) {
       if (source) {
         this.update(source);
@@ -44,7 +49,7 @@ export class HTTPHeaderDict {
     return this.#values.get(normalizeHeaderKey(key)) ?? defaultValue;
   }
 
-  set(key: string, value: string | number | boolean | Uint8Array): void {
+  set(key: string, value: HeaderValue): void {
     const normalized = normalizeHeaderKey(key);
     this.#sensitive.set(normalized, key);
     this.#values.set(
@@ -65,6 +70,24 @@ export class HTTPHeaderDict {
     return value;
   }
 
+  popitem(): [string, string] | undefined {
+    const last = [...this.#values.entries()].at(-1);
+    if (!last) {
+      return undefined;
+    }
+    this.delete(last[0]);
+    return last;
+  }
+
+  setdefault(key: string, defaultValue: HeaderValue = ""): string {
+    const existing = this.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    this.set(key, defaultValue);
+    return this.get(key) ?? "";
+  }
+
   clear(): void {
     this.#values.clear();
     this.#sensitive.clear();
@@ -74,11 +97,17 @@ export class HTTPHeaderDict {
     return new HTTPHeaderDict(this);
   }
 
-  update(source: Record<string, string> | Headers | HTTPHeaderDict): void {
+  update(source: Exclude<HeaderSource, null | undefined>): void {
     if (source instanceof HTTPHeaderDict) {
       source = source.sensitive();
     }
     if (source instanceof Headers) {
+      for (const [key, value] of source) {
+        this.set(key, value);
+      }
+      return;
+    }
+    if (isHeaderEntryIterable(source)) {
       for (const [key, value] of source) {
         this.set(key, value);
       }
@@ -178,15 +207,17 @@ export const escape_rfc3986 = escapeRfc3986;
 
 export function normalizeUrl(url: string): string {
   const parsed = new URL(url);
-  parsed.hostname = parsed.hostname
-    ? new URL(`http://${parsed.hostname}`).hostname
-    : parsed.hostname;
-  parsed.pathname = escapeRfc3986(removeDotSegments(parsed.pathname));
-  parsed.search = parsed.search
-    ? `?${escapeRfc3986(decodeURIComponent(parsed.search.slice(1)))}`
+  const username = parsed.username ? escapeRfc3986(decodeURIComponent(parsed.username)) : "";
+  const password = parsed.password ? `:${escapeRfc3986(decodeURIComponent(parsed.password))}` : "";
+  const auth = username || password ? `${username}${password}@` : "";
+  const path = escapeRfc3986(removeDotSegments(decodeURI(parsed.pathname)));
+  const query = parsed.search
+    ? `?${escapeRfc3986(decodeURI(parsed.search.slice(1)))}`
     : "";
-  parsed.hash = parsed.hash ? `#${escapeRfc3986(parsed.hash.slice(1))}` : "";
-  return parsed.toString();
+  const fragment = parsed.hash
+    ? `#${escapeRfc3986(decodeURI(parsed.hash.slice(1)))}`
+    : "";
+  return `${parsed.protocol}//${auth}${parsed.host}${path}${query}${fragment}`;
 }
 
 export const normalize_url = normalizeUrl;
@@ -205,6 +236,10 @@ function normalizeHeaderKey(key: string): string {
   return key
     .toLowerCase()
     .replaceAll(/(^|-)([a-z])/g, (match) => match.toUpperCase());
+}
+
+function isHeaderEntryIterable(source: unknown): source is Iterable<readonly [string, HeaderValue]> {
+  return typeof source === "object" && source !== null && Symbol.iterator in source;
 }
 
 function latin1Decode(value: Uint8Array): string {

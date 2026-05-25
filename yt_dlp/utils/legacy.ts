@@ -4,6 +4,9 @@
 import { inflateSync } from "node:zlib";
 
 import { NotImplementedError } from "../errors.ts";
+import { Indirect } from "../globals.ts";
+import { Request as YtdlbRequest } from "../networking/common.ts";
+import { loadPlugins as loadPluginSpec } from "../plugins.ts";
 import {
   escapeRfc3986,
   normalizeUrl as escapeUrl,
@@ -25,14 +28,21 @@ export const has_certifi = hasCertifi;
 export const hasWebsockets = typeof WebSocket !== "undefined";
 export const has_websockets = hasWebsockets;
 
-export function loadPlugins(
-  _name: string,
-  _suffix: string,
-  _namespace: Record<string, unknown>,
-): never {
-  throw new NotImplementedError(
-    "legacy plugin loading shim; use yt_dlp/plugins.ts",
-  );
+export async function loadPlugins(
+  name: string,
+  suffix: string,
+  namespace: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const destination = new Indirect<Record<string, unknown>>({});
+  const pluginDestination = new Indirect<Record<string, unknown>>({});
+  const plugins = await loadPluginSpec({
+    moduleName: name,
+    suffix,
+    destination,
+    pluginDestination,
+  });
+  Object.assign(namespace, plugins);
+  return plugins;
 }
 
 export const load_plugins = loadPlugins;
@@ -207,7 +217,7 @@ export function handleYoutubedlHeaders(
 
 export const handle_youtubedl_headers = handleYoutubedlHeaders;
 
-export function requestToUrl(request: string | URL | Request): string {
+export function requestToUrl(request: string | URL | globalThis.Request): string {
   return typeof request === "string"
     ? request
     : request instanceof URL
@@ -217,16 +227,61 @@ export function requestToUrl(request: string | URL | Request): string {
 
 export const request_to_url = requestToUrl;
 
-export function sanitizedRequest(_url: string, ..._args: unknown[]): never {
-  throw new NotImplementedError(
-    "legacy urllib Request construction; use networking/Request",
+function sanitizeLegacyUrl(url: string): string {
+  let result = url.trim().replace(/^httpss:\/\//, "https://").replace(/^rmtp([es]?):\/\//, "rtmp$1://");
+  if (result.startsWith("//")) {
+    result = `http:${result}`;
+  }
+  return result;
+}
+
+function extractBasicAuthForRequest(url: string): [string, string | null] {
+  const match = /^(?<scheme>[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?<authority>[^/?#]*)(?<rest>[/?#][\s\S]*)?$/.exec(url);
+  const authority = match?.groups?.authority;
+  if (!match?.groups?.scheme || authority === undefined) {
+    return [url, null];
+  }
+  const atIndex = authority.lastIndexOf("@");
+  if (atIndex < 0) {
+    return [url, null];
+  }
+  const userinfo = authority.slice(0, atIndex);
+  const host = authority.slice(atIndex + 1);
+  const [rawUsername, ...rawPasswordParts] = userinfo.split(":");
+  const username = decodeURIComponentSafe(rawUsername ?? "");
+  const password = decodeURIComponentSafe(rawPasswordParts.join(":"));
+  return [
+    `${match.groups.scheme}${host}${match.groups.rest ?? ""}`,
+    `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+  ];
+}
+
+function decodeURIComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export function sanitizedRequest(
+  url: string,
+  init: RequestInit = {},
+): YtdlbRequest {
+  const [cleanUrl, authorization] = extractBasicAuthForRequest(
+    escapeUrl(sanitizeLegacyUrl(url)),
   );
+  const headers = new Headers(init.headers);
+  if (authorization !== null) {
+    headers.set("Authorization", authorization);
+  }
+  return new YtdlbRequest(cleanUrl, { ...init, headers });
 }
 
 export const sanitized_Request = sanitizedRequest;
 
 export class YoutubeDLHandler {
-  constructor(readonly params: Record<string, unknown>) {}
+  constructor(readonly params: Record<string, unknown>, readonly options: Record<string, unknown> = {}) {}
 }
 
 export class YoutubeDLHTTPSHandler extends YoutubeDLHandler {}
@@ -236,23 +291,42 @@ export class YoutubeDLCookieProcessor {
 }
 
 export function makeHTTPSHandler(
-  _params: Record<string, unknown>,
-  ..._args: unknown[]
-): never {
-  throw new NotImplementedError(
-    "legacy HTTPS handler construction; use RequestDirector",
-  );
+  params: Record<string, unknown>,
+  options: Record<string, unknown> = {},
+): YoutubeDLHTTPSHandler {
+  return new YoutubeDLHTTPSHandler(params, {
+    ...options,
+    verify: !params.nocheckcertificate,
+    client_certificate: params.client_certificate,
+    client_certificate_key: params.client_certificate_key,
+    client_certificate_password: params.client_certificate_password,
+    legacy_support: params.legacyserverconnect,
+    use_certifi: !Array.isArray(params.compat_opts) || !params.compat_opts.includes("no-certifi"),
+  });
 }
 
 export const make_HTTPS_handler = makeHTTPSHandler;
 
 export function processCommunicateOrKill(
-  _process: unknown,
-  ..._args: unknown[]
-): never {
-  throw new NotImplementedError(
-    "legacy subprocess communication; use Bun Shell",
-  );
+  processLike: {
+    communicate_or_kill?: (...args: unknown[]) => unknown;
+    communicate?: (...args: unknown[]) => unknown;
+    kill?: (...args: unknown[]) => unknown;
+  },
+  ...args: unknown[]
+): unknown {
+  if (typeof processLike.communicate_or_kill === "function") {
+    return processLike.communicate_or_kill(...args);
+  }
+  if (typeof processLike.communicate === "function") {
+    try {
+      return processLike.communicate(...args);
+    } catch (error) {
+      processLike.kill?.();
+      throw error;
+    }
+  }
+  throw new TypeError("process object does not provide communicate");
 }
 
 export const process_communicate_or_kill = processCommunicateOrKill;

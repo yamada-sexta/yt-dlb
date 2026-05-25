@@ -5,8 +5,12 @@ import { describe, expect, test } from "bun:test";
 import {
   addAcceptEncodingHeader,
   getRedirectMethod,
+  InstanceStoreMixin,
+  makeSslContext,
   makeSocksProxyOpts,
+  sslLoadCerts,
 } from "../yt_dlp/networking/helper.ts";
+import { YoutubeDLCookieJar } from "../yt_dlp/cookies.ts";
 import { HTTPError, IncompleteRead } from "../yt_dlp/networking/exceptions.ts";
 import { ProxyType } from "../yt_dlp/socks.ts";
 import {
@@ -137,8 +141,84 @@ describe("networking utility helpers", () => {
     );
   });
 
-  test.todo("makeSslContext once TLS context construction is ported", () =>
-    undefined);
+  test("makeSslContext builds Bun TLS options from Python helper inputs", () => {
+    const previous = process.env.SSLKEYLOGFILE;
+    process.env.SSLKEYLOGFILE = "/tmp/ytdlb-ssl-keys.log";
+    try {
+      const context = makeSslContext({
+        verify: false,
+        client_certificate: "test/testdata/certificate/client.crt",
+        client_certificate_key: "test/testdata/certificate/client.key",
+        client_certificate_password: "foobar",
+      });
+      expect(context.verify).toBe(false);
+      expect(context.tls.rejectUnauthorized).toBe(false);
+      expect(context.tls.ALPNProtocols).toBe("http/1.1");
+      expect(context.tls.cert).toContain("BEGIN CERTIFICATE");
+      expect(context.tls.key).toContain("BEGIN");
+      expect(context.tls.passphrase).toBe("foobar");
+      expect(context.keylogFilename).toBe("/tmp/ytdlb-ssl-keys.log");
+      expect(context.postHandshakeAuth).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SSLKEYLOGFILE;
+      } else {
+        process.env.SSLKEYLOGFILE = previous;
+      }
+    }
+  });
+
+  test("makeSslContext handles legacy and certificate errors explicitly", () => {
+    const legacy = makeSslContext({ legacy_support: true, use_certifi: false });
+    expect(legacy.tls.secureOptions).toBe(4);
+    expect(legacy.tls.ciphers).toBe("DEFAULT");
+    expect(legacy.trustSource).toBe("platform");
+
+    expect(() =>
+      makeSslContext({ client_certificate: "test/testdata/certificate/missing.crt" }),
+    ).toThrow("Unable to load client certificate");
+  });
+
+  test("sslLoadCerts uses platform trust when certifi is unavailable", () => {
+    const tls = {};
+    expect(sslLoadCerts(tls, { use_certifi: true })).toBe("platform");
+    expect(tls).toEqual({});
+  });
+
+  test("InstanceStoreMixin caches by Python-style value equality", () => {
+    class FakeInstanceStoreMixin extends InstanceStoreMixin<number> {
+      instances = 0;
+
+      protected override createInstance(): number {
+        this.instances += 1;
+        return this.instances;
+      }
+    }
+
+    const mixin = new FakeInstanceStoreMixin();
+    expect(mixin._get_instance({ d: { a: 1, b: 2, c: new Set(["d", 4]) } })).toBe(
+      mixin._get_instance({ d: { c: new Set([4, "d"]), b: 2, a: 1 } }),
+    );
+    expect(mixin._get_instance({ d: { a: 1 }, e: [1, 2, 3] })).toBe(
+      mixin._get_instance({ e: [1, 2, 3], d: { a: 1 } }),
+    );
+    expect(mixin._get_instance({ d: { a: 1 }, e: [1, 2, 3] })).not.toBe(
+      mixin._get_instance({ d: { a: 1 }, e: [1, 2, 3, 4] }),
+    );
+
+    const cookiejar = new YoutubeDLCookieJar();
+    expect(mixin._get_instance({ b: [1, 2], c: cookiejar })).toBe(
+      mixin._get_instance({ c: cookiejar, b: [1, 2] }),
+    );
+    expect(mixin._get_instance({ b: [1, 2], c: cookiejar })).not.toBe(
+      mixin._get_instance({ b: [1, 2], c: new YoutubeDLCookieJar() }),
+    );
+
+    const cached = mixin._get_instance({ t: 1234 });
+    expect(mixin._get_instance({ t: 1234 })).toBe(cached);
+    mixin._clear_instances();
+    expect(mixin._get_instance({ t: 1234 })).not.toBe(cached);
+  });
 });
 
 describe("networking exceptions", () => {

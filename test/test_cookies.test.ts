@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import {
   Cookie,
+  CookieMorsel,
   LenientSimpleCookie,
   LinuxDesktopEnvironment,
   LinuxChromeCookieDecryptor,
@@ -280,10 +281,22 @@ describe("cookie helpers", () => {
       "a=b; c=[; d=r; f=h",
       { a: "b", c: "[", d: "r", f: "h" },
     ],
+    [
+      "quoted cookie with semicolon and escaped quotes",
+      'keebler="E=mc2; L=\\"Loves\\"; fudge=;"',
+      { keebler: 'E=mc2; L="Loves"; fudge=;' },
+    ],
+    ["quoted semicolon", 'chips="a;hoy"; vienna=finger', { chips: "a;hoy", vienna: "finger" }],
     ["keep last value", "a=c; a=b", { a: "b" }],
     ["ignore cookies without a name", "a=b; unnamed; c=d", { a: "b", c: "d" }],
+    ["skip invalid complex cookie", 'chips={"ahoy;": 1}; vienna="finger;"', { vienna: "finger;" }],
+    ["skip space separated garbage", "x a=b c=d x; e=f", { a: "b", c: "d", e: "f" }],
+    ["mend invalid quote", 'a=b; invalid="; c=d', { a: "b", c: "d" }],
+    ["invalid morsel key", "Key=Value; [Invalid]=Value; Another=Value", { Key: "Value", Another: "Value" }],
     ["ignore control character name", "foo\x0a=bar;", {}],
     ["continue after control character name", "foo\x0d=bar; x=y;", { x: "y" }],
+    ['ignore quote without name', 'a=b; "; c=d', { a: "b", c: "d" }],
+    ["ignore quoted control character value", 'keebler="E=mc2; L=\\"Loves\\"; fudge=\\012;"', {}],
   ] as const)("LenientSimpleCookie %s", (_message, raw, expected) => {
     const cookie = new LenientSimpleCookie(raw);
     expect(Object.fromEntries(cookie.cookies)).toEqual(expected);
@@ -295,12 +308,39 @@ describe("cookie helpers", () => {
     expect(cookie.get("foo")).toBe("bar");
   });
 
+  test("LenientSimpleCookie stores Python-style morsel attributes", () => {
+    const cookie = new LenientSimpleCookie(
+      'Customer="WILE_E_COYOTE"; Version=1; Path=/acme; HttpOnly; Secure; SameSite=Lax',
+    );
+    const morsel = cookie.getMorsel("Customer");
+    expect(morsel).toBeInstanceOf(CookieMorsel);
+    expect(morsel?.value).toBe("WILE_E_COYOTE");
+    expect(
+      Object.fromEntries(morsel?.entries().filter(([, value]) => value !== "") ?? []),
+    ).toEqual({
+      version: "1",
+      path: "/acme",
+      httponly: true,
+      secure: true,
+      samesite: "Lax",
+    });
+  });
+
+  test("LenientSimpleCookie resets morsel after invalid attributes", () => {
+    const invalidAttribute = new LenientSimpleCookie("a=b; invalid; Version=1; c=d");
+    expect(Object.fromEntries(invalidAttribute.cookies)).toEqual({ a: "b", c: "d" });
+    expect(invalidAttribute.getMorsel("a")?.getAttribute("version")).toBe("");
+
+    const controlAttribute = new LenientSimpleCookie(
+      'Customer="WILE_E_COYOTE"; Version="1\\012"; Path="/acme"',
+    );
+    expect(Object.fromEntries(controlAttribute.cookies)).toEqual({});
+  });
+
   test.todo("test_chrome_cookie_decryptor_windows_v10 once Windows DPAPI is ported", () =>
     undefined);
   test.todo("test_chrome_cookie_decryptor_windows_v10_meta24 once Windows DPAPI is ported", () =>
     undefined);
   test.todo("test_chrome_cookie_decryptor_mac_v10 once macOS keychain compatibility is ported", () =>
-    undefined);
-  test.todo("TestLenientSimpleCookie attribute morsel compatibility once attributes are stored", () =>
     undefined);
 });

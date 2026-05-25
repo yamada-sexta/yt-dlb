@@ -2,21 +2,30 @@
 // Port note: this is a dependency-first subset used by migrated downloader/postprocessor code.
 
 import { spawnSync } from "node:child_process";
-import { createHmac, randomBytes, randomUUID as nodeRandomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { createHash, createHmac, randomBytes, randomUUID as nodeRandomUUID } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { createServer } from "node:net";
 
-import type { XmlElement } from "../compat/index.ts";
+import { compat_HTMLParseError, type XmlElement } from "../compat/index.ts";
 import { NotImplementedError } from "../errors.ts";
-import { xpathElement } from "./xml.ts";
+import { findXmlPathAll } from "./xml.ts";
+export {
+  escapeRfc3986,
+  escape_rfc3986,
+  HTTPHeaderDict,
+  normalizeUrl,
+  normalize_url,
+  removeDotSegments,
+  remove_dot_segments,
+} from "./networking.ts";
 export { fixXmlAmpersands, xpathElement, xpathText, xpathWithNs } from "./xml.ts";
 export { fix_xml_ampersands, xpath_element, xpath_text, xpath_with_ns } from "./xml.ts";
 
 export const NO_DEFAULT = Symbol("NO_DEFAULT");
 export const IDENTITY = <T>(value: T): T => value;
 
-const ENGLISH_MONTH_NAMES = [
+export const ENGLISH_MONTH_NAMES = [
   "January",
   "February",
   "March",
@@ -31,21 +40,21 @@ const ENGLISH_MONTH_NAMES = [
   "December",
 ] as const;
 
-const MONTH_NAMES: Record<string, readonly string[]> = {
+export const MONTH_NAMES: Record<string, readonly string[]> = {
   en: ENGLISH_MONTH_NAMES,
   fr: [
     "janvier",
-    "fevrier",
+    "février",
     "mars",
     "avril",
     "mai",
     "juin",
     "juillet",
-    "aout",
+    "août",
     "septembre",
     "octobre",
     "novembre",
-    "decembre",
+    "décembre",
   ],
   is: [
     "janúar",
@@ -76,6 +85,93 @@ const MONTH_NAMES: Record<string, readonly string[]> = {
     "grudnia",
   ],
 };
+
+export const TIMEZONE_NAMES: Record<string, number> = {
+  UT: 0,
+  UTC: 0,
+  GMT: 0,
+  Z: 0,
+  AST: -4,
+  ADT: -3,
+  EST: -5,
+  EDT: -4,
+  CST: -6,
+  CDT: -5,
+  MST: -7,
+  MDT: -6,
+  PST: -8,
+  PDT: -7,
+};
+
+export const DATE_FORMATS = [
+  "%d %B %Y",
+  "%d %b %Y",
+  "%B %d %Y",
+  "%B %dst %Y",
+  "%B %dnd %Y",
+  "%B %drd %Y",
+  "%B %dth %Y",
+  "%b %d %Y",
+  "%b %dst %Y",
+  "%b %dnd %Y",
+  "%b %drd %Y",
+  "%b %dth %Y",
+  "%b %dst %Y %I:%M",
+  "%b %dnd %Y %I:%M",
+  "%b %drd %Y %I:%M",
+  "%b %dth %Y %I:%M",
+  "%Y %m %d",
+  "%Y-%m-%d",
+  "%Y.%m.%d.",
+  "%Y/%m/%d",
+  "%Y/%m/%d %H:%M",
+  "%Y/%m/%d %H:%M:%S",
+  "%Y%m%d%H%M",
+  "%Y%m%d%H%M%S",
+  "%Y%m%d",
+  "%Y-%m-%d %H:%M",
+  "%Y-%m-%d %H:%M:%S",
+  "%Y-%m-%d %H:%M:%S.%f",
+  "%Y-%m-%d %H:%M:%S:%f",
+  "%d.%m.%Y %H:%M",
+  "%d.%m.%Y %H.%M",
+  "%Y-%m-%dT%H:%M:%SZ",
+  "%Y-%m-%dT%H:%M:%S.%fZ",
+  "%Y-%m-%dT%H:%M:%S.%f0Z",
+  "%Y-%m-%dT%H:%M:%S",
+  "%Y-%m-%dT%H:%M:%S.%f",
+  "%Y-%m-%dT%H:%M",
+  "%b %d %Y at %H:%M",
+  "%b %d %Y at %H:%M:%S",
+  "%B %d %Y at %H:%M",
+  "%B %d %Y at %H:%M:%S",
+  "%H:%M %d-%b-%Y",
+] as const;
+
+export const DATE_FORMATS_DAY_FIRST = [
+  ...DATE_FORMATS,
+  "%d-%m-%Y",
+  "%d.%m.%Y",
+  "%d.%m.%y",
+  "%d/%m/%Y",
+  "%d/%m/%y",
+  "%d/%m/%Y %H:%M:%S",
+  "%d-%m-%Y %H:%M",
+  "%H:%M %d/%m/%Y",
+] as const;
+
+export const DATE_FORMATS_MONTH_FIRST = [
+  ...DATE_FORMATS,
+  "%m-%d-%Y",
+  "%m.%d.%Y",
+  "%m/%d/%Y",
+  "%m/%d/%y",
+  "%m/%d/%Y %H:%M:%S",
+] as const;
+
+export const PACKED_CODES_RE = String.raw`}\('(.+)',(\d+),(\d+),'([^']+)'\.split\('\|'\)`;
+export const JSON_LD_RE = String.raw`(?is)<script[^>]+type=(["']?)application/ld\+json\1[^>]*>\s*(?P<json_ld>{.+?}|\[.+?\])\s*</script>`;
+export const NUMBER_RE = String.raw`\d+(?:\.\d+)?`;
 
 export class YoutubeDLError extends Error {
   constructor(message?: string | null) {
@@ -169,6 +265,19 @@ export class ContentTooShortError extends YoutubeDLError {
 
 export class XAttrMetadataError extends YoutubeDLError {
   override name = "XAttrMetadataError";
+
+  readonly reason: "NO_SPACE" | "VALUE_TOO_LONG" | "NOT_SUPPORTED";
+
+  constructor(readonly code: number | null = null, readonly msg = "Unknown error") {
+    super(msg);
+    if (code === 28 || code === 122 || msg.includes("No space left") || msg.includes("Disk quota exceeded")) {
+      this.reason = "NO_SPACE";
+    } else if (code === 7 || msg.includes("Argument list too long")) {
+      this.reason = "VALUE_TOO_LONG";
+    } else {
+      this.reason = "NOT_SUPPORTED";
+    }
+  }
 }
 
 export class XAttrUnavailableError extends YoutubeDLError {
@@ -227,18 +336,28 @@ export function encodeArgument(value: string | Uint8Array): string {
 
 export const encodeArgument_ = encodeArgument;
 
+export function determineExt(url: string | null | undefined): string;
+export function determineExt(url: string | null | undefined, defaultExt: string): string;
+export function determineExt(url: string | null | undefined, defaultExt: null): string | null;
+export function determineExt(url: string | null | undefined, defaultExt: string | null): string;
 export function determineExt(
   url: string | null | undefined,
   defaultExt: string | null = "unknown_video",
-): string {
-  const fallback = defaultExt ?? "unknown_video";
+): string | null {
+  const fallback = defaultExt === undefined ? "unknown_video" : defaultExt;
   if (!url?.includes(".")) {
     return fallback;
   }
   const [withoutQuery = ""] = url.split("?");
   const [withoutHash = ""] = withoutQuery.split("#");
   const guess = withoutHash.split(".").pop() ?? "";
-  return /^[A-Za-z0-9]+$/.test(guess) ? guess : fallback;
+  if (/^[A-Za-z0-9]+$/.test(guess)) {
+    return guess;
+  }
+  const stripped = guess.replace(/\/+$/, "");
+  return (KNOWN_EXTENSIONS as readonly string[]).includes(stripped)
+    ? stripped
+    : fallback;
 }
 
 export const determine_ext = determineExt;
@@ -304,7 +423,9 @@ export function urljoin(
   if (!decodedBase || !/^(?:https?:)?\/\//.test(decodedBase)) {
     return null;
   }
-  return new URL(decodedPath, decodedBase).toString();
+  const protocolRelative = decodedBase.startsWith("//");
+  const joined = new URL(decodedPath, protocolRelative ? `http:${decodedBase}` : decodedBase).toString();
+  return protocolRelative ? joined.replace(/^http:/, "") : joined;
 }
 
 export function urlOrNone(value: unknown): string | null {
@@ -396,6 +517,9 @@ export function updateUrl(
     parsed.search = options.search ?? options.query ?? "";
   }
   if (options.query_update) {
+    if (options.query !== undefined) {
+      throw new Error("query_update and query cannot be specified at the same time");
+    }
     applyQueryUpdate(parsed, options.query_update);
   }
   if (options.hash !== undefined || options.fragment !== undefined) {
@@ -415,7 +539,8 @@ export function updateUrlQuery(
         | string
         | number
         | boolean
-        | readonly (string | number | boolean)[]
+        | Uint8Array
+        | readonly (string | number | boolean | Uint8Array)[]
         | null
         | undefined
       >,
@@ -489,13 +614,48 @@ export function parseM3u8Attributes(
 
 export const parse_m3u8_attributes = parseM3u8Attributes;
 
+type IntOrNoneOptions = {
+  scale?: number;
+  default?: number | null;
+  defaultValue?: number | null;
+  get_attr?: string;
+  invscale?: number;
+  base?: number;
+};
+
+type FloatOrNoneOptions = {
+  scale?: number;
+  invscale?: number;
+  default?: number | null;
+  defaultValue?: number | null;
+};
+
+export function intOrNone(options: IntOrNoneOptions): (value: unknown) => number | null;
 export function intOrNone(
   value: unknown,
+  scale?: number,
+  defaultValue?: number | null,
+  invscale?: number,
+  base?: number,
+): number | null;
+export function intOrNone(
+  valueOrOptions: unknown,
   scale = 1,
   defaultValue: number | null = null,
   invscale = 1,
   base?: number,
-): number | null {
+): number | null | ((value: unknown) => number | null) {
+  if (isIntOrNoneOptions(valueOrOptions)) {
+    const options = valueOrOptions;
+    return (value) => intOrNone(
+      options.get_attr ? getAttr(value, options.get_attr) : value,
+      options.scale ?? 1,
+      options.defaultValue ?? options.default ?? null,
+      options.invscale ?? 1,
+      options.base,
+    );
+  }
+  const value = valueOrOptions;
   if (value === null || value === undefined) {
     return defaultValue;
   }
@@ -508,33 +668,67 @@ export function intOrNone(
 
 export const int_or_none = intOrNone;
 
+export const US_RATINGS: Record<string, number> = {
+  G: 0,
+  PG: 10,
+  "PG-13": 13,
+  R: 16,
+  NC: 18,
+};
+
+export const TV_PARENTAL_GUIDELINES: Record<string, number> = {
+  "TV-Y": 0,
+  "TV-Y7": 7,
+  "TV-G": 0,
+  "TV-PG": 0,
+  "TV-14": 14,
+  "TV-MA": 17,
+};
+
 export function parseAgeLimit(value: unknown): number | null {
-  if (value === null || value === undefined || value === false) {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value >= 0 && value <= 21 ? value : null;
+  }
+  if (typeof value !== "string") {
     return null;
   }
-  const text = String(value).trim().toLowerCase();
-  if (!text) {
-    return null;
+  const numericAge = /^(\d{1,2})\+?$/.exec(value.trim())?.[1];
+  if (numericAge) {
+    return Number(numericAge);
   }
-  if (/^(?:all|everyone|general|u|g|tv[-_ ]?g|pg)$/i.test(text)) {
-    return 0;
+  const normalized = value.toUpperCase().replace("_", "-");
+  if (normalized in US_RATINGS) {
+    return US_RATINGS[normalized] ?? null;
   }
-  const ratingAges: Record<string, number> = { "tv-ma": 17, tvma: 17 };
-  if (ratingAges[text] !== undefined) {
-    return ratingAges[text];
-  }
-  const age = intOrNone(/\d+/.exec(text)?.[0] ?? null);
-  return age !== null && age <= 21 ? age : null;
+  const tvMatch = /^TV-?(Y7|Y|G|PG|14|MA)$/.exec(normalized);
+  return tvMatch ? (TV_PARENTAL_GUIDELINES[`TV-${tvMatch[1]}`] ?? null) : null;
 }
 
 export const parse_age_limit = parseAgeLimit;
 
+export function floatOrNone(options: FloatOrNoneOptions): (value: unknown) => number | null;
 export function floatOrNone(
   value: unknown,
+  scale?: number,
+  defaultValue?: number | null,
+  invscale?: number,
+): number | null;
+export function floatOrNone(
+  valueOrOptions: unknown,
   scale = 1,
   defaultValue: number | null = null,
   invscale = 1,
-): number | null {
+): number | null | ((value: unknown) => number | null) {
+  if (isFloatOrNoneOptions(valueOrOptions)) {
+    const options = valueOrOptions;
+    return (value) => floatOrNone(
+      value,
+      options.scale ?? 1,
+      options.defaultValue ?? options.default ?? null,
+      options.invscale ?? 1,
+    );
+  }
+  const value = valueOrOptions;
   if (value === null || value === undefined || value === "") {
     return defaultValue;
   }
@@ -544,6 +738,20 @@ export function floatOrNone(
 }
 
 export const float_or_none = floatOrNone;
+
+function isIntOrNoneOptions(value: unknown): value is IntOrNoneOptions {
+  return isPlainObject(value)
+    && ("scale" in value || "default" in value || "defaultValue" in value || "get_attr" in value || "invscale" in value || "base" in value);
+}
+
+function isFloatOrNoneOptions(value: unknown): value is FloatOrNoneOptions {
+  return isPlainObject(value)
+    && ("scale" in value || "default" in value || "defaultValue" in value || "invscale" in value);
+}
+
+function getAttr(value: unknown, attr: string): unknown {
+  return value && typeof value === "object" ? (value as Record<string, unknown>)[attr] : undefined;
+}
 
 export function strOrNone(
   value: unknown,
@@ -592,30 +800,35 @@ export function tryGet<T>(
 
 export const try_get = tryGet;
 
-export function tryCall<T>(
+export function tryCall(
   ...funcsAndOptions: Array<
-    | (() => T)
+    | ((...args: unknown[]) => unknown)
+    | null
+    | undefined
     | {
-        expected_type?: (value: unknown) => value is T;
+        expected_type?: (value: unknown) => boolean;
         args?: unknown[];
         kwargs?: Record<string, unknown>;
       }
   >
-): T | null {
+): unknown | null {
   const maybeOptions = funcsAndOptions.at(-1);
   const options =
     typeof maybeOptions === "object" &&
     maybeOptions !== null &&
     !("call" in maybeOptions)
       ? (funcsAndOptions.pop() as {
-          expected_type?: (value: unknown) => value is T;
+          expected_type?: (value: unknown) => boolean;
           args?: unknown[];
           kwargs?: Record<string, unknown>;
         })
       : {};
-  for (const func of funcsAndOptions as Array<() => T>) {
+  for (const func of funcsAndOptions as Array<((...args: unknown[]) => unknown) | null | undefined>) {
+    if (typeof func !== "function") {
+      continue;
+    }
     try {
-      const value = func();
+      const value = func(...(options.args ?? []));
       if (!options.expected_type || options.expected_type(value)) {
         return value;
       }
@@ -666,9 +879,13 @@ export function mergeDicts<T extends Record<string, unknown>>(
   ...dicts: Array<T | null | undefined>
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const dict of dicts.toReversed()) {
+  for (const dict of dicts) {
     for (const [key, value] of Object.entries(dict ?? {})) {
-      if (value !== null && value !== undefined && out[key] === undefined) {
+      if (
+        value !== null &&
+        value !== undefined &&
+        (!(key in out) || (typeof value === "string" && out[key] === ""))
+      ) {
         out[key] = value;
       }
     }
@@ -709,11 +926,18 @@ export function joinNonempty(
 
 export const join_nonempty = joinNonempty;
 
-export function variadic<T>(value: T | readonly T[] | null | undefined): T[] {
-  if (value === null || value === undefined) {
-    return [];
+export function variadic<T>(value: T | Iterable<T>): T[] {
+  if (
+    value !== null &&
+    value !== undefined &&
+    typeof value !== "string" &&
+    !(value instanceof Uint8Array) &&
+    !(value instanceof Map) &&
+    typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
+  ) {
+    return [...(value as Iterable<T>)];
   }
-  return Array.isArray(value) ? ([...value] as T[]) : [value as T];
+  return [value as T];
 }
 
 export function formatSeconds(
@@ -762,21 +986,59 @@ export function unescapeHTML(value: string | null | undefined): string | null {
   if (value === null || value === undefined) {
     return null;
   }
-  return value
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&apos;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
+  return value.replaceAll(/&([^&;]+;)/g, (_match, entity: string) =>
+    htmlEntityTransform(entity),
+  );
 }
 
 export const unescapeHTML_ = unescapeHTML;
+
+const HTML_ENTITY_CODEPOINTS: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  nbsp: "\u00a0",
+  quot: '"',
+};
+
+const HTML5_ENTITY_TEXT: Record<string, string> = {
+  ...HTML_ENTITY_CODEPOINTS,
+  Eacute: "É",
+  eacute: "é",
+  lambda: "λ",
+  period: ".",
+  pound: "£",
+};
+
+function htmlEntityTransform(entityWithSemicolon: string): string {
+  const entity = entityWithSemicolon.slice(0, -1);
+  const named = HTML_ENTITY_CODEPOINTS[entity] ?? HTML5_ENTITY_TEXT[entity];
+  if (named !== undefined) {
+    return named;
+  }
+  const numericMatch = /^#(?<number>x[0-9a-fA-F]+|[0-9]+)/.exec(entity);
+  const numberText = numericMatch?.groups?.number;
+  if (numberText) {
+    const codepoint = numberText.startsWith("x")
+      ? Number.parseInt(`0${numberText}`, 16)
+      : Number.parseInt(numberText, 10);
+    if (Number.isFinite(codepoint)) {
+      try {
+        return String.fromCodePoint(codepoint);
+      } catch {}
+    }
+  }
+  return `&${entity};`;
+}
+
+export const _htmlentity_transform = htmlEntityTransform;
 
 export function cleanHtml(html: string | null | undefined): string | null {
   if (html === null || html === undefined) {
     return null;
   }
+  const normalizedHtml = html.replaceAll(/\s+/g, " ");
   let text = "";
   new HTMLRewriter()
     .on("br", {
@@ -796,7 +1058,7 @@ export function cleanHtml(html: string | null | undefined): string | null {
         text += chunk.text;
       },
     })
-    .transform(html);
+    .transform(normalizedHtml);
   return unescapeHTML(normalizeHtmlText(text))?.trim() ?? null;
 }
 
@@ -859,13 +1121,13 @@ export function getElementHtmlByAttribute(
 export const get_element_html_by_attribute = getElementHtmlByAttribute;
 
 export function getElementsByClass(className: string, html: string): string[] {
-  return getElementsTextAndHtmlByAttribute("class", `(?:^|\\s)${RegExp.escape(className)}(?:\\s|$)`, html, { escape_value: false }).map(([text]) => text);
+  return getElementsTextAndHtmlByAttribute("class", `(?:^|.*\\s)${RegExp.escape(className)}(?:\\s.*|$)`, html, { escape_value: false }).map(([text]) => text);
 }
 
 export const get_elements_by_class = getElementsByClass;
 
 export function getElementsHtmlByClass(className: string, html: string): string[] {
-  return getElementsTextAndHtmlByAttribute("class", `(?:^|\\s)${RegExp.escape(className)}(?:\\s|$)`, html, { escape_value: false }).map(([, htmlText]) => htmlText);
+  return getElementsTextAndHtmlByAttribute("class", `(?:^|.*\\s)${RegExp.escape(className)}(?:\\s.*|$)`, html, { escape_value: false }).map(([, htmlText]) => htmlText);
 }
 
 export const get_elements_html_by_class = getElementsHtmlByClass;
@@ -934,13 +1196,34 @@ export function getElementsTextAndHtmlByAttribute(
 
 export const get_elements_text_and_html_by_attribute = getElementsTextAndHtmlByAttribute;
 
-export function getElementTextAndHtmlByTag(tag: string, html: string): [string | null, string | null] {
-  const pattern = new RegExp(String.raw`<(?<tag>${tag})\b[^>]*>(?<body>[\s\S]*?)<\/\k<tag>>`, "i");
-  const match = pattern.exec(html);
-  if (!match) {
-    return [null, null];
+export function getElementTextAndHtmlByTag(tag: string, html: string): [string, string] {
+  const openPattern = new RegExp(String.raw`<(?<tag>${tag})\b[^>]*(?<selfClosing>\/)?>`, "i");
+  const openMatch = openPattern.exec(html);
+  const tagName = openMatch?.groups?.tag;
+  if (!openMatch || !tagName) {
+    throw new compat_HTMLParseError(`opening ${tag} tag not found`);
   }
-  return [cleanHtml(match.groups?.body ?? ""), match[0]];
+  if (openMatch.groups?.selfClosing) {
+    return ["", openMatch[0]];
+  }
+  const wholeStart = openMatch.index ?? 0;
+  const contentStart = wholeStart + openMatch[0].length;
+  const tagPattern = new RegExp(String.raw`<\/?${RegExp.escape(tagName)}\b[^>]*(?:\/)?>`, "gi");
+  tagPattern.lastIndex = contentStart;
+  let depth = 1;
+  for (let match = tagPattern.exec(html); match; match = tagPattern.exec(html)) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        const content = html.slice(contentStart, match.index);
+        const whole = html.slice(wholeStart, match.index + match[0].length);
+        return [cleanHtml(content) ?? "", whole];
+      }
+    } else if (!match[0].endsWith("/>")) {
+      depth += 1;
+    }
+  }
+  throw new compat_HTMLParseError(`closing ${tagName} tag not found`);
 }
 
 export const get_element_text_and_html_by_tag = getElementTextAndHtmlByTag;
@@ -1108,44 +1391,141 @@ export const clean_podcast_url = cleanPodcastUrl;
 
 export function parseIso8601(
   dateStr: string | null | undefined,
-  delimiter = "T",
+  delimiterOrOptions: string | { delimiter?: string; timezone?: number | typeof NO_DEFAULT | null } = "T",
+  timezoneOption?: number | typeof NO_DEFAULT | null,
 ): number | null {
   if (!dateStr) {
     return null;
   }
-  const normalized = dateStr.replace(/\.[0-9]+/, "").replace(delimiter, "T");
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? Math.trunc(timestamp / 1000) : null;
+  const delimiter = typeof delimiterOrOptions === "string" ? delimiterOrOptions : delimiterOrOptions.delimiter ?? "T";
+  const explicitTimezone = typeof delimiterOrOptions === "object" ? delimiterOrOptions.timezone : timezoneOption;
+  let value = dateStr.replace(/\.[0-9]+/, "");
+  const [extractedTimezone, withoutTimezone] = extractTimezone(value, explicitTimezone === undefined ? 0 : explicitTimezone === NO_DEFAULT ? null : explicitTimezone);
+  if (extractedTimezone === null) {
+    return null;
+  }
+  value = withoutTimezone;
+  const escapedDelimiter = RegExp.escape(delimiter);
+  const match = new RegExp(`^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})${escapedDelimiter}(?<hour>\\d{2}):(?<minute>\\d{2}):(?<second>\\d{2})$`).exec(value);
+  if (!match?.groups) {
+    return null;
+  }
+  return Math.trunc(utcTimestamp(
+    Number(match.groups.year),
+    Number(match.groups.month) - 1,
+    Number(match.groups.day),
+    Number(match.groups.hour),
+    Number(match.groups.minute),
+    Number(match.groups.second),
+  ) / 1000) - extractedTimezone;
 }
 
 export const parse_iso8601 = parseIso8601;
 
+const ENGLISH_MONTH_LOOKUP = new Map<string, number>(
+  ENGLISH_MONTH_NAMES.flatMap((month, index) => [
+    [month.toLowerCase(), index + 1],
+    [month.slice(0, 3).toLowerCase(), index + 1],
+  ]),
+);
+
+interface UnifiedDateParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  timezone: number | null;
+  pm: boolean;
+}
+
+function parseUnifiedDateParts(dateStr: string, dayFirst: boolean, defaultTimezone: number | null = null): UnifiedDateParts | null {
+  let value = dateStr
+    .replaceAll(/[,|]/g, " ")
+    .replaceAll(/\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  const hadAmPm = /(?:AM|PM)\b/i.test(value);
+  const pm = /PM\b/i.test(value);
+  value = value.replace(/\s*(?:AM|PM)\b/gi, "").replaceAll(/\s+/g, " ").trim();
+
+  let timezone = defaultTimezone;
+  const numericTimezone = /\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?<tz>Z|(?<sign>[+-])(?<hours>\d{2}):?(?<minutes>\d{2}))$/.exec(value);
+  if (numericTimezone?.groups?.tz) {
+    const tz = numericTimezone.groups.tz;
+    value = value.slice(0, -tz.length).trim();
+    timezone = tz === "Z"
+      ? 0
+      : (numericTimezone.groups.sign === "-" ? -1 : 1) *
+        (Number(numericTimezone.groups.hours) * 3600 + Number(numericTimezone.groups.minutes) * 60);
+  } else {
+    const namedTimezone = /\s+(?<tz>[A-Z]{1,4})$/.exec(value);
+    const zone = namedTimezone?.groups?.tz;
+    if (zone && hadAmPm) {
+      value = value.slice(0, -zone.length).trim();
+    } else if (zone && TIMEZONE_NAMES[zone] !== undefined) {
+      value = value.slice(0, -zone.length).trim();
+      timezone = TIMEZONE_NAMES[zone] * 3600;
+    } else if (/\d{1,2}:\d{1,2}(?:\.\d+)?\s*[A-Z]+$/.test(value)) {
+      value = value.replace(/\s+[A-Z]+$/, "").trim();
+    }
+  }
+  value = value.replace(/(\.\d{6})\d+(?=$|[+-])/, "$1").replace(/Q$/, "");
+
+  const timeSuffix = String.raw`(?:(?:T|\s+)(?:at\s+)?(?<hour>\d{1,2})[:.](?<minute>\d{2})(?::(?<second>\d{2})(?:\.\d+)?)?)?`;
+  const patterns: RegExp[] = [
+    new RegExp(`^(?<year>\\d{4})[-/.](?<month>\\d{1,2})[-/.](?<day>\\d{1,2})${timeSuffix}$`),
+    new RegExp(`^(?<year>\\d{4})\\s+(?<month>\\d{1,2})\\s+(?<day>\\d{1,2})${timeSuffix}$`),
+    new RegExp(`^(?<day>\\d{1,2})[-.](?<month>\\d{1,2})[-.](?<year>\\d{2,4})${timeSuffix}$`),
+    new RegExp(dayFirst
+      ? `^(?<day>\\d{1,2})/(?<month>\\d{1,2})/(?<year>\\d{2,4})${timeSuffix}$`
+      : `^(?<month>\\d{1,2})/(?<day>\\d{1,2})/(?<year>\\d{2,4})${timeSuffix}$`),
+    new RegExp(`^(?<monthName>[A-Za-z]+)\\s+(?<day>\\d{1,2})(?:st|nd|rd|th)?\\s+(?<year>\\d{4})${timeSuffix}$`, "i"),
+    new RegExp(`^(?<day>\\d{1,2})\\s+(?<monthName>[A-Za-z]+)\\s+(?<year>\\d{4})${timeSuffix}$`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(value);
+    if (!match?.groups) {
+      continue;
+    }
+    const month = match.groups.month ? Number(match.groups.month) : ENGLISH_MONTH_LOOKUP.get(match.groups.monthName?.toLowerCase() ?? "");
+    let year = Number(match.groups.year);
+    if (year < 100) {
+      year += year >= 69 ? 1900 : 2000;
+    }
+    if (!month) {
+      continue;
+    }
+    return {
+      year,
+      month,
+      day: Number(match.groups.day),
+      hour: Number(match.groups.hour ?? 0),
+      minute: Number(match.groups.minute ?? 0),
+      second: Number(match.groups.second ?? 0),
+      timezone,
+      pm,
+    };
+  }
+  return null;
+}
+
 export function unifiedTimestamp(
   dateStr: unknown,
-  _dayFirst = true,
+  dayFirst = true,
   tzOffset = 0,
 ): number | null {
   if (typeof dateStr !== "string") {
     return null;
   }
-  // Logic note: Bun uses the platform Date parser after normalizing common feed date text.
-  const normalized = dateStr
-    .replaceAll(/[,|]/g, " ")
-    .replaceAll(
-      /\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi,
-      " ",
-    )
-    .replaceAll(/\s+/g, " ")
-    .trim();
-  const timestamp = Date.parse(normalized);
-  if (Number.isFinite(timestamp)) {
-    return Math.trunc(timestamp / 1000);
+  const parsed = parseUnifiedDateParts(dateStr, dayFirst, tzOffset ? tzOffset * 3600 : 0);
+  if (!parsed) {
+    return null;
   }
-  const withoutZone = normalized.replace(/\s+[A-Z]+$/, "");
-  const fallback = Date.parse(withoutZone);
-  return Number.isFinite(fallback)
-    ? Math.trunc(fallback / 1000) - tzOffset * 3600
-    : null;
+  const timestamp = utcTimestamp(parsed.year, parsed.month - 1, parsed.day, parsed.hour + (parsed.pm ? 12 : 0), parsed.minute, parsed.second);
+  return Math.trunc(timestamp / 1000) - (parsed.timezone ?? 0);
 }
 
 export const unified_timestamp = unifiedTimestamp;
@@ -1160,7 +1540,9 @@ export function datetimeFromStr(
     | "hour"
     | "day" = "auto",
 ): Date | null {
-  const now = new Date();
+  const autoPrecision = precision === "auto";
+  const resolvedPrecision = autoPrecision ? "microsecond" : precision;
+  const now = roundDate(new Date(), resolvedPrecision);
   let date: Date;
   if (dateStr === "now" || dateStr === "today") {
     date = now;
@@ -1176,31 +1558,42 @@ export function datetimeFromStr(
       relative.groups.time &&
       relative.groups.unit
     ) {
-      const start = datetimeFromStr(relative.groups.start, precision);
+      const start = datetimeFromStr(relative.groups.start, resolvedPrecision);
       if (!start) {
         return null;
       }
       const sign = relative.groups.sign === "-" ? -1 : 1;
       const amount = Number(relative.groups.time) * sign;
-      date = addDateUnit(start, relative.groups.unit, amount);
+      const unit = relative.groups.unit;
+      date = addDateUnit(start, unit, amount);
+      if (autoPrecision) {
+        let roundUnit: "microsecond" | "second" | "minute" | "hour" | "day";
+        if (unit === "week" || unit === "month" || unit === "year") {
+          roundUnit = "day";
+        } else {
+          roundUnit = unit as "microsecond" | "second" | "minute" | "hour" | "day";
+        }
+        return roundDate(date, roundUnit);
+      }
     } else {
       const compact = /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})$/.exec(
         dateStr,
       );
-      const timestamp = compact?.groups
-        ? Date.UTC(
-            Number(compact.groups.year),
-            Number(compact.groups.month) - 1,
-            Number(compact.groups.day),
-          )
-        : Date.parse(dateStr);
-      if (!Number.isFinite(timestamp)) {
-        return null;
+      if (compact?.groups) {
+        date = utcDate(
+          Number(compact.groups.year),
+          Number(compact.groups.month) - 1,
+          Number(compact.groups.day),
+        );
+      } else {
+        const timestamp = Date.parse(dateStr);
+        if (!Number.isFinite(timestamp)) {
+          return null;
+        }
+        date = new Date(timestamp);
       }
-      date = new Date(timestamp);
     }
   }
-  const resolvedPrecision = precision === "auto" ? "microsecond" : precision;
   return roundDate(date, resolvedPrecision);
 }
 
@@ -1218,7 +1611,9 @@ export function strftimeOrNone(
     timestamp instanceof Date
       ? timestamp
       : typeof timestamp === "number"
-        ? new Date(timestamp * 1000)
+        ? Math.abs(timestamp) > 253_402_300_799
+          ? null
+          : new Date(timestamp * 1000)
         : datetimeFromStr(timestamp);
   if (!date || Number.isNaN(date.getTime())) {
     return defaultValue;
@@ -1242,22 +1637,14 @@ export const strftime_or_none = strftimeOrNone;
 
 export function unifiedStrdate(
   dateStr: string | null | undefined,
+  dayFirst = true,
 ): string | null {
   if (!dateStr) {
     return null;
   }
-  const parsed = Date.parse(dateStr.replaceAll(",", " "));
-  if (Number.isFinite(parsed)) {
-    return new Date(parsed).toISOString().slice(0, 10).replaceAll("-", "");
-  }
-  const match =
-    /(?<year>\d{4})[-/.](?<month>\d{1,2})[-/.](?<day>\d{1,2})/.exec(dateStr) ??
-    /(?<day>\d{1,2})[-/.](?<month>\d{1,2})[-/.](?<year>\d{4})/.exec(dateStr);
-  const year = match?.groups?.year;
-  const month = match?.groups?.month;
-  const day = match?.groups?.day;
-  return year && month && day
-    ? `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`
+  const parsed = parseUnifiedDateParts(dateStr, dayFirst);
+  return parsed
+    ? `${String(parsed.year).padStart(4, "0")}${String(parsed.month).padStart(2, "0")}${String(parsed.day).padStart(2, "0")}`
     : null;
 }
 
@@ -1269,6 +1656,51 @@ export function qualities(
   const map = new Map(qualityIds.map((qualityId, index) => [qualityId, index]));
   return (qualityId) => (qualityId ? (map.get(qualityId) ?? -1) : -1);
 }
+
+export const POSTPROCESS_WHEN = [
+  "pre_process",
+  "after_filter",
+  "video",
+  "before_dl",
+  "post_process",
+  "after_move",
+  "after_video",
+  "playlist",
+] as const;
+
+export const DEFAULT_OUTTMPL = {
+  default: "%(title)s [%(id)s].%(ext)s",
+  chapter: "%(title)s - %(section_number)03d %(section_title)s [%(id)s].%(ext)s",
+} as const;
+
+export const OUTTMPL_TYPES = {
+  chapter: null,
+  subtitle: null,
+  thumbnail: null,
+  description: "description",
+  annotation: "annotations.xml",
+  infojson: "info.json",
+  link: null,
+  pl_video: null,
+  pl_thumbnail: null,
+  pl_description: "description",
+  pl_infojson: "info.json",
+} as const;
+
+export const STR_FORMAT_RE_TMPL = String.raw`(?x)
+    (?<!%)(?P<prefix>(?:%%)*)
+    %
+    (?P<has_key>\((?P<key>{0})\))?
+    (?P<format>
+        (?P<conversion>[#0\-+ ]+)?
+        (?P<min_width>\d+)?
+        (?P<precision>\.\d+)?
+        (?P<len_mod>[hlL])?
+        {1}
+    )
+`;
+
+export const STR_FORMAT_TYPES = "diouxXeEfFgGcrsa";
 
 export function strToInt(value: string | null | undefined): number | null {
   if (value === null || value === undefined) {
@@ -1315,52 +1747,67 @@ export function parseCount(value: string | null | undefined): number | null {
 export const parse_count = parseCount;
 
 export function parseDuration(value: unknown): number | null {
-  if (
-    value === null ||
-    value === undefined ||
-    value === "" ||
-    value === false
-  ) {
-    return null;
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
   if (typeof value !== "string") {
     return null;
   }
-  const isoMatch =
-    /^(?:P(?:(?<days>\d+(?:\.\d+)?)D)?(?:T)?(?:(?<hours>\d+(?:\.\d+)?)H)?(?:(?<minutes>\d+(?:\.\d+)?)M(?:in(?:utes?)?\.?)?)?(?:(?<seconds>\d+(?:\.\d+)?)S(?:ec(?:onds?)?)?Z?)?)$/i.exec(
-      value,
-    );
-  if (
-    isoMatch?.[0] &&
-    Object.values(isoMatch.groups ?? {}).some((part) => part !== undefined)
-  ) {
+  const input = value.trim();
+  if (!input) {
+    return null;
+  }
+  const colonMatch = /^(?<body>\d+(?::\d+){0,3})(?<fraction>[.:]\d+)?Z?$/.exec(input);
+  if (colonMatch?.groups?.body) {
+    const parts = colonMatch.groups.body.split(":");
+    let days = 0;
+    let hours = 0;
+    let minutes = 0;
+    let seconds = 0;
+    let fraction = colonMatch.groups.fraction ?? "";
+    if (parts.length === 1) {
+      seconds = Number(parts[0]);
+    } else if (parts.length === 2) {
+      if (!fraction && (parts[1]?.length ?? 0) > 2) {
+        seconds = Number(parts[0]);
+        fraction = `.${parts[1]}`;
+      } else {
+        minutes = Number(parts[0]);
+        seconds = Number(parts[1]);
+      }
+    } else if (parts.length === 3) {
+      hours = Number(parts[0]);
+      minutes = Number(parts[1]);
+      seconds = Number(parts[2]);
+    } else if ((parts[3]?.length ?? 0) > 2) {
+      hours = Number(parts[0]);
+      minutes = Number(parts[1]);
+      seconds = Number(parts[2]);
+      fraction = `.${parts[3]}`;
+    } else {
+      days = Number(parts[0]);
+      hours = Number(parts[1]);
+      minutes = Number(parts[2]);
+      seconds = Number(parts[3]);
+    }
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds + Number((fraction || ".0").replace(":", "."));
+  }
+  const isoMatch = /^(?:P?(?:\d+\s*y(?:ears?)?,?\s*)?(?:\d+\s*m(?:onths?)?,?\s*)?(?:\d+\s*w(?:eeks?)?,?\s*)?(?:(?<days>\d+)\s*d(?:ays?)?,?\s*)?T?)?(?:(?<hours>\d+)\s*h(?:(?:ou)?rs?)?,?\s*)?(?:(?<minutes>\d+)\s*m(?:in(?:ute)?s?)?,?\s*)?(?:(?<seconds>\d+)(?<fraction>\.\d+)?\s*s(?:ec(?:ond)?s?)?\s*)?Z?$/i.exec(input);
+  if (isoMatch?.[0] && Object.values(isoMatch.groups ?? {}).some((part) => part !== undefined)) {
     return (
       Number(isoMatch.groups?.days ?? 0) * 86400 +
       Number(isoMatch.groups?.hours ?? 0) * 3600 +
       Number(isoMatch.groups?.minutes ?? 0) * 60 +
-      Number(isoMatch.groups?.seconds ?? 0)
+      Number(isoMatch.groups?.seconds ?? 0) +
+      Number(isoMatch.groups?.fraction ?? 0)
     );
-  }
-  const colonParts = value.split(":").map((part) => Number.parseFloat(part));
-  if (colonParts.length > 1 && colonParts.every(Number.isFinite)) {
-    return colonParts.reduce((total, part) => total * 60 + part, 0);
   }
   const unitMatch =
-    /(?:(?<hours>\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?[\s,]*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?\.?)?)?[\s,]*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?)?/i.exec(
-      value,
-    );
-  if (unitMatch?.[0]?.trim()) {
+    /^(?:(?<hours>\d+(?:\.\d+)?)\s*(?:hours?)|(?<minutes>\d+(?:\.\d+)?)\s*(?:mins?\.?|minutes?)\s*)Z?$/i.exec(input);
+  if (unitMatch?.[0]) {
     return (
       Number(unitMatch.groups?.hours ?? 0) * 3600 +
-      Number(unitMatch.groups?.minutes ?? 0) * 60 +
-      Number(unitMatch.groups?.seconds ?? 0)
+      Number(unitMatch.groups?.minutes ?? 0) * 60
     );
   }
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return null;
 }
 
 export const parse_duration = parseDuration;
@@ -1390,6 +1837,41 @@ const FILESIZE_UNITS: Record<string, number> = {
   gb: 1000 ** 3,
   gigabytes: 1000 ** 3,
   gibibytes: 1024 ** 3,
+  TiB: 1024 ** 4,
+  TB: 1000 ** 4,
+  tB: 1024 ** 4,
+  Tb: 1000 ** 4,
+  tb: 1000 ** 4,
+  terabytes: 1000 ** 4,
+  tebibytes: 1024 ** 4,
+  PiB: 1024 ** 5,
+  PB: 1000 ** 5,
+  pB: 1024 ** 5,
+  Pb: 1000 ** 5,
+  pb: 1000 ** 5,
+  petabytes: 1000 ** 5,
+  pebibytes: 1024 ** 5,
+  EiB: 1024 ** 6,
+  EB: 1000 ** 6,
+  eB: 1024 ** 6,
+  Eb: 1000 ** 6,
+  eb: 1000 ** 6,
+  exabytes: 1000 ** 6,
+  exbibytes: 1024 ** 6,
+  ZiB: 1024 ** 7,
+  ZB: 1000 ** 7,
+  zB: 1024 ** 7,
+  Zb: 1000 ** 7,
+  zb: 1000 ** 7,
+  zettabytes: 1000 ** 7,
+  zebibytes: 1024 ** 7,
+  YiB: 1024 ** 8,
+  YB: 1000 ** 8,
+  yB: 1024 ** 8,
+  Yb: 1000 ** 8,
+  yb: 1000 ** 8,
+  yottabytes: 1000 ** 8,
+  yobibytes: 1024 ** 8,
 };
 
 export function parseFilesize(value: string | null | undefined): number | null {
@@ -1454,6 +1936,9 @@ export function truncateString(
   left: number,
   right = 0,
 ): string | null | undefined {
+  if (!(left > 3) || right < 0) {
+    throw new Error("truncateString requires left > 3 and right >= 0");
+  }
   if (value == null || value.length <= left + right) {
     return value;
   }
@@ -1544,11 +2029,12 @@ export function configurationArgs(
   mainKey: string,
   argdict: unknown,
   exe: string,
-  keys: readonly string[] = [""],
+  keys: readonly (string | readonly string[])[] = [""],
   defaultValue: readonly string[] = [],
+  useCompat = true,
 ): string[] {
   if (Array.isArray(argdict)) {
-    return argdict.map(String);
+    return useCompat ? argdict.map(String) : [...defaultValue];
   }
   if (!argdict || typeof argdict !== "object") {
     return [...defaultValue];
@@ -1558,18 +2044,18 @@ export function configurationArgs(
     mainKey.toLowerCase() === exe.toLowerCase()
       ? exe.toLowerCase()
       : `${mainKey.toLowerCase()}+${exe.toLowerCase()}`;
-  const candidateKeys = keys.map((key) => `${rootKey}${key}`);
-  candidateKeys.push("default");
-  for (const key of candidateKeys) {
-    const value = args[key.toLowerCase()];
-    if (Array.isArray(value)) {
-      return value.map(String);
+  const candidateKeys: Array<string | readonly string[]> = keys.map((key) =>
+    typeof key === "string" ? `${rootKey}${key}` : key.map((item) => `${rootKey}${item}`),
+  );
+  if (candidateKeys.some((key) => key === rootKey)) {
+    if (mainKey.toLowerCase() !== exe.toLowerCase()) {
+      candidateKeys.push([mainKey.toLowerCase(), exe.toLowerCase()]);
     }
-    if (typeof value === "string") {
-      return [value];
-    }
+    candidateKeys.push("default");
+  } else {
+    useCompat = false;
   }
-  return [...defaultValue];
+  return cliConfigurationArgs(args, candidateKeys, defaultValue, useCompat);
 }
 
 export const _configuration_args = configurationArgs;
@@ -1597,6 +2083,14 @@ export class RetryManager implements Iterable<{ error: unknown }> {
   }
 }
 
+export const _WINDOWS_QUOTE_TRANS: Record<string, string> = { '"': String.raw`\"` };
+export const _CMD_QUOTE_TRANS: Record<string, string> = {
+  '"': '""',
+  "\n": "%=%",
+  "\r": "%=%",
+  "%": "%%cd:~,%",
+};
+
 export function shellQuote(args: readonly string[]): string {
   return args
     .map((arg) =>
@@ -1616,7 +2110,7 @@ export const args_to_str = argsToStr;
 export function detectExeVersion(
   output: string | null | undefined,
 ): string | false {
-  const match = /(?:version|v)\s*(?<version>\d+(?:\.\d+)+)/i.exec(output ?? "");
+  const match = /version\s+(?<version>[-0-9._a-zA-Z]+)/i.exec(output ?? "");
   return match?.groups?.version ?? false;
 }
 
@@ -1674,20 +2168,41 @@ export function versionTuple(
 
 export const version_tuple = versionTuple;
 
-export function replaceExtension(filename: string, extension: string): string {
+export function _change_extension(
+  prepend: boolean,
+  filename: string,
+  extension: string,
+  expectedRealExt?: string | null,
+): string {
   const current = extname(filename);
-  return current
-    ? `${filename.slice(0, -current.length)}.${extension}`
-    : `${filename}.${extension}`;
+  let name = current ? filename.slice(0, -current.length) : filename;
+  if (!expectedRealExt || current.slice(1) === expectedRealExt) {
+    if (prepend && current) {
+      _UnsafeExtensionError.sanitizeExtension(extension, { prepend: true });
+      return `${name}.${extension}${current}`;
+    }
+  } else {
+    name = filename;
+  }
+  return `${name}.${_UnsafeExtensionError.sanitizeExtension(extension)}`;
+}
+
+export function replaceExtension(
+  filename: string,
+  extension: string,
+  expectedRealExt?: string | null,
+): string {
+  return _change_extension(false, filename, extension, expectedRealExt);
 }
 
 export const replace_extension = replaceExtension;
 
-export function prependExtension(filename: string, extension: string): string {
-  const current = extname(filename);
-  return current
-    ? `${filename.slice(0, -current.length)}.${extension}${current}`
-    : `${filename}.${extension}`;
+export function prependExtension(
+  filename: string,
+  extension: string,
+  expectedRealExt?: string | null,
+): string {
+  return _change_extension(true, filename, extension, expectedRealExt);
 }
 
 export const prepend_extension = prependExtension;
@@ -1698,63 +2213,147 @@ export function subtitlesFilename(
   subFormat: string,
   expectedRealExt?: string | null,
 ): string {
-  const extension = `${subLang}.${subFormat}`;
-  return expectedRealExt
-    ? replaceExtension(filename, extension)
-    : prependExtension(filename, extension);
+  return replaceExtension(filename, `${subLang}.${subFormat}`, expectedRealExt);
 }
 
 export const subtitles_filename = subtitlesFilename;
 
-export function orderedSet<T>(items: Iterable<T>): T[] {
-  return [...new Set(items)];
+export function orderedSet<T>(items: Iterable<T>, options: { lazy: true }): Iterable<T>;
+export function orderedSet<T>(items: Iterable<T>, options?: { lazy?: false }): T[];
+export function orderedSet<T>(items: Iterable<T>, options: { lazy?: boolean } = {}): T[] | Iterable<T> {
+  function* iter(): Iterable<T> {
+    const seen: T[] = [];
+    for (const item of items) {
+      if (!seen.some((value) => pythonEquals(value, item))) {
+        seen.push(item);
+        yield item;
+      }
+    }
+  }
+  return options.lazy ? iter() : [...iter()];
 }
 
 export const orderedSet_ = orderedSet;
 
-export class LazyList<T> implements Iterable<T> {
-  readonly #cache: T[] = [];
-  #done = false;
-  #iterator: Iterator<T>;
+function pythonEquals(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right) || left === right) {
+    return true;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length
+      && left.every((value, index) => pythonEquals(value, right[index]));
+  }
+  if (isPlainObject(left) && isPlainObject(right)) {
+    const leftEntries = Object.entries(left);
+    const rightEntries = Object.entries(right);
+    return leftEntries.length === rightEntries.length
+      && leftEntries.every(([key, value]) => key in right && pythonEquals(value, right[key]));
+  }
+  return false;
+}
 
-  constructor(iterable: Iterable<T>) {
-    this.#iterator = iterable[Symbol.iterator]();
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype);
+}
+
+function sliceArray<T>(array: T[], start: number | undefined, end: number | undefined, step: number): T[] {
+  const length = array.length;
+  const out: T[] = [];
+  if (step > 0) {
+    const from = start === undefined ? 0 : Math.min(Math.max(start < 0 ? length + start : start, 0), length);
+    const to = end === undefined ? length : Math.min(Math.max(end < 0 ? length + end : end, 0), length);
+    for (let index = from; index < to; index += step) {
+      out.push(array[index] as T);
+    }
+    return out;
+  }
+  const from = start === undefined ? length - 1 : Math.min(start < 0 ? length + start : start, length - 1);
+  const to = end === undefined ? -1 : Math.max(end < 0 ? length + end : end, -1);
+  for (let index = from; index > to; index += step) {
+    if (index >= 0 && index < length) {
+      out.push(array[index] as T);
+    }
+  }
+  return out;
+}
+
+export class LazyList<T> implements Iterable<T> {
+  readonly _cache: T[];
+  private done = false;
+  private iterator: Iterator<T>;
+
+  constructor(iterable: Iterable<T>, readonly reverse = false, cache?: T[]) {
+    this.iterator = iterable[Symbol.iterator]();
+    this._cache = cache ?? [];
   }
 
   get length(): number {
     this.exhaust();
-    return this.#cache.length;
+    return this._cache.length;
   }
 
   at(index: number): T | undefined {
-    if (index < 0) {
-      this.exhaust();
-      return this.#cache.at(index);
+    const effectiveIndex = this.reverse ? LazyList.reverseIndex(index) : index;
+    if (effectiveIndex !== index) {
+      return this.get(effectiveIndex);
     }
-    while (!this.#done && this.#cache.length <= index) {
-      this.nextItem();
-    }
-    return this.#cache[index];
+    return this.get(index);
   }
 
-  slice(start?: number, end?: number): T[] {
-    this.exhaust();
-    return this.#cache.slice(start, end);
+  private get(index: number): T | undefined {
+    if (index < 0) {
+      this.exhaust();
+      return this._cache.at(index);
+    }
+    while (!this.done && this._cache.length <= index) {
+      this.nextItem();
+    }
+    return this._cache[index];
+  }
+
+  slice(start?: number, end?: number, step = 1): T[] {
+    if (!Number.isInteger(step) || step === 0) {
+      throw new TypeError("slice step must be a non-zero integer");
+    }
+    let effectiveStart = start;
+    let effectiveEnd = end;
+    let effectiveStep = step;
+    if (this.reverse) {
+      effectiveStart = start === undefined ? undefined : LazyList.reverseIndex(start);
+      effectiveEnd = end === undefined ? undefined : LazyList.reverseIndex(end);
+      effectiveStep = -step;
+    }
+    if ((effectiveStart ?? 0) < 0 || (effectiveEnd ?? 0) < 0 || (effectiveStart === undefined && effectiveStep < 0) || (effectiveEnd === undefined && effectiveStep > 0)) {
+      this.exhaust();
+    } else {
+      const limit = Math.max(effectiveStart ?? 0, effectiveEnd ?? 0);
+      while (!this.done && this._cache.length <= limit) {
+        this.nextItem();
+      }
+    }
+    return sliceArray(this._cache, effectiveStart, effectiveEnd, effectiveStep);
   }
 
   exhaust(): T[] {
-    while (!this.#done) {
+    while (!this.done) {
       this.nextItem();
     }
-    return [...this.#cache];
+    return this.reverse ? [...this._cache].reverse() : [...this._cache];
+  }
+
+  reversed(): LazyList<T> {
+    return new LazyList({ [Symbol.iterator]: () => this.iterator }, !this.reverse, this._cache);
   }
 
   [Symbol.iterator](): Iterator<T> {
+    if (this.reverse) {
+      return this.exhaust()[Symbol.iterator]();
+    }
     let index = 0;
     return {
       next: (): IteratorResult<T> => {
         const value = this.at(index);
-        if (value === undefined && index >= this.#cache.length && this.#done) {
+        if (value === undefined && index >= this._cache.length && this.done) {
           return { done: true, value: undefined };
         }
         index += 1;
@@ -1764,12 +2363,16 @@ export class LazyList<T> implements Iterable<T> {
   }
 
   private nextItem(): void {
-    const next = this.#iterator.next();
+    const next = this.iterator.next();
     if (next.done) {
-      this.#done = true;
+      this.done = true;
     } else {
-      this.#cache.push(next.value);
+      this._cache.push(next.value);
     }
+  }
+
+  private static reverseIndex(index: number): number {
+    return ~index;
   }
 }
 
@@ -1892,9 +2495,64 @@ export function mimetype2ext(
     return defaultValue;
   }
   const map: Record<string, string> = {
+    "3gpp": "3gp",
+    "aacp": "aac",
+    "avif": "avif",
+    "bmp": "bmp",
+    "dash+xml": "mpd",
+    "f4m+xml": "f4m",
+    "filmstrip+json": "fs",
+    "flac": "flac",
+    "gif": "gif",
+    "gzip": "gz",
+    "hds+xml": "f4m",
+    "jpeg": "jpg",
+    "json": "json",
+    "midi": "mid",
+    "mp2t": "ts",
+    "mp4": "mp4",
+    "mpeg": "mpeg",
+    "mpegurl": "m3u8",
+    "ogg": "ogg",
+    "png": "png",
+    "quicktime": "mov",
+    "smptett+xml": "tt",
+    "svg+xml": "svg",
+    "ttaf+xml": "dfxp",
+    "tiff": "tif",
+    "ttml+xml": "ttml",
+    "vnd.apple.mpegurl": "m3u8",
+    "vnd.dlna.mpeg-tts": "mpeg",
+    "vnd.ms-sstr+xml": "ism",
+    "vnd.wap.wbmp": "wbmp",
+    "vp9": "vp9",
+    "wav": "wav",
+    "wave": "wav",
+    "webm": "webm",
+    "webp": "webp",
+    "x-aac": "aac",
+    "x-flac": "flac",
+    "x-flv": "flv",
+    "x-icon": "ico",
+    "x-jng": "jng",
+    "x-m4a": "m4a",
+    "x-m4v": "m4v",
+    "x-matroska": "mkv",
+    "x-mng": "mng",
+    "x-mp4-fragmented": "mp4",
+    "x-mpegurl": "m3u8",
+    "x-ms-asf": "asf",
+    "x-ms-bmp": "bmp",
+    "x-ms-sami": "sami",
+    "x-ms-wmv": "wmv",
+    "x-msvideo": "avi",
+    "x-realaudio": "ra",
+    "x-subrip": "srt",
+    "x-srt": "srt",
+    "x-wav": "wav",
+    "xml": "xml",
+    "zip": "zip",
     "video/ogg": "ogv",
-    "video/x-flv": "flv",
-    "video/x-matroska": "mkv",
     "application/dash+xml": "mpd",
     "application/f4m+xml": "f4m",
     "application/hds+xml": "f4m",
@@ -2050,6 +2708,24 @@ export function filesizeFromTbr(
 
 export const filesize_from_tbr = filesizeFromTbr;
 
+export function _request_dump_filename(
+  url: string,
+  videoId: string | null | undefined,
+  data: Uint8Array | string | null = null,
+  trimLength: number | null = null,
+): string {
+  const dataHash = data === null
+    ? null
+    : createHash("md5").update(typeof data === "string" ? data : Buffer.from(data)).digest("hex");
+  let baseName = joinNonempty(videoId, dataHash, url, { delim: "_" });
+  const maxLength = trimLength ?? 240;
+  if (baseName.length > maxLength) {
+    const hash = `___${createHash("md5").update(baseName).digest("hex")}`;
+    baseName = `${baseName.slice(0, maxLength - hash.length)}${hash}`;
+  }
+  return sanitizeFilename(`${baseName}.dump`, { restricted: true });
+}
+
 export function getCompatibleExt(options: {
   vcodecs: readonly (string | null | undefined)[];
   acodecs: readonly (string | null | undefined)[];
@@ -2169,7 +2845,8 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
     throw new Error("Invalid dfxp/TTML subtitle");
   }
   const output: string[] = [];
-  for (const [index, paragraph] of paragraphs.entries()) {
+  const appliedStyles: TtmlStyle[] = [];
+  for (const paragraph of paragraphs) {
     const attrs = parseXmlAttributesSubset(paragraph.groups?.attrs ?? "");
     const beginTime = parseDfxpTimeExpr(attrs.begin);
     let endTime = parseDfxpTimeExpr(attrs.end);
@@ -2191,6 +2868,7 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
       parseXmlAttributesSubset(paragraph.groups?.attrs ?? ""),
       styles,
       defaultStyle,
+      appliedStyles,
     );
     output.push(
       `${output.length + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`,
@@ -2330,9 +3008,9 @@ function ttmlTextToSrt(
   paragraphAttrs: Record<string, string>,
   styles: Map<string, TtmlStyle>,
   defaultStyle: TtmlStyle,
+  appliedStyles: TtmlStyle[] = [],
 ): string {
   const out: string[] = [];
-  const appliedStyles: TtmlStyle[] = [];
   const unclosedStack: string[][] = [];
 
   const openElement = (attrs: Record<string, string>) => {
@@ -2421,10 +3099,14 @@ export function formatField<T>(
     field && obj && typeof obj === "object" && !Array.isArray(obj)
       ? (obj as Record<string, T>)[field]
       : (obj as T | null | undefined);
-  if (value === null || value === undefined || value === ignore) {
+  if (
+    ignore === NO_DEFAULT
+      ? !value
+      : variadic(ignore).includes(value)
+  ) {
     return defaultValue;
   }
-  return template.replace("%s", String(func(value)));
+  return template.replace("%s", String(func(value as T)));
 }
 
 export const format_field = formatField;
@@ -2471,6 +3153,14 @@ export function ageRestricted(
 }
 
 export const age_restricted = ageRestricted;
+
+export const BOMS: Array<readonly [Uint8Array, string]> = [
+  [Uint8Array.from([0xef, 0xbb, 0xbf]), "utf-8"],
+  [Uint8Array.from([0x00, 0x00, 0xfe, 0xff]), "utf-32-be"],
+  [Uint8Array.from([0xff, 0xfe, 0x00, 0x00]), "utf-32-le"],
+  [Uint8Array.from([0xff, 0xfe]), "utf-16-le"],
+  [Uint8Array.from([0xfe, 0xff]), "utf-16-be"],
+];
 
 export function isHtml(firstBytes: Uint8Array | string): boolean {
   const bytes = typeof firstBytes === "string" ? new TextEncoder().encode(firstBytes) : firstBytes.subarray(0, 512);
@@ -2552,20 +3242,17 @@ export function formatDecimalSuffix(
   fmt = "%d%s",
   options: { factor?: number } = {},
 ): string | null {
-  if (num === null || num === undefined) {
+  if (num === null || num === undefined || num < 0) {
     return null;
   }
   const factor = options.factor ?? 1000;
   const suffixes = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
-  let value = num;
-  let suffix = "";
-  for (const candidate of suffixes) {
-    suffix = candidate;
-    if (Math.abs(value) < factor || candidate === suffixes.at(-1)) {
-      break;
-    }
-    value /= factor;
+  const exponent = num === 0 ? 0 : Math.min(Math.trunc(Math.log(num) / Math.log(factor)), suffixes.length - 1);
+  let suffix = suffixes[exponent] ?? "";
+  if (factor === 1024) {
+    suffix = suffix === "k" ? "Ki" : suffix === "" ? "" : `${suffix}i`;
   }
+  const value = num / factor ** exponent;
   const precision = /%\.(\d+)f/.exec(fmt)?.[1];
   const rendered =
     precision !== undefined
@@ -2589,13 +3276,13 @@ export function formatBytes(bytes: number | null | undefined): string {
 
 export const format_bytes = formatBytes;
 
+export function _base_n_table(n = 62, table?: string): string {
+  const alphabet = table ?? "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  return alphabet.slice(0, n);
+}
+
 export function encodeBaseN(num: number, n = 62, table?: string): string {
-  const alphabet =
-    table ??
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(
-      0,
-      n,
-    );
+  const alphabet = _base_n_table(n, table);
   if (num === 0) {
     return alphabet[0] ?? "";
   }
@@ -2611,12 +3298,7 @@ export function encodeBaseN(num: number, n = 62, table?: string): string {
 export const encode_base_n = encodeBaseN;
 
 export function decodeBaseN(value: string, n = 62, table?: string): number {
-  const alphabet =
-    table ??
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(
-      0,
-      n,
-    );
+  const alphabet = _base_n_table(n, table);
   return [...value].reduce((acc, char) => acc * n + alphabet.indexOf(char), 0);
 }
 
@@ -2647,6 +3329,34 @@ export function urshift(value: number, shift: number): number {
   return value >>> shift;
 }
 
+export const DOT_URL_LINK_TEMPLATE = `[InternetShortcut]
+URL=%(url)s
+`;
+
+export const DOT_WEBLOC_LINK_TEMPLATE = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+\t<key>URL</key>
+\t<string>%(url)s</string>
+</dict>
+</plist>
+`;
+
+export const DOT_DESKTOP_LINK_TEMPLATE = `[Desktop Entry]
+Encoding=UTF-8
+Name=%(filename)s
+Type=Link
+URL=%(url)s
+Icon=text-html
+`;
+
+export const LINK_TEMPLATES = {
+  url: DOT_URL_LINK_TEMPLATE,
+  desktop: DOT_DESKTOP_LINK_TEMPLATE,
+  webloc: DOT_WEBLOC_LINK_TEMPLATE,
+} as const;
+
 export function iriToUri(iri: string): string {
   try {
     return new URL(iri).toString();
@@ -2659,35 +3369,53 @@ export const iri_to_uri = iriToUri;
 
 export function extractBasicAuth(
   url: string,
-): [string, { Authorization?: string }] {
-  const parsed = new URL(url);
-  if (!parsed.username && !parsed.password) {
-    return [url, {}];
+): [string, string | null] {
+  const match = /^(?<scheme>[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?<authority>[^/?#]*)(?<rest>[/?#][\s\S]*)?$/.exec(url);
+  const authority = match?.groups?.authority;
+  if (!match?.groups?.scheme || authority === undefined) {
+    return [url, null];
   }
-  const username = decodeURIComponent(parsed.username);
-  const password = decodeURIComponent(parsed.password);
-  parsed.username = "";
-  parsed.password = "";
+  const atIndex = authority.lastIndexOf("@");
+  if (atIndex < 0) {
+    return [url, null];
+  }
+  const userinfo = authority.slice(0, atIndex);
+  const host = authority.slice(atIndex + 1);
+  const [rawUsername, ...rawPasswordParts] = userinfo.split(":");
+  const username = decodeURIComponentSafe(rawUsername ?? "");
+  const password = decodeURIComponentSafe(rawPasswordParts.join(":"));
   return [
-    parsed.toString(),
-    {
-      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
-    },
+    `${match.groups.scheme}${host}${match.groups.rest ?? ""}`,
+    `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
   ];
 }
 
 export const extract_basic_auth = extractBasicAuth;
 
+function decodeURIComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function sanitizeUrl(
-  url: string,
+  url: string | null | undefined,
   options: { scheme?: string } = {},
-): string {
+): string | undefined {
+  if (url === null || url === undefined) {
+    return undefined;
+  }
   const scheme = options.scheme ?? "http";
   if (url.startsWith("//")) {
     return `${scheme}:${url}`;
   }
-  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
-    return `${scheme}://${url}`;
+  if (/^httpss:\/\//.test(url)) {
+    return url.replace(/^httpss:\/\//, "https://");
+  }
+  if (/^rmtp([es]?):\/\//.test(url)) {
+    return url.replace(/^rmtp([es]?):\/\//, "rtmp$1://");
   }
   return url;
 }
@@ -2695,10 +3423,17 @@ export function sanitizeUrl(
 export const sanitize_url = sanitizeUrl;
 
 export function makeArchiveId(
-  ie: { IE_NAME?: string } | string,
+  ie: object | string,
   videoId: unknown,
 ): string {
-  return `${typeof ie === "string" ? ie : (ie.IE_NAME ?? "unknown")} ${videoId}`;
+  const ieObject = typeof ie === "object"
+    ? ie as { IE_NAME?: string; ieKey?: () => string; constructor?: { ieKey?: () => string } }
+    : null;
+  const staticIeKey = ieObject?.constructor?.ieKey;
+  const ieKey = typeof ie === "string"
+    ? ie
+    : ieObject?.ieKey?.() ?? staticIeKey?.() ?? ieObject?.IE_NAME ?? "unknown";
+  return `${ieKey.toLowerCase()} ${videoId}`;
 }
 
 export const make_archive_id = makeArchiveId;
@@ -2706,10 +3441,15 @@ export const make_archive_id = makeArchiveId;
 const SMUGGLE_KEY = "__youtubedl_smuggle";
 
 export function smuggleUrl(url: string, data: Record<string, unknown>): string {
-  const parsed = new URL(url);
+  const [cleanUrl, existingData] = unsmuggleUrl(url, {});
+  const parsed = new URL(cleanUrl);
+  const mergedData = {
+    ...(existingData ?? {}),
+    ...data,
+  };
   parsed.searchParams.set(
     SMUGGLE_KEY,
-    Buffer.from(JSON.stringify(data), "utf8").toString("base64url"),
+    Buffer.from(JSON.stringify(mergedData), "utf8").toString("base64url"),
   );
   return parsed.toString();
 }
@@ -2718,8 +3458,16 @@ export const smuggle_url = smuggleUrl;
 
 export function unsmuggleUrl(
   url: string,
-  defaultValue: Record<string, unknown> = {},
-): [string, Record<string, unknown>] {
+  defaultValue?: Record<string, unknown>,
+): [string, Record<string, unknown>];
+export function unsmuggleUrl(
+  url: string,
+  defaultValue: null,
+): [string, Record<string, unknown> | null];
+export function unsmuggleUrl(
+  url: string,
+  defaultValue: Record<string, unknown> | null = {},
+): [string, Record<string, unknown> | null] {
   const parsed = new URL(url);
   const encoded = parsed.searchParams.get(SMUGGLE_KEY);
   if (!encoded) {
@@ -2750,7 +3498,8 @@ function applyQueryUpdate(
         | string
         | number
         | boolean
-        | readonly (string | number | boolean)[]
+        | Uint8Array
+        | readonly (string | number | boolean | Uint8Array)[]
         | null
         | undefined
       >,
@@ -2766,7 +3515,10 @@ function applyQueryUpdate(
     }
     const values = Array.isArray(value) ? value : [value];
     for (const item of values) {
-      parsed.searchParams.append(key, String(item));
+      parsed.searchParams.append(
+        key,
+        item instanceof Uint8Array ? new TextDecoder().decode(item) : String(item),
+      );
     }
   }
 }
@@ -2786,9 +3538,9 @@ function addDateUnit(date: Date, unit: string, amount: number): Date {
   } else if (unit.startsWith("week")) {
     out.setUTCDate(out.getUTCDate() + amount * 7);
   } else if (unit.startsWith("month")) {
-    out.setUTCMonth(out.getUTCMonth() + amount);
+    return datetimeAddMonths(out, amount);
   } else if (unit.startsWith("year")) {
-    out.setUTCFullYear(out.getUTCFullYear() + amount);
+    return datetimeAddMonths(out, amount * 12);
   }
   return out;
 }
@@ -2797,20 +3549,16 @@ function roundDate(
   date: Date,
   precision: "microsecond" | "second" | "minute" | "hour" | "day",
 ): Date {
-  const out = new Date(date.getTime());
-  if (precision === "day") {
-    out.setUTCHours(0);
+  if (precision === "microsecond") {
+    return new Date(date.getTime());
   }
-  if (precision === "day" || precision === "hour") {
-    out.setUTCMinutes(0);
-  }
-  if (precision === "day" || precision === "hour" || precision === "minute") {
-    out.setUTCSeconds(0);
-  }
-  if (precision !== "microsecond") {
-    out.setUTCMilliseconds(0);
-  }
-  return out;
+  const unitMs = {
+    second: 1000,
+    minute: 60_000,
+    hour: 3_600_000,
+    day: 86_400_000,
+  }[precision];
+  return new Date(Math.round(date.getTime() / unitMs) * unitMs);
 }
 
 function pad2(value: number): string {
@@ -2878,6 +3626,18 @@ export function jsToJson(
   strict = false,
 ): string {
   let processed = code.replace(/(?:new\s+)?Array\((.*?)\)/g, "[$1]");
+  processed = processed.replace(/\bnew\s+Date\(\s*("(?:\\.|[^\\"])*"|'(?:\\.|[^\\'])*')\s*\)/g, "$1");
+  processed = processed.replace(/\bnew\s+Map\(\s*(\[[\s\S]*\])\s*\)/g, (match, entriesSource: string) => {
+    try {
+      const entries = JSON.parse(jsToJson(entriesSource, vars, strict)) as unknown;
+      if (!Array.isArray(entries)) {
+        return match;
+      }
+      return JSON.stringify(Object.fromEntries(entries as Array<[PropertyKey, unknown]>));
+    } catch {
+      return match;
+    }
+  });
   const PATTERN =
     /(?<str>'(?:\\.|[^\\'])*'|"(?:\\.|[^\\"])*"|`(?:\\.|[^\\`])*`)|(?<comment>\/\*(?:(?!\*\/)[\s\S])*\*\/|\/\/[^\n]*\n)|(?<comma>,\s*(?=[\]}]))|(?<void>\bvoid\s+0\b|\bundefined\b)|(?<ident>(?:(?<![0-9])[eE]|[a-df-zA-DF-Z_$])[.a-zA-Z_$0-9]*)|(?<hex>\b(?:0[xX][0-9a-fA-F]+|(?<!\.)0+[0-7]+)(?:\s*:)?)|(?<num>[0-9]+(?=\s*:))|(?<excl>!+)/g;
   processed = processed.replace(PATTERN, (...args) => {
@@ -2887,7 +3647,7 @@ export function jsToJson(
       if (groups.str.startsWith("`")) {
         content = content.replace(/\$\{(.*?)\}/g, (_, key) => {
           const trimmed = key.trim();
-          return vars[trimmed] !== undefined ? JSON.parse(vars[trimmed]) : "";
+          return vars[trimmed] !== undefined ? JSON.parse(vars[trimmed]) : trimmed;
         });
       }
       return JSON.stringify(content);
@@ -2901,7 +3661,7 @@ export function jsToJson(
     if (groups.hex) {
       const hasColon = groups.hex.endsWith(":");
       const numStr = hasColon ? groups.hex.slice(0, -1).trim() : groups.hex;
-      const num = Number(numStr);
+      const num = /^0[0-7]+$/.test(numStr) ? Number.parseInt(numStr, 8) : Number(numStr);
       if (Number.isNaN(num)) return groups.hex;
       return hasColon ? `"${num}":` : String(num);
     }
@@ -2923,7 +3683,7 @@ export function jsToJson(
     }
     return args[0];
   });
-  return processed;
+  return processed.replaceAll(/,\s*(?=[\]}])/g, "");
 }
 
 export const js_to_json = jsToJson;
@@ -2982,8 +3742,15 @@ export async function writeJsonFile(obj: unknown, filename: string): Promise<voi
 
 export const write_json_file = writeJsonFile;
 
-export function partialApplication<T extends (...args: unknown[]) => unknown>(func: T): T {
-  return func;
+export function partialApplication<T extends (...args: never[]) => unknown>(func: T): (...args: unknown[]) => unknown {
+  const callable = func as unknown as (...args: unknown[]) => unknown;
+  const apply = (...args: unknown[]): unknown => {
+    if (args.length >= callable.length) {
+      return callable(...args);
+    }
+    return (...moreArgs: unknown[]) => apply(...args, ...moreArgs);
+  };
+  return apply;
 }
 
 export const partial_application = partialApplication;
@@ -3011,15 +3778,17 @@ export function isPathLike(value: unknown): value is string | Uint8Array | { toS
 export const is_path_like = isPathLike;
 
 export function expandPath(value: string): string {
-  if (value === "~" || value.startsWith("~/")) {
-    return join(process.env.HOME ?? "", value.slice(2));
-  }
-  return value.replaceAll(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}/g, (_match, bare: string, braced: string) => process.env[bare || braced] ?? "");
+  const homeExpanded = value === "~" || value.startsWith("~/")
+    ? join(process.env.HOME ?? "", value.slice(2))
+    : value;
+  return homeExpanded
+    .replaceAll(/%([^%]+)%/g, (match, name: string) => process.env[name] ?? match)
+    .replaceAll(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}/g, (_match, bare: string, braced: string) => process.env[bare || braced] ?? "");
 }
 
 export const expand_path = expandPath;
 
-const ACCENT_MAP: Record<string, string> = {
+export const ACCENT_CHARS: Record<string, string> = {
   Â: "A", Ã: "A", Ä: "A", À: "A", Á: "A", Å: "A", Æ: "AE", Ç: "C", È: "E", É: "E", Ê: "E", Ë: "E", Ì: "I", Í: "I", Î: "I", Ï: "I", Ð: "D", Ñ: "N", Ò: "O", Ó: "O", Ô: "O", Õ: "O", Ö: "O", Ő: "O", Ø: "O", Œ: "OE", Ù: "U", Ú: "U", Û: "U", Ü: "U", Ű: "U", Ý: "Y", Þ: "TH", ß: "ss",
   à: "a", á: "a", â: "a", ã: "a", ä: "a", å: "a", æ: "ae", ç: "c", è: "e", é: "e", ê: "e", ë: "e", ì: "i", í: "i", î: "i", ï: "i", ð: "i", ñ: "n", ò: "o", ó: "o", ô: "o", õ: "o", ö: "o", ő: "o", ø: "o", œ: "oe", ù: "u", ú: "u", û: "u", ü: "u", ű: "u", ý: "y", þ: "th", ÿ: "y",
 };
@@ -3036,17 +3805,18 @@ export function sanitizeFilename(value: string, options: { restricted?: boolean;
     let out = "";
     for (const char of timestampSafe) {
       if (isId === undefined && '"*:<>?|/\\"'.includes(char)) {
-        out += char === "/" ? "⧸" : char === "\\" ? "⧹" : String.fromCodePoint(char.codePointAt(0)! + 0xfee0);
-      } else if (char === "?" || char < " " || char.charCodeAt(0) === 0x7f) {
-        continue;
-      } else if (char === '"') {
-        out += isId === true ? char : "'";
-      } else if (char === ":") {
-        out += isId === true ? char : " -";
-      } else if ("\\/|*<>".includes(char)) {
-        out += isId === true ? char : "_";
-      } else {
-        out += char;
+        const codePoint = char.codePointAt(0) ?? 0;
+        out += char === "/" ? "⧸" : char === "\\" ? "⧹" : String.fromCodePoint(codePoint + 0xfee0);
+      } else if (!(char === "?" || char < " " || char.charCodeAt(0) === 0x7f)) {
+        if (char === '"') {
+          out += isId === true ? char : "'";
+        } else if (char === ":") {
+          out += isId === true ? char : " -";
+        } else if ("\\/|*<>".includes(char)) {
+          out += isId === true ? char : "_";
+        } else {
+          out += char;
+        }
       }
     }
     if (isId === false) {
@@ -3057,9 +3827,16 @@ export function sanitizeFilename(value: string, options: { restricted?: boolean;
     }
     return out || "_";
   }
-  let out = [...timestampSafe].map((char) => ACCENT_MAP[char] ?? (/[A-Za-z0-9._-]/.test(char) ? char : "_")).join("");
-  out = out.replaceAll(/_+/g, "_").replace(/^_+|_+$/g, "").replace(/^\.+/, "");
-  if (isId === false) {
+  let out = [...timestampSafe].map((char) => {
+    if (ACCENT_CHARS[char]) return ACCENT_CHARS[char];
+    if (/[A-Za-z0-9._-]/.test(char)) return char;
+    if (char === ":") return "_-";
+    return "_";
+  }).join("");
+  if (isId !== true) {
+    out = out.replaceAll(/_+/g, "_").replace(/^_+|_+$/g, "").replace(/^\.+/, "");
+  }
+  if (isId !== true) {
     if (out.startsWith("-_")) out = out.slice(2);
     if (out.startsWith("-")) out = `_${out.slice(1)}`;
   }
@@ -3068,8 +3845,45 @@ export function sanitizeFilename(value: string, options: { restricted?: boolean;
 
 export const sanitize_filename = sanitizeFilename;
 
-export function sanitizePath(value: string): string {
-  return value.split(/[\\/]/).map((part) => part.replaceAll(/[<>:"|?*]/g, "#").replace(/\.+$/, (dots) => `${dots.slice(0, -1)}#`)).join("\\");
+export function _sanitizePathParts(parts: readonly string[]): string[] {
+  const sanitizedParts: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      if (sanitizedParts.length && sanitizedParts.at(-1) !== "..") {
+        sanitizedParts.pop();
+      } else {
+        sanitizedParts.push("..");
+      }
+      continue;
+    }
+    sanitizedParts.push(part.replaceAll(/[/<>:"|\\?*]|[\s.]$/g, "#"));
+  }
+  return sanitizedParts;
+}
+
+export const _sanitize_path_parts = _sanitizePathParts;
+
+export function sanitizePath(value: string, _force = false): string {
+  const normalized = value.replaceAll("/", "\\");
+  let root = "";
+  let parts: string[];
+  if (normalized.startsWith("\\\\")) {
+    const split = normalized.split("\\");
+    root = `${split.slice(0, 4).join("\\")}\\`;
+    parts = split.slice(4);
+  } else if (normalized.slice(1, 2) === ":") {
+    const offset = normalized.slice(2, 3) === "\\" ? 3 : 2;
+    root = normalized.slice(0, offset);
+    parts = normalized.slice(offset).split("\\");
+  } else {
+    root = normalized.startsWith("\\") ? "\\" : "";
+    parts = normalized.split("\\");
+  }
+  const path = _sanitizePathParts(parts).join("\\");
+  return root || path ? `${root}${path}` : ".";
 }
 
 export const sanitize_path = sanitizePath;
@@ -3088,8 +3902,29 @@ export function timeconvert(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : null;
 }
 
-export function timetupleFromMsec(milliseconds: number): Date {
-  return new Date(milliseconds);
+export type TimeTuple = {
+  hours: number;
+  minutes: number;
+  seconds: number;
+  milliseconds: number;
+};
+
+export const _timetuple = (
+  hours: number,
+  minutes: number,
+  seconds: number,
+  milliseconds: number,
+): TimeTuple => ({ hours, minutes, seconds, milliseconds });
+
+export function timetupleFromMsec(milliseconds: number): TimeTuple {
+  let remaining = Math.trunc(milliseconds);
+  const msec = remaining % 1000;
+  remaining = Math.trunc(remaining / 1000);
+  const seconds = remaining % 60;
+  remaining = Math.trunc(remaining / 60);
+  const minutes = remaining % 60;
+  const hours = Math.trunc(remaining / 60);
+  return _timetuple(hours, minutes, seconds, msec);
 }
 
 export const timetuple_from_msec = timetupleFromMsec;
@@ -3120,7 +3955,7 @@ export function dateFromStr(value: string, options: { strict?: boolean; format?:
   if (!parsed) {
     throw new Error(`Invalid date format "${value}"`);
   }
-  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+  return utcDate(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
 }
 
 export const date_from_str = dateFromStr;
@@ -3130,7 +3965,7 @@ export function datetimeAddMonths(date: Date, months: number): Date {
   const day = out.getUTCDate();
   out.setUTCDate(1);
   out.setUTCMonth(out.getUTCMonth() + months);
-  const lastDay = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  const lastDay = utcDate(out.getUTCFullYear(), out.getUTCMonth() + 1, 0).getUTCDate();
   out.setUTCDate(Math.min(day, lastDay));
   return out;
 }
@@ -3150,18 +3985,56 @@ export function hyphenateDate(value: string): string {
 export const hyphenate_date = hyphenateDate;
 
 export class DateRange {
-  readonly start: Date | null;
-  readonly end: Date | null;
+  readonly start: Date;
+  readonly end: Date;
 
   constructor(start?: string | Date | null, end?: string | Date | null) {
-    this.start = typeof start === "string" ? dateFromStr(start) : start ?? null;
-    this.end = typeof end === "string" ? dateFromStr(end) : end ?? null;
+    this.start = typeof start === "string" ? dateFromStr(start, { strict: true }) : start ?? utcDate(1, 0, 1);
+    this.end = typeof end === "string" ? dateFromStr(end, { strict: true }) : end ?? utcDate(9999, 11, 31);
+    if (this.start > this.end) {
+      throw new Error(`Date range: "${this}" , the start date must be before the end date`);
+    }
+  }
+
+  static day(day: string | Date): DateRange {
+    return new DateRange(day, day);
   }
 
   includes(date: string | Date): boolean {
     const parsed = typeof date === "string" ? dateFromStr(date) : date;
-    return (!this.start || parsed >= this.start) && (!this.end || parsed <= this.end);
+    return this.start <= parsed && parsed <= this.end;
   }
+
+  equals(other: unknown): boolean {
+    return other instanceof DateRange
+      && this.start.getTime() === other.start.getTime()
+      && this.end.getTime() === other.end.getTime();
+  }
+
+  toString(): string {
+    return `${dateToIsoDate(this.start)} to ${dateToIsoDate(this.end)}`;
+  }
+}
+
+function utcDate(year: number, month: number, day: number): Date {
+  const date = new Date(0);
+  date.setUTCFullYear(year, month, day);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function utcTimestamp(year: number, month: number, day: number, hour = 0, minute = 0, second = 0, millisecond = 0): number {
+  const date = utcDate(year, month, day);
+  date.setUTCHours(hour, minute, second, millisecond);
+  return date.getTime();
+}
+
+function dateToIsoDate(date: Date): string {
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 export function systemIdentifier(): string {
@@ -3183,14 +4056,31 @@ export function getFilesystemEncoding(): string {
 export const get_filesystem_encoding = getFilesystemEncoding;
 
 export function lookupUnitTable(unitTable: Record<string, number>, value: string, strict = false): number | null {
-  const unit = strict ? value : value.toLowerCase();
-  return unitTable[unit] ?? null;
+  const numberPattern = strict ? NUMBER_RE : NUMBER_RE.replace(String.raw`\.` , "[,.]");
+  const unitsPattern = Object.keys(unitTable).map((unit) => RegExp.escape(unit)).join("|");
+  const pattern = new RegExp(`${strict ? "^" : ""}(?<num>${numberPattern})\\s*(?<unit>${unitsPattern})\\b${strict ? "$" : ""}`);
+  const match = pattern.exec(value);
+  if (!match?.groups) {
+    return null;
+  }
+  const numberText = match.groups.num;
+  const unit = match.groups.unit;
+  if (numberText === undefined || unit === undefined) {
+    return null;
+  }
+  const number = Number.parseFloat(numberText.replace(",", "."));
+  const multiplier = unitTable[unit];
+  return multiplier === undefined ? null : Math.round(number * multiplier);
 }
 
 export const lookup_unit_table = lookupUnitTable;
 
 export function parseBytes(value: string | null | undefined): number | null {
-  return parseFilesize(value);
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const unitTable = Object.fromEntries(["", "K", "M", "G", "T", "P", "E", "Z", "Y"].map((unit, index) => [unit, 1024 ** index]));
+  return lookupUnitTable(unitTable, value.toUpperCase(), true);
 }
 
 export const parse_bytes = parseBytes;
@@ -3224,6 +4114,7 @@ export function multipartEncode(data: Record<string | number, string | Uint8Arra
   return [new TextEncoder().encode(chunks.join("")), `multipart/form-data; boundary=${boundary}`];
 }
 
+export const _multipart_encode_impl = multipartEncode;
 export const multipart_encode = multipartEncode;
 
 export function isIterableLike(value: unknown): value is Iterable<unknown> {
@@ -3246,14 +4137,17 @@ export const get_exe_version = getExeVersion;
 
 export function determineProtocol(info: Record<string, unknown>): string {
   const protocol = info.protocol;
-  if (typeof protocol === "string") {
-    return protocol;
+  if (protocol !== null && protocol !== undefined) {
+    return String(protocol);
   }
-  const url = typeof info.url === "string" ? info.url : "";
-  const ext = typeof info.ext === "string" ? info.ext : determineExt(url);
-  if (ext === "m3u8") return "m3u8_native";
-  if (ext === "mpd") return "http_dash_segments";
-  return /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1] ?? "http";
+  const url = sanitizeUrl(String(info.url ?? "")) ?? "";
+  if (url.startsWith("rtmp")) return "rtmp";
+  if (url.startsWith("mms")) return "mms";
+  if (url.startsWith("rtsp")) return "rtsp";
+  const ext = determineExt(url);
+  if (ext === "m3u8") return info.is_live ? "m3u8" : "m3u8_native";
+  if (ext === "f4m") return "f4m";
+  return /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1] ?? "";
 }
 
 export const determine_protocol = determineProtocol;
@@ -3286,8 +4180,14 @@ export function renderTable(headerRow: readonly unknown[], data: readonly (reado
 
 export const render_table = renderTable;
 
-export function matchStr(filter: string, data: Record<string, unknown>): boolean {
-  return filter.split(/\s*&\s*/).every((part) => matchOneFilter(part.trim(), data));
+export function matchStr(
+  filter: string,
+  data: Record<string, unknown>,
+  incomplete: boolean | Iterable<string> = false,
+): boolean {
+  return splitFilterParts(filter).every((part) =>
+    matchOneFilter(part.replaceAll(String.raw`\&`, "&").trim(), data, incomplete),
+  );
 }
 
 export const match_str = matchStr;
@@ -3320,8 +4220,33 @@ export function assSubtitlesTimecode(seconds: number): string {
 export const ass_subtitles_timecode = assSubtitlesTimecode;
 export const parse_dfxp_time_expr = parseDfxpTimeExpr;
 
-export function cliConfigurationArgs(argdict: unknown, keys: readonly string[], defaultValue: readonly string[] = []): string[] {
-  return configurationArgs("default", argdict, "default", keys, defaultValue);
+export function cliConfigurationArgs(
+  argdict: unknown,
+  keys: readonly (string | readonly string[])[],
+  defaultValue: readonly string[] = [],
+  useCompat = true,
+): string[] {
+  if (Array.isArray(argdict)) {
+    return useCompat ? argdict.map(String) : [...defaultValue];
+  }
+  if (argdict === null || argdict === undefined) {
+    return [...defaultValue];
+  }
+  if (typeof argdict !== "object") {
+    throw new TypeError("argdict must be a dictionary, list or null");
+  }
+  const args = argdict as Record<string, readonly unknown[] | unknown | null | undefined>;
+  for (const keyList of keys) {
+    const values = variadic(keyList)
+      .map((key) => args[String(key).toLowerCase()])
+      .filter((value) => value !== null && value !== undefined);
+    if (values.length) {
+      return values.flatMap((value) =>
+        Array.isArray(value) ? value.map(String) : [String(value)],
+      );
+    }
+  }
+  return [...defaultValue];
 }
 
 export const cli_configuration_args = cliConfigurationArgs;
@@ -3346,32 +4271,77 @@ export const bytes_to_long = bytesToLong;
 
 export function pkcs1pad(data: Uint8Array, length: number): Uint8Array {
   if (data.length > length - 11) {
-    throw new Error("Message too long for PKCS#1 padding");
+    throw new Error("Input data too long for PKCS#1 padding");
   }
   const paddingLength = length - data.length - 3;
   const padding = new Uint8Array(paddingLength).map(() => {
-    let byte = 0;
-    while (!byte) byte = randomBytes(1)[0] ?? 0;
-    return byte;
+    return Math.floor(Math.random() * 255);
   });
   return Uint8Array.from([0, 2, ...padding, 0, ...data]);
 }
 
-export function ohdaveRsaEncrypt(data: Uint8Array, exponent: number | bigint, modulus: number | bigint): Uint8Array {
-  const padded = bytesToLong(pkcs1pad(data, Math.ceil(BigInt(modulus).toString(16).length / 2)));
-  return longToBytes(modPow(padded, BigInt(exponent), BigInt(modulus)));
+export function ohdaveRsaEncrypt(data: Uint8Array, exponent: number | bigint, modulus: number | bigint): string {
+  const payload = bytesToLong(Uint8Array.from([...data].reverse()));
+  return modPow(payload, BigInt(exponent), BigInt(modulus)).toString(16);
 }
 
 export const ohdave_rsa_encrypt = ohdaveRsaEncrypt;
 
 export function decodePackedCodes(code: string): string {
-  return code;
+  const match = new RegExp(PACKED_CODES_RE).exec(code);
+  if (!match) {
+    return code;
+  }
+  const [, obfuscatedCode = "", baseText = "0", countText = "0", symbolsText = ""] = match;
+  const base = Number(baseText);
+  let count = Number(countText);
+  const symbols = symbolsText.split("|");
+  const symbolTable = new Map<string, string>();
+  while (count) {
+    count -= 1;
+    const baseNCount = encodeBaseN(count, base);
+    symbolTable.set(baseNCount, symbols[count] || baseNCount);
+  }
+  return obfuscatedCode.replaceAll(/\b(\w+)\b/g, (word) => symbolTable.get(word) ?? word);
 }
 
 export const decode_packed_codes = decodePackedCodes;
 
-export function writeXattr(_path: string, _key: string, _value: string): void {
-  throw new NotImplementedError("Extended attributes are not implemented in the Bun utility layer");
+export function writeXattr(path: string, key: string, value: string | Uint8Array): void {
+  if (process.platform === "win32") {
+    if (key.includes(":")) {
+      throw new XAttrMetadataError(null, "xattr key must not contain ':' on Windows");
+    }
+    if (!existsSync(path)) {
+      throw new XAttrMetadataError(null, `${path} does not exist`);
+    }
+    try {
+      writeFileSync(`${path}:${key}`, value);
+    } catch (error) {
+      throw new XAttrMetadataError(typeof (error as NodeJS.ErrnoException).errno === "number" ? (error as NodeJS.ErrnoException).errno ?? null : null, (error as Error).message);
+    }
+    return;
+  }
+
+  const setfattr = checkExecutable("setfattr", ["--version"]);
+  const xattr = setfattr ? false : checkExecutable("xattr", ["-h"]);
+  const exe = setfattr || xattr;
+  if (!exe) {
+    throw new XAttrUnavailableError(
+      "Couldn't find a tool to set the xattrs. Install either the xattr binary or GNU attr package (which contains the setfattr tool)",
+    );
+  }
+
+  const textValue = typeof value === "string" ? value : Buffer.from(value).toString();
+  const result = exe === xattr
+    ? spawnSync(exe, ["-w", key, textValue, path], { encoding: "utf8", input: "" })
+    : spawnSync(exe, ["-n", key, "-v", textValue, path], { encoding: "utf8", input: "" });
+  if (result.error) {
+    throw new XAttrMetadataError((result.error as NodeJS.ErrnoException).errno ?? null, result.error.message);
+  }
+  if (result.status) {
+    throw new XAttrMetadataError(result.status, result.stderr || `xattr command failed with status ${result.status}`);
+  }
 }
 
 export const write_xattr = writeXattr;
@@ -3406,6 +4376,8 @@ export function toHighLimitPath(path: string): string {
 }
 
 export const to_high_limit_path = toHighLimitPath;
+
+export const _HEX_TABLE = "0123456789abcdef";
 
 export function randomUuidv4(): string {
   return nodeRandomUUID();
@@ -3445,7 +4417,10 @@ export function timeSeconds(): number {
 export const time_seconds = timeSeconds;
 
 export function jwtEncode(payloadData: Record<string, unknown>, key: string | Uint8Array, options: { alg?: "HS256"; headers?: Record<string, unknown> } = {}): string {
-  const header = { alg: options.alg ?? "HS256", typ: "JWT", ...(options.headers ?? {}) };
+  const headers = options.headers ?? null;
+  const header = headers && "alg" in headers && "typ" in headers
+    ? headers
+    : { alg: options.alg ?? "HS256", typ: "JWT", ...(headers ?? {}) };
   const encode = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const signingInput = `${encode(header)}.${encode(payloadData)}`;
   const signature = createHmac("sha256", key).update(signingInput).digest("base64url");
@@ -3466,36 +4441,68 @@ export function windowsEnableVtMode(): boolean {
 
 export const windows_enable_vt_mode = windowsEnableVtMode;
 
+const ESCAPE_CHARACTER = "\u001B";
+export const _terminal_sequences_re = new RegExp(`${ESCAPE_CHARACTER}\\[[^m]+m`, "g");
+
 export function removeTerminalSequences(value: string): string {
-  return value.replaceAll(new RegExp("\\x1B\\[[0-?]*[ -/]*[@-~]", "g"), "");
+  return value.replaceAll(_terminal_sequences_re, "");
 }
 
 export const remove_terminal_sequences = removeTerminalSequences;
 
 export function numberOfDigits(number: number): number {
-  return Math.abs(Math.trunc(number)).toString().length;
+  return Math.trunc(number).toString().length;
 }
 
 export const number_of_digits = numberOfDigits;
 
-export function scaleThumbnailsToMaxFormatWidth(formats: Array<Record<string, unknown>>, thumbnails: Array<Record<string, unknown>>, urlWidthRe: RegExp): void {
-  const maxWidth = Math.max(...formats.map((format) => Number(format.width ?? 0)), 0);
-  for (const thumbnail of thumbnails) {
-    if (!thumbnail.width && typeof thumbnail.url === "string") {
-      const match = urlWidthRe.exec(thumbnail.url);
-      if (match?.[1]) thumbnail.width = Math.min(Number(match[1]), maxWidth || Number(match[1]));
-    }
+export function scaleThumbnailsToMaxFormatWidth(
+  formats: Array<Record<string, unknown>>,
+  thumbnails: Array<Record<string, unknown>>,
+  urlWidthRe: RegExp,
+): Array<Record<string, unknown>> {
+  const keys = ["width", "height"] as const;
+  const maxDimensions = formats.reduce<[number, number]>(
+    (best, format) => {
+      const current: [number, number] = [
+        Number(format.width ?? 0),
+        Number(format.height ?? 0),
+      ];
+      return current[0] > best[0] ? current : best;
+    },
+    [0, 0],
+  );
+  if (!maxDimensions[0]) {
+    return thumbnails;
   }
+  return thumbnails.map((thumbnail) =>
+    mergeDicts(
+      {
+        url: typeof thumbnail.url === "string"
+          ? thumbnail.url.replace(urlWidthRe, String(maxDimensions[0]))
+          : thumbnail.url,
+      },
+      Object.fromEntries(keys.map((key, index) => [key, maxDimensions[index]])),
+      thumbnail,
+    ),
+  );
 }
 
 export const scale_thumbnails_to_max_format_width = scaleThumbnailsToMaxFormatWidth;
 
-export function parseHttpRange(range: string | null | undefined): { start?: number; end?: number; length?: number } | null {
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(range ?? "");
-  if (!match) return null;
-  const start = match[1] ? Number(match[1]) : undefined;
-  const end = match[2] ? Number(match[2]) : undefined;
-  return { start, end, length: start !== undefined && end !== undefined ? end - start + 1 : undefined };
+export function parseHttpRange(range: string | null | undefined): [number | null, number | null, number | null] {
+  if (!range) {
+    return [null, null, null];
+  }
+  const match = /bytes[ =](\d+)-(\d+)?(?:\/(\d+))?/i.exec(range);
+  if (!match) {
+    return [null, null, null];
+  }
+  return [
+    Number(match[1]),
+    intOrNone(match[2] ?? null),
+    intOrNone(match[3] ?? null),
+  ];
 }
 
 export const parse_http_range = parseHttpRange;
@@ -3506,35 +4513,110 @@ export async function readStdin(_what = "data"): Promise<string> {
 
 export const read_stdin = readStdin;
 
-export function determineFileEncoding(data: Uint8Array | string): [string, number] {
+function bytesStartsWith(bytes: Uint8Array, prefix: Uint8Array): boolean {
+  if (bytes.length < prefix.length) return false;
+  return prefix.every((byte, index) => bytes[index] === byte);
+}
+
+export function determineFileEncoding(data: Uint8Array | string): [string | null, number] {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return ["utf-8", 3];
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) return ["utf-16le", 2];
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) return ["utf-16be", 2];
-  const firstLine = new TextDecoder().decode(bytes.subarray(0, 200)).split(/\r?\n/, 1)[0] ?? "";
-  return [/coding[:=]\s*([-\w.]+)/.exec(firstLine)?.[1] ?? "utf-8", 0];
+  if (!bytes.length) return [null, 0];
+  for (const [bom, encoding] of BOMS) {
+    if (bytesStartsWith(bytes, bom)) {
+      return [encoding, bom.length];
+    }
+  }
+  const withoutNuls = bytes.filter((byte) => byte !== 0);
+  const header = new TextDecoder("utf-8", { fatal: false }).decode(withoutNuls);
+  return [/^#\s*coding\s*:\s*(\S+)\s*$/m.exec(header)?.[1] ?? null, 0];
 }
 
 export const determine_file_encoding = determineFileEncoding;
+
+function decodeConfigBytes(bytes: Uint8Array, encoding: string | null): string {
+  switch (encoding?.toLowerCase()) {
+    case "utf-16-le":
+      return decodeUtf16Le(bytes);
+    case "utf-16-be":
+      return decodeUtf16Be(bytes);
+    case "utf-32-le":
+      return decodeUtf32(bytes, true);
+    case "utf-32-be":
+      return decodeUtf32(bytes, false);
+    default:
+      return new TextDecoder(encoding ?? "utf-8", { fatal: true }).decode(bytes);
+  }
+}
 
 export class Config {
   configs: Config[] = [];
   own_args: string[] | null = null;
   parsed_args: string[] = [];
   filename: string | null = null;
+  private initialized = false;
+  private loadedPaths = new Set<string>();
 
-  constructor(readonly parser: { parse_known_args?: (args?: Iterable<string>) => unknown; parse_args?: (args?: Iterable<string>) => unknown } | null = null, readonly label: string | null = null) {}
+  constructor(
+    readonly parser: {
+      parse_known_args?: (args?: Iterable<string>, options?: Record<string, unknown>) => unknown;
+      parse_args?: (args?: Iterable<string>) => unknown;
+      error?: (message: string) => never;
+    } | null = null,
+    readonly label: string | null = null,
+  ) {}
 
   init(args: string[] | null = null, filename: string | null = null): boolean {
+    if (this.initialized) {
+      throw new Error("Config is already initialized");
+    }
     this.own_args = args ?? [];
-    this.parsed_args = this.own_args;
     this.filename = filename;
+    return this.loadConfigs();
+  }
+
+  loadConfigs(): boolean {
+    let directory = "";
+    if (this.filename) {
+      const location = this.filename;
+      directory = dirname(location);
+      if (this.loadedPaths.has(location)) return false;
+      this.loadedPaths.add(location);
+    }
+    this.initialized = true;
+    const parsed = this.parser?.parse_known_args?.(this.own_args ?? []);
+    const opts = Array.isArray(parsed) ? parsed[0] : parsed;
+    this.parsed_args = this.own_args ?? [];
+    const locations = opts && typeof opts === "object" && "config_locations" in opts
+      ? (opts as { config_locations?: unknown }).config_locations
+      : null;
+    if (Array.isArray(locations)) {
+      for (const rawLocation of locations) {
+        if (typeof rawLocation !== "string") continue;
+        if (rawLocation === "-") {
+          if (this.loadedPaths.has(rawLocation)) continue;
+          this.loadedPaths.add(rawLocation);
+          continue;
+        }
+        const location = rawLocation.startsWith("/") ? rawLocation : join(directory, expandPath(rawLocation));
+        if (!existsSync(location)) {
+          this.parser?.error?.(`config location ${location} does not exist`);
+          throw new Error(`config location ${location} does not exist`);
+        }
+        this.appendConfig(Config.readFile(location), location);
+      }
+    }
     return true;
   }
 
   static readFile(filename: string, defaultValue: string[] = []): string[] {
     if (!existsSync(filename)) return defaultValue;
-    return shlexSplit(readFileSync(filename, "utf8"));
+    const contents = readFileSync(filename);
+    const [encoding, skip] = determineFileEncoding(contents.subarray(0, 512));
+    try {
+      return shlexSplit(decodeConfigBytes(contents.subarray(skip), encoding));
+    } catch (error) {
+      throw new Error(`Unable to parse "${filename}": ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   static hideLoginInfo(options: readonly string[]): string[] {
@@ -3550,7 +4632,36 @@ export class Config {
   }
 
   get all_args(): Iterable<string> {
-    return this.parsed_args;
+    const self = this;
+    return (function* allArgs() {
+      for (const config of [...self.configs].reverse()) {
+        yield* config.all_args;
+      }
+      yield* self.parsed_args;
+    })();
+  }
+
+  appendConfig(args: string[] | null, filename: string | null = null, label: string | null = null): void {
+    const config = new Config(this.parser, label);
+    config.loadedPaths = this.loadedPaths;
+    if (config.init(args, filename)) {
+      this.configs.push(config);
+    }
+  }
+
+  parse_known_args(options: Record<string, unknown> = {}): unknown {
+    return this.parser?.parse_known_args?.(this.all_args, options);
+  }
+
+  parse_args(): unknown {
+    return this.parser?.parse_args?.(this.all_args);
+  }
+
+  toString(): string {
+    const label = joinNonempty(this.label, "config", this.filename ? `"${this.filename}"` : "", { delim: " " });
+    const own = this.own_args ? `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${JSON.stringify(Config.hideLoginInfo(this.own_args))}` : "";
+    const nested = this.configs.map((config) => `\n${config}`.replaceAll("\n", "\n| ").slice(1));
+    return joinNonempty(own, ...nested, { delim: "\n" });
   }
 }
 
@@ -3597,6 +4708,165 @@ export class Namespace {
   }
 }
 
+const COMMON_VIDEO_EXTENSIONS = ["avi", "flv", "mkv", "mov", "mp4", "webm"] as const;
+const VIDEO_EXTENSIONS = ["3g2", "3gp", "f4v", "mk3d", "divx", "mpg", "ogv", "m4v", "wmv", ...COMMON_VIDEO_EXTENSIONS] as const;
+const COMMON_AUDIO_EXTENSIONS = ["aiff", "alac", "flac", "m4a", "mka", "mp3", "ogg", "opus", "wav"] as const;
+const AUDIO_EXTENSIONS = ["aac", "ape", "asf", "f4a", "f4b", "m4b", "m4r", "oga", "ogx", "spx", "vorbis", "wma", "weba", ...COMMON_AUDIO_EXTENSIONS] as const;
+const THUMBNAIL_EXTENSIONS = ["jpg", "png", "webp"] as const;
+const STORYBOARD_EXTENSIONS = ["mhtml"] as const;
+const SUBTITLE_EXTENSIONS = ["srt", "vtt", "ass", "lrc"] as const;
+const MANIFEST_EXTENSIONS = ["f4f", "f4m", "m3u8", "smil", "mpd"] as const;
+
+export const MEDIA_EXTENSIONS = new Namespace({
+  common_video: COMMON_VIDEO_EXTENSIONS,
+  video: VIDEO_EXTENSIONS,
+  common_audio: COMMON_AUDIO_EXTENSIONS,
+  audio: AUDIO_EXTENSIONS,
+  thumbnails: THUMBNAIL_EXTENSIONS,
+  storyboards: STORYBOARD_EXTENSIONS,
+  subtitles: SUBTITLE_EXTENSIONS,
+  manifests: MANIFEST_EXTENSIONS,
+}) as Namespace & {
+  common_video: typeof COMMON_VIDEO_EXTENSIONS;
+  video: typeof VIDEO_EXTENSIONS;
+  common_audio: typeof COMMON_AUDIO_EXTENSIONS;
+  audio: typeof AUDIO_EXTENSIONS;
+  thumbnails: typeof THUMBNAIL_EXTENSIONS;
+  storyboards: typeof STORYBOARD_EXTENSIONS;
+  subtitles: typeof SUBTITLE_EXTENSIONS;
+  manifests: typeof MANIFEST_EXTENSIONS;
+};
+
+export const KNOWN_EXTENSIONS = [
+  ...MEDIA_EXTENSIONS.video,
+  ...MEDIA_EXTENSIONS.audio,
+  ...MEDIA_EXTENSIONS.manifests,
+] as const;
+
+export class _UnsafeExtensionError extends Error {
+  static readonly ALLOWED_EXTENSIONS = new Set([
+    "description",
+    "json",
+    "meta",
+    "orig",
+    "part",
+    "temp",
+    "uncut",
+    "unknown_video",
+    "ytdl",
+    ...MEDIA_EXTENSIONS.video,
+    "asx",
+    "ismv",
+    "m2t",
+    "m2ts",
+    "m2v",
+    "m4s",
+    "mng",
+    "mp2v",
+    "mp4v",
+    "mpe",
+    "mpeg",
+    "mpeg1",
+    "mpeg2",
+    "mpeg4",
+    "mxf",
+    "ogm",
+    "qt",
+    "rm",
+    "swf",
+    "ts",
+    "vid",
+    "vob",
+    "vp9",
+    ...MEDIA_EXTENSIONS.audio,
+    "3ga",
+    "ac3",
+    "adts",
+    "aif",
+    "au",
+    "dts",
+    "isma",
+    "it",
+    "mid",
+    "mod",
+    "mpga",
+    "mp1",
+    "mp2",
+    "mp4a",
+    "mpa",
+    "ra",
+    "shn",
+    "xm",
+    ...MEDIA_EXTENSIONS.thumbnails,
+    "avif",
+    "bmp",
+    "gif",
+    "heic",
+    "ico",
+    "image",
+    "jfif",
+    "jng",
+    "jpe",
+    "jpeg",
+    "jxl",
+    "svg",
+    "tif",
+    "tiff",
+    "wbmp",
+    ...MEDIA_EXTENSIONS.subtitles,
+    "dfxp",
+    "fs",
+    "ismt",
+    "json3",
+    "sami",
+    "scc",
+    "srv1",
+    "srv2",
+    "srv3",
+    "ssa",
+    "tt",
+    "ttml",
+    "xml",
+    ...MEDIA_EXTENSIONS.manifests,
+    ...MEDIA_EXTENSIONS.storyboards,
+    "desktop",
+    "ism",
+    "m3u",
+    "sbv",
+    "url",
+    "webloc",
+  ]);
+
+  override name = "_UnsafeExtensionError";
+
+  constructor(readonly extension: string) {
+    super(`unsafe file extension: ${JSON.stringify(extension)}`);
+  }
+
+  static sanitizeExtension(extension: string | null | undefined, options: { prepend?: boolean } = {}): string | null | undefined {
+    if (extension === null || extension === undefined) {
+      return extension;
+    }
+    if (extension.includes("/") || extension.includes("\\")) {
+      throw new _UnsafeExtensionError(extension);
+    }
+    if (!options.prepend) {
+      const last = extension.split(".").pop() ?? extension;
+      const checkedExtension = last === "bin" ? "unknown_video" : extension;
+      const checkedLast = last === "bin" ? "unknown_video" : last.toLowerCase();
+      if (!_UnsafeExtensionError.ALLOWED_EXTENSIONS.has(checkedLast)) {
+        throw new _UnsafeExtensionError(extension);
+      }
+      return checkedExtension;
+    }
+    return extension;
+  }
+
+  static sanitize_extension(extension: string | null | undefined, options: { prepend?: boolean } = {}): string | null | undefined {
+    return _UnsafeExtensionError.sanitizeExtension(extension, options);
+  }
+}
+
 export class classproperty {
   constructor(readonly func: (klass: unknown) => unknown) {}
 }
@@ -3611,18 +4881,362 @@ export class function_with_repr {
   }
 }
 
-export function orderedSetFromOptions<T>(options: Iterable<T>, _aliasDict: Record<string, string> = {}): T[] {
-  return orderedSet(options);
+export function orderedSetFromOptions(
+  options: Iterable<string>,
+  aliasDict: Record<string, readonly string[] | string> = {},
+  config: { use_regex?: boolean; start?: readonly string[] | null } = {},
+): string[] {
+  if (!("all" in aliasDict)) {
+    throw new Error('"all" alias is required');
+  }
+  const allValues = variadic(aliasDict.all);
+  const requested = [...(config.start ?? [])];
+  for (let value of options) {
+    const discard = value.startsWith("-");
+    if (discard) value = value.slice(1);
+
+    if (value in aliasDict) {
+      const aliasValues = variadic(aliasDict[value] as readonly string[] | string);
+      const expanded = discard
+        ? aliasValues.map((item) => item.startsWith("-") ? item.slice(1) : `-${item}`)
+        : aliasValues;
+      requested.splice(0, requested.length, ...orderedSetFromOptions(expanded, aliasDict, { start: requested }));
+      continue;
+    }
+
+    const current = config.use_regex
+      ? allValues.filter((item) => new RegExp(value, "i").test(item))
+      : allValues.includes(value)
+        ? [value]
+        : null;
+    if (current === null) {
+      throw new Error(value);
+    }
+    if (discard) {
+      for (const item of current) {
+        let index = requested.indexOf(item);
+        while (index >= 0) {
+          requested.splice(index, 1);
+          index = requested.indexOf(item);
+        }
+      }
+    } else {
+      requested.push(...current);
+    }
+  }
+  return orderedSet(requested);
 }
 
 export const orderedSet_from_options = orderedSetFromOptions;
 
 export class FormatSorter {
-  constructor(readonly ydl: unknown, readonly fieldPreference: unknown[] = []) {}
+  static readonly regex = /^\s*(?:(?<reverse>\+)?(?<field>[a-zA-Z0-9_]+)((?<separator>[~:])(?<limit>.*?))?)?\s*$/;
+  static readonly default = [
+    "hidden",
+    "aud_or_vid",
+    "hasvid",
+    "ie_pref",
+    "lang",
+    "quality",
+    "res",
+    "fps",
+    "hdr:12",
+    "vcodec",
+    "channels",
+    "acodec",
+    "size",
+    "br",
+    "asr",
+    "proto",
+    "ext",
+    "hasaud",
+    "source",
+    "id",
+  ] as const;
+
+  private readonly settings: Record<string, Record<string, unknown>> = makeFormatSortSettings();
+  private readonly order: string[] = [];
+  private readonly sortUser: string[];
+  private readonly sortExtractor: string[];
+  private readonly useFreeOrder: boolean;
+
+  constructor(
+    readonly ydl: { params?: Record<string, unknown>; deprecated_feature?: (message: string) => void; write_debug?: (message: string) => void },
+    fieldPreference: readonly string[] = [],
+  ) {
+    const params = ydl.params ?? {};
+    this.useFreeOrder = Boolean(params.prefer_free_formats);
+    this.sortUser = Array.isArray(params.format_sort) ? params.format_sort.map(String) : [];
+    this.sortExtractor = [...fieldPreference];
+    this.evaluateParams(params, this.sortExtractor);
+    if (params.verbose && ydl.write_debug) {
+      this.printVerboseInfo(ydl.write_debug);
+    }
+  }
+
+  private getFieldSetting(field: string, key: string): unknown {
+    if (!(field in this.settings)) {
+      if (key === "forced" || key === "priority") {
+        return false;
+      }
+      this.ydl.deprecated_feature?.(`Using arbitrary fields (${field}) for format sorting is deprecated and may be removed in a future version`);
+      this.settings[field] = {};
+    }
+    const setting = this.settings[field] ?? {};
+    if (!(key in setting)) {
+      const type = setting.type;
+      if (key === "field") {
+        setting[key] = type === "extractor" ? "preference" : type === "combined" || type === "multiple" ? [field] : field;
+      } else if (key === "convert") {
+        setting[key] = type === "ordered" ? "order" : field ? "float_string" : "ignore";
+      } else {
+        setting[key] = ({ type: "field", visible: true, order: [], not_in_list: [null] } as Record<string, unknown>)[key];
+      }
+    }
+    return setting[key];
+  }
+
+  private resolveFieldValue(field: string, value: unknown, convertNone = false): unknown {
+    let normalized: string | null;
+    if (value === null || value === undefined) {
+      if (!convertNone) {
+        return null;
+      }
+      normalized = null;
+    } else {
+      normalized = String(value).toLowerCase();
+    }
+    const conversion = this.getFieldSetting(field, "convert");
+    if (conversion === "ignore") return null;
+    if (conversion === "string") return normalized;
+    if (conversion === "float_none") return floatOrNone(normalized);
+    if (conversion === "bytes") return parseBytes(normalized);
+    if (conversion === "order") {
+      const freeOrder = this.useFreeOrder ? this.getFieldSetting(field, "order_free") : null;
+      const orderList = toStringArray(freeOrder ?? this.getFieldSetting(field, "order"));
+      const useRegex = Boolean(this.getFieldSetting(field, "regex"));
+      const emptyPos = orderList.includes("") ? orderList.indexOf("") : orderList.length + 1;
+      if (useRegex && normalized !== null) {
+        const matched = orderList.findIndex((regex) => regex ? new RegExp(regex).test(normalized) : false);
+        return matched >= 0 ? orderList.length - matched : orderList.length - emptyPos;
+      }
+      const found = normalized === null ? -1 : orderList.indexOf(normalized);
+      return orderList.length - (found >= 0 ? found : emptyPos);
+    }
+    if (normalized !== null && /^-?\d+(?:\.\d+)?$/.test(normalized)) {
+      return Number(normalized);
+    }
+    if (field) {
+      this.settings[field] ??= {};
+      this.settings[field].convert = "string";
+    }
+    return normalized;
+  }
+
+  private evaluateParams(params: Record<string, unknown>, sortExtractor: readonly string[]): void {
+    const addItem = (fieldRaw: string, reverse: boolean, closest: boolean, limitText: string | null) => {
+      const field = fieldRaw.toLowerCase();
+      if (this.order.includes(field)) return;
+      this.order.push(field);
+      const limit = this.resolveFieldValue(field, limitText);
+      this.settings[field] ??= {};
+      Object.assign(this.settings[field], {
+        reverse,
+        closest: limit === null ? false : closest,
+        limit_text: limitText,
+        limit,
+      });
+    };
+
+    const forcedDefault = FormatSorter.default.filter((field) => Boolean(this.getFieldSetting(parseSortField(field), "forced")));
+    const priorityDefault = params.format_sort_force ? [] : FormatSorter.default.filter((field) => Boolean(this.getFieldSetting(parseSortField(field), "priority")));
+    const sortList = [...forcedDefault, ...priorityDefault, ...this.sortUser, ...sortExtractor, ...FormatSorter.default];
+    for (const item of sortList) {
+      const match = FormatSorter.regex.exec(item);
+      const fieldMatch = match?.groups?.field;
+      if (!match || !fieldMatch) {
+        if (item.trim()) throw new ExtractorError(`Invalid format sort string "${item}" given by extractor`);
+        continue;
+      }
+      let field = fieldMatch.toLowerCase();
+      if (this.getFieldSetting(field, "type") === "alias") {
+        const alias = field;
+        field = String(this.getFieldSetting(field, "field"));
+        if (this.getFieldSetting(alias, "deprecated")) {
+          this.ydl.deprecated_feature?.(`Format sorting alias ${alias} is deprecated and may be removed in a future version. Please use ${field} instead`);
+        }
+      }
+      const groups = match.groups;
+      const reverse = Boolean(groups?.reverse);
+      const closest = groups?.separator === "~";
+      const limitText = groups?.limit ?? null;
+      const hasLimit = limitText !== null;
+      const hasMultipleFields = this.getFieldSetting(field, "type") === "combined";
+      const fields = hasMultipleFields ? toStringArray(this.getFieldSetting(field, "field")) : [field];
+      const limits = hasLimit && hasMultipleFields && !this.getFieldSetting(field, "same_limit")
+        ? limitText.split(":")
+        : hasLimit
+          ? [limitText]
+          : [];
+      for (const [index, fieldItem] of fields.entries()) {
+        addItem(fieldItem, reverse, closest, limits[index] ?? limits[0] ?? null);
+      }
+    }
+  }
+
+  private printVerboseInfo(writeDebug: (message: string) => void): void {
+    if (this.sortUser.length) writeDebug(`Sort order given by user: ${this.sortUser.join(", ")}`);
+    if (this.sortExtractor.length) writeDebug(`Sort order given by extractor: ${this.sortExtractor.join(", ")}`);
+    writeDebug(`Formats sorted by: ${this.order.filter((field) => this.getFieldSetting(field, "visible")).join(", ")}`);
+  }
+
+  private calculateFieldPreferenceFromValue(field: string, type: unknown, rawValue: unknown): unknown[] {
+    let value = rawValue;
+    const reverse = Boolean(this.getFieldSetting(field, "reverse"));
+    const closest = Boolean(this.getFieldSetting(field, "closest"));
+    const limit = this.getFieldSetting(field, "limit");
+    if (type === "extractor") {
+      const maximum = this.getFieldSetting(field, "max");
+      if (value === null || value === undefined || (typeof maximum === "number" && Number(value) >= maximum)) value = -1;
+    } else if (type === "boolean") {
+      const inList = this.getFieldSetting(field, "in_list");
+      const notInList = this.getFieldSetting(field, "not_in_list");
+      const inAllowed = !Array.isArray(inList) || inList.includes(value);
+      const notDisallowed = !Array.isArray(notInList) || !notInList.includes(value);
+      value = inAllowed && notDisallowed ? 0 : -1;
+    } else if (type === "ordered") {
+      value = this.resolveFieldValue(field, value, true);
+    }
+    const valueNumber = floatOrNone(value, 1, this.getFieldSetting(field, "default") as number | null);
+    const isNumber = this.getFieldSetting(field, "convert") !== "string" && valueNumber !== null;
+    if (isNumber) value = valueNumber;
+    if (value === null || value === undefined) return [-10, 0];
+    if (!isNumber) return [1, value, 0];
+    const numericValue = Number(value);
+    const numericLimit = typeof limit === "number" ? limit : null;
+    if (closest && numericLimit !== null) return [0, -Math.abs(numericValue - numericLimit), reverse ? numericValue - numericLimit : numericLimit - numericValue];
+    if (!reverse && (numericLimit === null || numericValue <= numericLimit)) return [0, numericValue, 0];
+    if (numericLimit === null || (reverse && numericValue === numericLimit) || numericValue > numericLimit) return [0, -numericValue, 0];
+    return [-1, numericValue, 0];
+  }
+
+  private calculateFieldPreference(format: Record<string, unknown>, field: string): unknown[] {
+    let type = this.getFieldSetting(field, "type");
+    const getValue = (valueField: string) => format[String(this.getFieldSetting(valueField, "field"))];
+    let value: unknown;
+    if (type === "multiple") {
+      type = "field";
+      const fields = toStringArray(this.getFieldSetting(field, "field"));
+      const values = fields.map((item) => getValue(item));
+      const func = this.getFieldSetting(field, "function");
+      value = typeof func === "function" ? (func as (items: unknown[]) => unknown)(values) : values.find(Boolean);
+    } else {
+      value = getValue(field);
+    }
+    return this.calculateFieldPreferenceFromValue(field, type, value);
+  }
+
+  static fillSortingFields(format: Record<string, unknown>): void {
+    if (!format.protocol) format.protocol = determineProtocol(format);
+    if (!format.ext && typeof format.url === "string") format.ext = determineExt(format.url).toLowerCase();
+    if (format.vcodec === "none") {
+      format.audio_ext = format.acodec !== "none" ? format.ext : "none";
+      format.video_ext = "none";
+    } else {
+      format.video_ext = format.ext;
+      format.audio_ext = "none";
+    }
+    if (format.preference === null || format.preference === undefined) {
+      if (format.ext === "flv" && /[hx]265|he?vc?/.test(String(format.vcodec ?? ""))) format.preference = -100;
+    }
+    if (format.vcodec === "none") format.vbr = 0;
+    if (format.acodec === "none") format.abr = 0;
+    if (!format.vbr && format.vcodec !== "none") format.vbr = tryCall(() => Number(format.tbr) - Number(format.abr));
+    if (!format.abr && format.acodec !== "none") format.abr = tryCall(() => Number(format.tbr) - Number(format.vbr));
+    if (!format.tbr) format.tbr = tryCall(() => Number(format.vbr) + Number(format.abr));
+  }
 
   calculate_preference(format: Record<string, unknown>): unknown[] {
-    return this.fieldPreference.map((field) => format[String(field)]);
+    FormatSorter.fillSortingFields(format);
+    return this.order.map((field) => this.calculateFieldPreference(format, field));
   }
+}
+
+function parseSortField(field: string): string {
+  return field.split(/[~:]/, 1)[0] ?? field;
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : value === null || value === undefined ? [] : [String(value)];
+}
+
+function makeFormatSortSettings(): Record<string, Record<string, unknown>> {
+  return {
+    vcodec: { type: "ordered", regex: true, order: ["av0?1", String.raw`vp0?9\.0?2`, "vp0?9", "[hx]265|he?vc?", "[hx]264|avc", "vp0?8", "mp4v|h263", "theora", "", null, "none"] },
+    acodec: { type: "ordered", regex: true, order: ["[af]lac", "wav|aiff", "opus", "vorbis|ogg", "aac", "mp?4a?", "mp3", "ac-?4", "e-?a?c-?3", "ac-?3", "dts", "", null, "none"] },
+    hdr: { type: "ordered", regex: true, field: "dynamic_range", order: ["dv", "(hdr)?12", String.raw`(hdr)?10\+`, "(hdr)?10", "hlg", "", "sdr", null] },
+    proto: { type: "ordered", regex: true, field: "protocol", order: ["(ht|f)tps", "(ht|f)tp$", "m3u8.*", ".*dash", "websocket_frag", "rtmpe?", "", "mms|rtsp", "ws|websocket", "f4"] },
+    vext: { type: "ordered", field: "video_ext", order: ["mp4", "mov", "webm", "flv", "", "none"], order_free: ["webm", "mp4", "mov", "flv", "", "none"] },
+    aext: { type: "ordered", regex: true, field: "audio_ext", order: ["m4a", "aac", "mp3", "ogg", "opus", "web[am]", "", "none"], order_free: ["ogg", "opus", "web[am]", "mp3", "m4a", "aac", "", "none"] },
+    hidden: { visible: false, forced: true, type: "extractor", max: -1000 },
+    aud_or_vid: { visible: false, forced: true, type: "multiple", field: ["vcodec", "acodec"], function: (items: unknown[]) => Number(items.some((item) => item !== "none")) },
+    ie_pref: { priority: true, type: "extractor" },
+    hasvid: { priority: true, field: "vcodec", type: "boolean", not_in_list: ["none"] },
+    hasaud: { field: "acodec", type: "boolean", not_in_list: ["none"] },
+    lang: { convert: "float", field: "language_preference", default: -1 },
+    quality: { convert: "float", default: -1 },
+    filesize: { convert: "bytes" },
+    fs_approx: { convert: "bytes", field: "filesize_approx" },
+    id: { convert: "string", field: "format_id" },
+    height: { convert: "float_none" },
+    width: { convert: "float_none" },
+    fps: { convert: "float_none" },
+    channels: { convert: "float_none", field: "audio_channels" },
+    tbr: { convert: "float_none" },
+    vbr: { convert: "float_none" },
+    abr: { convert: "float_none" },
+    asr: { convert: "float_none" },
+    source: { convert: "float", field: "source_preference", default: -1 },
+    codec: { type: "combined", field: ["vcodec", "acodec"] },
+    br: { type: "multiple", field: ["tbr", "vbr", "abr"], convert: "float_none", function: (items: unknown[]) => items.find((item) => item) ?? null },
+    size: { type: "multiple", field: ["filesize", "fs_approx"], convert: "bytes", function: (items: unknown[]) => items.find((item) => item) ?? null },
+    ext: { type: "combined", field: ["vext", "aext"] },
+    res: {
+      type: "multiple",
+      field: ["height", "width"],
+      function: (items: unknown[]) => {
+        const values = items.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
+        return values.length ? Math.min(...values) : 0;
+      },
+    },
+    format_id: { type: "alias", field: "id" },
+    preference: { type: "alias", field: "ie_pref" },
+    language_preference: { type: "alias", field: "lang" },
+    source_preference: { type: "alias", field: "source" },
+    protocol: { type: "alias", field: "proto" },
+    filesize_approx: { type: "alias", field: "fs_approx" },
+    audio_channels: { type: "alias", field: "channels" },
+    dimension: { type: "alias", field: "res", deprecated: true },
+    resolution: { type: "alias", field: "res", deprecated: true },
+    extension: { type: "alias", field: "ext", deprecated: true },
+    bitrate: { type: "alias", field: "br", deprecated: true },
+    total_bitrate: { type: "alias", field: "tbr", deprecated: true },
+    video_bitrate: { type: "alias", field: "vbr", deprecated: true },
+    audio_bitrate: { type: "alias", field: "abr", deprecated: true },
+    framerate: { type: "alias", field: "fps", deprecated: true },
+    filesize_estimate: { type: "alias", field: "size", deprecated: true },
+    samplerate: { type: "alias", field: "asr", deprecated: true },
+    video_ext: { type: "alias", field: "vext", deprecated: true },
+    audio_ext: { type: "alias", field: "aext", deprecated: true },
+    video_codec: { type: "alias", field: "vcodec", deprecated: true },
+    audio_codec: { type: "alias", field: "acodec", deprecated: true },
+    video: { type: "alias", field: "hasvid", deprecated: true },
+    has_video: { type: "alias", field: "hasvid", deprecated: true },
+    audio: { type: "alias", field: "hasaud", deprecated: true },
+    has_audio: { type: "alias", field: "hasaud", deprecated: true },
+    extractor: { type: "alias", field: "ie_pref", deprecated: true },
+    extractor_preference: { type: "alias", field: "ie_pref", deprecated: true },
+  };
 }
 
 function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
@@ -3637,30 +5251,41 @@ function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
   return result;
 }
 
-function matchOneFilter(filter: string, data: Record<string, unknown>): boolean {
+function matchOneFilter(
+  filter: string,
+  data: Record<string, unknown>,
+  incomplete: boolean | Iterable<string> = false,
+): boolean {
+  const isIncomplete = makeIncompletePredicate(incomplete);
   const unary = /^!(?<key>[A-Za-z0-9_]+)$/.exec(filter);
   if (unary?.groups?.key) {
     const value = data[unary.groups.key];
+    if ((value === null || value === undefined) && isIncomplete(unary.groups.key)) {
+      return true;
+    }
     return value === false || value === null || value === undefined;
   }
   if (/^[A-Za-z0-9_]+$/.test(filter)) {
     const value = data[filter];
+    if ((value === null || value === undefined) && isIncomplete(filter)) {
+      return true;
+    }
     return value !== false && value !== null && value !== undefined;
   }
   const match = /^(?<key>[A-Za-z0-9_]+)\s*(?<op>>=\??|<=\??|>\??|<\??|!\^=|!\*=|!=|!\$=|\^=|\*=|\$=|~=|=)\s*(?<value>.*)$/.exec(filter);
   if (!match?.groups?.key || !match.groups.op) {
-    return false;
+    throw new Error(`Invalid filter part ${JSON.stringify(filter)}`);
   }
   const current = data[match.groups.key];
   const optional = match.groups.op.includes("?");
-  if ((current === null || current === undefined) && optional) {
+  if ((current === null || current === undefined) && (optional || isIncomplete(match.groups.key))) {
     return true;
   }
   if (current === null || current === undefined) {
     return false;
   }
   const op = match.groups.op.replace("?", "");
-  const expectedRaw = removeQuotes((match.groups.value ?? "").trim()) ?? "";
+  const expectedRaw = unquoteFilterValue((match.groups.value ?? "").trim());
   if ([">", ">=", "<", "<="].includes(op)) {
     const left = Number(current);
     const right = parseNumericFilterValue(expectedRaw);
@@ -3669,6 +5294,13 @@ function matchOneFilter(filter: string, data: Record<string, unknown>): boolean 
     if (op === ">=") return left >= right;
     if (op === "<") return left < right;
     return left <= right;
+  }
+  if (
+    typeof current === "number" &&
+    Number.isFinite(current) &&
+    ["^=", "!^=", "*=", "!*=", "$=", "!$=", "~="].includes(op)
+  ) {
+    throw new Error(`Operator ${op.replace("!", "")} only supports string values!`);
   }
   const currentText = String(current);
   if (op === "=") return currentText === expectedRaw;
@@ -3687,45 +5319,237 @@ function matchOneFilter(filter: string, data: Record<string, unknown>): boolean 
   return false;
 }
 
+export function _match_one(
+  filterPart: string,
+  data: Record<string, unknown>,
+  incomplete: boolean | Iterable<string> = false,
+): boolean {
+  return matchOneFilter(filterPart, data, incomplete);
+}
+
 function parseNumericFilterValue(value: string): number | null {
   return parseCount(value) ?? parseDuration(value) ?? parseFilesize(value) ?? floatOrNone(value);
 }
 
+function splitFilterParts(filter: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | null = null;
+  let escaped = false;
+  for (const char of filter) {
+    if (escaped) {
+      current += `\\${char}`;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      }
+      current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "&") {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (escaped) {
+    current += "\\";
+  }
+  parts.push(current);
+  return parts;
+}
+
+function makeIncompletePredicate(incomplete: boolean | Iterable<string>): (key: string) => boolean {
+  if (typeof incomplete === "boolean") {
+    return () => incomplete;
+  }
+  const keys = new Set(incomplete);
+  return (key) => keys.has(key);
+}
+
+function unquoteFilterValue(value: string): string {
+  if (value.length < 2) {
+    return value;
+  }
+  const quote = value[0];
+  return (quote === '"' || quote === "'") && value.at(-1) === quote
+    ? value.slice(1, -1).replaceAll(`\\${quote}`, quote)
+    : value;
+}
+
 function shlexSplit(input: string): string[] {
-  const matches = input.match(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|[^\s#]+/g) ?? [];
-  return matches.map((item) => removeQuotes(item) ?? item);
+  const tokens: string[] = [];
+  let token = "";
+  let quote: string | null = null;
+  let escaped = false;
+  let tokenStarted = false;
+  const pushToken = () => {
+    if (tokenStarted) {
+      tokens.push(token);
+      token = "";
+      tokenStarted = false;
+    }
+  };
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index] ?? "";
+    if (escaped) {
+      token += char;
+      tokenStarted = true;
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      } else {
+        token += char;
+      }
+      tokenStarted = true;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      tokenStarted = true;
+    } else if (char === "'" || char === '"') {
+      quote = char;
+      tokenStarted = true;
+    } else if (char === "#") {
+      while (index < input.length && input[index] !== "\n") {
+        index += 1;
+      }
+      pushToken();
+    } else if (/\s/.test(char)) {
+      pushToken();
+    } else {
+      token += char;
+      tokenStarted = true;
+    }
+  }
+  if (escaped) token += "\\";
+  pushToken();
+  return tokens;
 }
 
 export function findXpathAttr(node: XmlElement, xpath: string, key: string, value: string | null = null): XmlElement | null {
-  const tag = xpath.split("/").pop()?.replace(/^\.?\/?/, "") ?? xpath;
-  const candidates = node.children.filter((child) => child.tag === tag || xpath === `.//${child.tag}`);
+  const candidates = findXmlPathAll(node, xpath);
   return candidates.find((child) => key in child.attrib && (value === null || child.attrib[key] === value)) ?? null;
 }
 
 export const find_xpath_attr = findXpathAttr;
 
 export function xpathAttr(node: XmlElement, xpath: string | readonly string[], key: string, name?: string | null, options: { fatal?: boolean; defaultValue?: string | null } = {}): string | null {
-  const element = xpathElement(node, xpath, name ?? key, { fatal: options.fatal });
-  const value = element?.attrib[key];
-  if (value !== undefined) return value;
+  const paths = typeof xpath === "string" ? [xpath] : xpath;
+  for (const path of paths) {
+    const element = findXpathAttr(node, path, key);
+    const value = element?.attrib[key];
+    if (value !== undefined) return value;
+  }
   if ("defaultValue" in options) return options.defaultValue ?? null;
-  if (options.fatal) throw new ExtractorError(`Could not find XML attribute ${name ?? key}`);
+  if (options.fatal) throw new ExtractorError(`Could not find XML attribute ${name ?? `${paths[0]}[@${key}]`}`);
   return null;
 }
 
 export const xpath_attr = xpathAttr;
 
-export class HTMLBreakOnClosingTagParser { feed(_html: string): void {} }
+export class HTMLBreakOnClosingTagParser {
+  static readonly HTMLBreakOnClosingTagException = class HTMLBreakOnClosingTagException extends Error {};
+
+  readonly tagstack: string[] = [];
+
+  feed(html: string): void {
+    const tagPattern = /<(?<closing>\/)?(?<tag>[\w:.-]+)\b[^>]*(?<selfClosing>\/)?>/g;
+    for (const match of html.matchAll(tagPattern)) {
+      const tag = match.groups?.tag?.toLowerCase();
+      if (!tag) {
+        continue;
+      }
+      if (match.groups?.closing) {
+        this.handleEndTag(tag);
+      } else if (!match.groups?.selfClosing) {
+        this.handleStartTag(tag);
+      }
+    }
+  }
+
+  close(): void {}
+
+  private handleStartTag(tag: string): void {
+    this.tagstack.push(tag);
+  }
+
+  private handleEndTag(tag: string): void {
+    if (!this.tagstack.length) {
+      throw new Error("no tags in the stack");
+    }
+    let matched = false;
+    while (this.tagstack.length) {
+      const innerTag = this.tagstack.pop();
+      if (innerTag === tag) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      throw new Error(`matching opening tag for closing ${tag} tag not found`);
+    }
+    if (!this.tagstack.length) {
+      throw new HTMLBreakOnClosingTagParser.HTMLBreakOnClosingTagException();
+    }
+  }
+}
 
 export class HTMLAttributeParser {
   attrs: Record<string, string | null> = {};
   feed(html: string): void { this.attrs = extractAttributes(html); }
 }
 
-export class HTMLListAttrsParser extends HTMLAttributeParser {}
+export class HTMLListAttrsParser {
+  readonly items: Array<Record<string, string | null>> = [];
+  private level = 0;
 
-export function parseList(webpage: string): string[] {
-  return [...webpage.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((match) => cleanHtml(match[1] ?? "") ?? "");
+  feed(html: string): void {
+    const tagPattern = /<(?<closing>\/)?(?<tag>[\w:.-]+)\b(?<attrs>[^>]*?)(?<selfClosing>\/)?>/g;
+    for (const match of html.matchAll(tagPattern)) {
+      const tag = match.groups?.tag?.toLowerCase();
+      if (!tag) {
+        continue;
+      }
+      if (match.groups?.closing) {
+        this.level = Math.max(0, this.level - 1);
+        continue;
+      }
+      if (tag === "li" && this.level === 0) {
+        this.items.push(extractAttributes(match[0]));
+      }
+      if (!match.groups?.selfClosing) {
+        this.level += 1;
+      }
+    }
+  }
+
+  close(): void {}
+}
+
+export function parseList(webpage: string): Array<Record<string, string | null>> {
+  const parser = new HTMLListAttrsParser();
+  parser.feed(webpage);
+  parser.close();
+  return parser.items;
 }
 
 export const parse_list = parseList;
@@ -3764,30 +5588,115 @@ export class Popen {
   }
 }
 
-export function extractTimezone(dateStr: string, defaultValue: number | null = null): [number | null, string] {
-  const match = /(?<tz>Z|(?<sign>[+-])(?<hours>\d{2}):?(?<minutes>\d{2}))$/.exec(dateStr);
-  if (!match?.groups?.tz) return [defaultValue, dateStr];
-  if (match.groups.tz === "Z") return [0, dateStr.slice(0, -1)];
-  const sign = match.groups.sign === "-" ? -1 : 1;
-  return [sign * (Number(match.groups.hours) * 3600 + Number(match.groups.minutes) * 60), dateStr.slice(0, -match.groups.tz.length)];
+export function extractTimezone(dateStr: string, defaultValue: number | null = 0): [number | null, string] {
+  const numeric = /^.{8,}?(?<tz>Z|(?<sign>[+-])(?<hours>\d{2}):?(?<minutes>\d{2}))$/.exec(dateStr);
+  if (numeric?.groups?.tz) {
+    const tz = numeric.groups.tz;
+    if (tz === "Z") {
+      return [0, dateStr.slice(0, -1)];
+    }
+    const sign = numeric.groups.sign === "-" ? -1 : 1;
+    return [
+      sign * (Number(numeric.groups.hours) * 3600 + Number(numeric.groups.minutes) * 60),
+      dateStr.slice(0, -tz.length).trimEnd(),
+    ];
+  }
+  const named = /\d{1,2}:\d{1,2}(?:\.\d+)?(?<tz>\s*[A-Z]+)$/.exec(dateStr);
+  const namedTimezone = named?.groups?.tz;
+  const timezone = TIMEZONE_NAMES[namedTimezone?.trim() ?? ""];
+  if (timezone !== undefined && namedTimezone) {
+    return [timezone * 3600, dateStr.slice(0, -namedTimezone.length)];
+  }
+  return [defaultValue, dateStr];
 }
 
 export const extract_timezone = extractTimezone;
 
 export function dateFormats(dayFirst = true): string[] {
-  const base = ["%Y%m%d", "%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S"];
-  return dayFirst ? [...base, "%d/%m/%Y", "%d-%m-%Y"] : [...base, "%m/%d/%Y", "%m-%d-%Y"];
+  return [...(dayFirst ? DATE_FORMATS_DAY_FIRST : DATE_FORMATS_MONTH_FIRST)];
 }
 
 export const date_formats = dateFormats;
 
 export class LockingUnsupportedError extends Error { override name = "LockingUnsupportedError"; }
 
+class BlockingIOError extends Error { override name = "BlockingIOError"; }
+
+type LockedFileState = { readers: number; writer: boolean };
+
+const LOCKED_FILE_STATES = new Map<string, LockedFileState>();
+
 export class locked_file {
-  constructor(readonly filename: string, readonly mode = "r") {}
-  async read(): Promise<string> { return await Bun.file(this.filename).text(); }
-  async write(data: string | Uint8Array): Promise<void> { await Bun.write(this.filename, data); }
-  close(): void {}
+  private readonly lockKey: string;
+  private readonly writable: boolean;
+  private closed = false;
+
+  constructor(readonly filename: string, readonly mode = "r", readonly block = true, readonly encoding: BufferEncoding | null = "utf8") {
+    if (!new Set(["r", "rb", "a", "ab", "w", "wb"]).has(mode)) {
+      throw new NotImplementedError(mode);
+    }
+    this.lockKey = resolve(filename);
+    this.writable = /[wa]/.test(mode);
+    const state = LOCKED_FILE_STATES.get(this.lockKey) ?? { readers: 0, writer: false };
+    if (this.writable && (state.writer || state.readers > 0)) {
+      if (!block) {
+        throw new BlockingIOError("File is already locked");
+      }
+      throw new LockingUnsupportedError("Blocking file locks are not implemented in the Bun utility layer");
+    }
+    if (this.writable) {
+      state.writer = true;
+    } else {
+      state.readers += 1;
+    }
+    LOCKED_FILE_STATES.set(this.lockKey, state);
+    if (mode.startsWith("w")) {
+      writeFileSync(filename, "");
+    } else if (mode.startsWith("a") && !existsSync(filename)) {
+      writeFileSync(filename, "");
+    }
+  }
+
+  read(): string | Uint8Array {
+    if (!this.mode.includes("r")) {
+      throw new Error("File is not open for reading");
+    }
+    return this.mode.includes("b") ? readFileSync(this.filename) : readFileSync(this.filename, { encoding: this.encoding ?? "utf8" });
+  }
+
+  write(data: string | Uint8Array): void {
+    if (!this.writable) {
+      throw new Error("File is not open for writing");
+    }
+    if (this.mode.startsWith("a")) {
+      appendFileSync(this.filename, data);
+    } else {
+      appendFileSync(this.filename, data);
+    }
+  }
+
+  close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    const state = LOCKED_FILE_STATES.get(this.lockKey);
+    if (!state) {
+      return;
+    }
+    if (this.writable) {
+      state.writer = false;
+    } else {
+      state.readers = Math.max(0, state.readers - 1);
+    }
+    if (!state.writer && state.readers === 0) {
+      LOCKED_FILE_STATES.delete(this.lockKey);
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.close();
+  }
 }
 
 export function setproctitle(_title: string): void {}
@@ -3825,11 +5734,54 @@ export class ISO3166Utils {
 }
 
 export class GeoUtils {
-  static randomIPv4(block: string): string {
-    const parts = block.split(/[./]/).map(Number).filter(Number.isFinite);
-    while (parts.length < 4) parts.push(Math.floor(Math.random() * 256));
-    return parts.slice(0, 4).join(".");
+  private static readonly countryIpMap: Record<string, string> = {
+    DE: "53.0.0.0/8",
+    FR: "90.0.0.0/9",
+    GB: "25.0.0.0/8",
+    JP: "133.0.0.0/8",
+    US: "6.0.0.0/8",
+  };
+
+  static randomIPv4(codeOrBlock: string): string | null {
+    const block = codeOrBlock.length === 2 ? GeoUtils.countryIpMap[codeOrBlock.toUpperCase()] : codeOrBlock;
+    if (!block) {
+      return null;
+    }
+    const match = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/.exec(block);
+    if (!match) {
+      return null;
+    }
+    const address = match[1] ?? "";
+    const prefixLength = Number(match[2]);
+    if (prefixLength < 0 || prefixLength > 32) {
+      return null;
+    }
+    const minAddress = ipv4ToInt(address);
+    if (minAddress === null) {
+      return null;
+    }
+    const hostMask = prefixLength === 32 ? 0 : 2 ** (32 - prefixLength) - 1;
+    const maxAddress = minAddress | hostMask;
+    const randomAddress = minAddress + Math.floor(Math.random() * (maxAddress - minAddress + 1));
+    return intToIpv4(randomAddress >>> 0);
   }
+}
+
+function ipv4ToInt(address: string): number | null {
+  const parts = address.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return null;
+  }
+  return (((parts[0] ?? 0) << 24) | ((parts[1] ?? 0) << 16) | ((parts[2] ?? 0) << 8) | (parts[3] ?? 0)) >>> 0;
+}
+
+function intToIpv4(address: number): string {
+  return [
+    (address >>> 24) & 0xff,
+    (address >>> 16) & 0xff,
+    (address >>> 8) & 0xff,
+    address & 0xff,
+  ].join(".");
 }
 
 export class ISO639Utils {
@@ -4035,5 +5987,64 @@ export class ISO639Utils {
       }
     }
     return undefined;
+  }
+}
+
+export class _YDLLogger {
+  constructor(
+    private readonly ydl: {
+      write_debug?: (message: string) => void;
+      to_screen?: (message: string) => void;
+      report_warning?: (message: string, once?: boolean) => void;
+      report_error?: (message: string, options?: { is_error?: boolean }) => void;
+      to_stdout?: (message: string) => void;
+      to_stderr?: (message: string) => void;
+    } | null = null,
+  ) {}
+
+  debug(message: string): void {
+    this.ydl?.write_debug?.(message);
+  }
+
+  info(message: string): void {
+    this.ydl?.to_screen?.(message);
+  }
+
+  warning(message: string, options: { once?: boolean } = {}): void {
+    this.ydl?.report_warning?.(message, options.once);
+  }
+
+  error(message: string, options: { is_error?: boolean } = {}): void {
+    this.ydl?.report_error?.(message, { is_error: options.is_error ?? true });
+  }
+
+  stdout(message: string): void {
+    this.ydl?.to_stdout?.(message);
+  }
+
+  stderr(message: string): void {
+    this.ydl?.to_stderr?.(message);
+  }
+}
+
+export class _ProgressState {
+  static readonly HIDDEN = new _ProgressState(0);
+  static readonly INDETERMINATE = new _ProgressState(3);
+  static readonly VISIBLE = new _ProgressState(1);
+  static readonly WARNING = new _ProgressState(4);
+  static readonly ERROR = new _ProgressState(2);
+
+  private constructor(readonly value: number) {}
+
+  static from_dict(state: Record<string, unknown>): _ProgressState {
+    if (state.status === "finished") return _ProgressState.INDETERMINATE;
+    if (state.status === "error") return _ProgressState.ERROR;
+    return state._percent === null || state._percent === undefined
+      ? _ProgressState.INDETERMINATE
+      : _ProgressState.VISIBLE;
+  }
+
+  get_ansi_escape(percent: number | null = null): string {
+    return `\x1B]9;4;${this.value};${Math.trunc(percent ?? 0)}\x07`;
   }
 }

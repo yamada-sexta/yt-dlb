@@ -918,6 +918,7 @@ export function parseSafariCookies(
 
 export class LenientSimpleCookie {
   readonly cookies = new Map<string, string>();
+  readonly morsels = new Map<string, CookieMorsel>();
 
   constructor(data?: string) {
     if (data) {
@@ -926,26 +927,168 @@ export class LenientSimpleCookie {
   }
 
   load(data: string): void {
-    for (const part of data.split(";")) {
-      const trimmed = part.trim();
-      if (!trimmed.includes("=")) {
+    let morsel: CookieMorsel | null = null;
+    for (const match of data.matchAll(COOKIE_PATTERN)) {
+      if (match.groups?.bad) {
+        morsel = null;
         continue;
       }
-      const [rawKey, ...rawValue] = trimmed.split("=");
-      if (!rawKey || hasCookieControlChar(rawKey)) {
+
+      const rawKey = match.groups?.key;
+      const rawValue = match.groups?.val;
+      if (!rawKey || !LEGAL_COOKIE_KEY_RE.test(rawKey)) {
+        morsel = null;
         continue;
       }
-      const value = rawValue.join("=");
-      if (hasCookieControlChar(value)) {
-        continue;
+
+      let key = rawKey;
+      let isAttribute = false;
+      if (key.startsWith("$")) {
+        key = key.slice(1);
+        isAttribute = true;
       }
-      this.cookies.set(rawKey, stripCookieQuotes(value));
+
+      const lowerKey = key.toLocaleLowerCase();
+      if (COOKIE_RESERVED_ATTRS.has(lowerKey)) {
+        if (!morsel) {
+          continue;
+        }
+        let attrValue: string | true;
+        if (rawValue === undefined) {
+          if (!COOKIE_FLAG_ATTRS.has(lowerKey)) {
+            morsel = null;
+            continue;
+          }
+          attrValue = true;
+        } else {
+          attrValue = decodeCookieValue(rawValue);
+          if (hasCookieControlChar(attrValue)) {
+            this.cookies.delete(morsel.key);
+            this.morsels.delete(morsel.key);
+            morsel = null;
+            continue;
+          }
+        }
+        morsel.setAttribute(lowerKey, attrValue);
+      } else if (isAttribute) {
+        morsel = null;
+      } else if (rawValue !== undefined) {
+        const realValue = decodeCookieValue(rawValue);
+        if (hasCookieControlChar(realValue)) {
+          morsel = null;
+          continue;
+        }
+        morsel = this.morsels.get(key) ?? new CookieMorsel();
+        morsel.set(key, realValue, rawValue);
+        this.morsels.set(key, morsel);
+        this.cookies.set(key, realValue);
+      } else {
+        morsel = null;
+      }
     }
   }
 
   get(key: string): string | undefined {
     return this.cookies.get(key);
   }
+
+  getMorsel(key: string): CookieMorsel | undefined {
+    return this.morsels.get(key);
+  }
+
+  keys(): IterableIterator<string> {
+    return this.morsels.keys();
+  }
+
+  values(): IterableIterator<CookieMorsel> {
+    return this.morsels.values();
+  }
+}
+
+export const COOKIE_MORSEL_ATTRIBUTE_KEYS = [
+  "expires",
+  "path",
+  "comment",
+  "domain",
+  "max-age",
+  "secure",
+  "httponly",
+  "version",
+  "samesite",
+] as const;
+
+export class CookieMorsel implements Iterable<string> {
+  key = "";
+  value = "";
+  codedValue = "";
+  readonly attributes: Record<string, string | true | ""> = Object.fromEntries(
+    COOKIE_MORSEL_ATTRIBUTE_KEYS.map((key) => [key, ""]),
+  ) as Record<string, string | true | "">;
+
+  [Symbol.iterator](): Iterator<string> {
+    return COOKIE_MORSEL_ATTRIBUTE_KEYS[Symbol.iterator]();
+  }
+
+  set(key: string, value: string, codedValue = value): void {
+    if (!LEGAL_COOKIE_KEY_RE.test(key)) {
+      throw new Error(`Illegal key ${key}`);
+    }
+    this.key = key;
+    this.value = value;
+    this.codedValue = codedValue;
+  }
+
+  setAttribute(key: string, value: string | true): void {
+    const lowerKey = key.toLocaleLowerCase();
+    if (!COOKIE_RESERVED_ATTRS.has(lowerKey)) {
+      throw new Error(`Invalid cookie attribute ${key}`);
+    }
+    this.attributes[lowerKey] = value;
+  }
+
+  update(values: Record<string, string | true>): void {
+    for (const [key, value] of Object.entries(values)) {
+      this.setAttribute(key, value);
+    }
+  }
+
+  getAttribute(key: string): string | true | "" {
+    return this.attributes[key.toLocaleLowerCase()] ?? "";
+  }
+
+  entries(): Array<[string, string | true | ""]> {
+    return COOKIE_MORSEL_ATTRIBUTE_KEYS.map((key) => [key, this.attributes[key] ?? ""]);
+  }
+
+  values(): Array<string | true | ""> {
+    return this.entries().map(([, value]) => value);
+  }
+
+  toTraversalRecord(): Record<string, string | true | ""> {
+    return Object.fromEntries([
+      ...this.entries(),
+      ["key", this.key],
+      ["value", this.value],
+    ]);
+  }
+}
+
+const COOKIE_RESERVED_ATTRS: Set<string> = new Set(COOKIE_MORSEL_ATTRIBUTE_KEYS);
+const COOKIE_FLAG_ATTRS: Set<string> = new Set(["secure", "httponly"]);
+const LEGAL_COOKIE_KEY_RE = /^[A-Za-z0-9_!#$%&'*+\-.:^`|~]+$/;
+const COOKIE_PATTERN =
+  /[ ]*(?<key>[^ =;]+)(?:[ ]*=[ ]*(?:(?<val>"(?:[^\\"]|\\.)*"|[A-Za-z]{3}, [A-Za-z0-9 -]{9,11} [0-9:]{8} GMT|[A-Za-z0-9_!#$%&'*+\-.:^`|~(),/<=>?@[\]{}]*)|(?<bad>(?:\\;|[^;])*?)))?[ ]*(?:[ ]+|;|$)/g;
+
+function decodeCookieValue(value: string): string {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\([0-3][0-7]{2}|.)/g, (_match, escaped: string) => {
+      if (/^[0-3][0-7]{2}$/.test(escaped)) {
+        return String.fromCharCode(Number.parseInt(escaped, 8));
+      }
+      return escaped;
+    });
+  }
+  return value;
 }
 
 function hasCookieControlChar(value: string): boolean {
@@ -1673,12 +1816,6 @@ function bufferishToString(value: string | Uint8Array | null): string {
     return "";
   }
   return Buffer.from(value).toString();
-}
-
-function stripCookieQuotes(value: string): string {
-  return value.startsWith('"') && value.endsWith('"')
-    ? value.slice(1, -1).replaceAll(/\\"/g, '"')
-    : value;
 }
 
 export const _LinuxKeyring = LinuxKeyring;
