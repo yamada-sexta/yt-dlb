@@ -336,46 +336,157 @@ export function cleanHtml(html: string | null | undefined): string | null {
   if (html === null || html === undefined) {
     return null;
   }
-  return unescapeHTML(html
-    .replaceAll(/\s+/g, " ")
-    .replaceAll(/\s?<\s?br\s?\/?\s?>\s?/gi, "\n")
-    .replaceAll(/<\s?\/\s?p\s?>\s?<\s?p[^>]*>/gi, "\n")
-    .replaceAll(/<.*?>/g, ""))?.trim() ?? null;
+  let text = "";
+  new HTMLRewriter()
+    .on("br", { element: () => { text += "\n"; } })
+    .on("p", {
+      element(element) {
+        element.onEndTag(() => {
+          text += "\n";
+        });
+      },
+    })
+    .onDocument({
+      text(chunk) {
+        text += chunk.text;
+      },
+    })
+    .transform(html);
+  return unescapeHTML(normalizeHtmlText(text))?.trim() ?? null;
 }
 
 export const clean_html = cleanHtml;
 
 export function getElementById(id: string, html: string): string | null {
-  const escaped = RegExp.escape(id);
-  const match = new RegExp(`<(?<tag>[\\w:-]+)[^>]+id=["']${escaped}["'][^>]*>(?<body>[\\s\\S]*?)<\\/\\k<tag>>`, "i").exec(html);
-  return match?.groups?.body ? cleanHtml(match.groups.body) : null;
+  return getElementText(`[id="${cssString(id)}"]`, html);
 }
 
 export const get_element_by_id = getElementById;
 
 export function getElementByClass(className: string, html: string): string | null {
-  for (const match of html.matchAll(/<(?<tag>[\w:-]+)[^>]+class=["'](?<classes>[^"']*)["'][^>]*>(?<body>[\s\S]*?)<\/\k<tag>>/gi)) {
-    if (match.groups?.classes?.split(/\s+/).includes(className)) {
-      return match.groups.body ? cleanHtml(match.groups.body) : null;
-    }
-  }
-  return null;
+  return getElementText(`[class~="${cssString(className)}"]`, html);
 }
 
 export const get_element_by_class = getElementByClass;
 
 export function extractAttributes(htmlElement: string): Record<string, string | null> {
   const attrs: Record<string, string | null> = {};
-  const source = htmlElement.replace(/^<\s*[\w:-]+/, "").replace(/\/?\s*>[\s\S]*$/, "");
-  for (const match of source.matchAll(/(?<name>[\w:-]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?/g)) {
-    const name = match.groups?.name?.toLowerCase();
-    if (!name) {
+  const assignedAttributes = scanAssignedAttributes(htmlElement);
+  let done = false;
+  new HTMLRewriter()
+    .on("*", {
+      element(element) {
+        if (done) {
+          return;
+        }
+        done = true;
+        for (const [rawName, rawValue] of element.attributes) {
+          const name = rawName.toLowerCase();
+          attrs[name] = assignedAttributes.has(name) ? unescapeHTML(rawValue) : null;
+        }
+      },
+    })
+    .transform(htmlElement);
+  return attrs;
+}
+
+function getElementText(selector: string, html: string): string | null {
+  let text = "";
+  let collecting = false;
+  let matched = false;
+  new HTMLRewriter()
+    .on(selector, {
+      element(element) {
+        if (matched) {
+          return;
+        }
+        matched = true;
+        collecting = true;
+        element.onEndTag(() => {
+          collecting = false;
+        });
+      },
+      text(chunk) {
+        if (collecting) {
+          text += chunk.text;
+        }
+      },
+    })
+    .on(`${selector} br`, {
+      element() {
+        if (collecting) {
+          text += "\n";
+        }
+      },
+    })
+    .transform(html);
+  return matched ? unescapeHTML(normalizeHtmlText(text))?.trim() ?? null : null;
+}
+
+function normalizeHtmlText(text: string): string {
+  return text
+    .replaceAll(/[^\S\n]+/g, " ")
+    .replaceAll(/ *\n+ */g, "\n")
+    .replaceAll(/\n{2,}/g, "\n");
+}
+
+function cssString(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+}
+
+function scanAssignedAttributes(htmlElement: string): Set<string> {
+  const assigned = new Set<string>();
+  let index = 0;
+  while (index < htmlElement.length && htmlElement[index] !== "<") {
+    index += 1;
+  }
+  index += 1;
+  while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== ">" && htmlElement[index] !== "/") {
+    index += 1;
+  }
+  while (index < htmlElement.length) {
+    while (index < htmlElement.length && isHtmlSpace(htmlElement[index])) {
+      index += 1;
+    }
+    if (htmlElement[index] === ">" || htmlElement[index] === "/" || index >= htmlElement.length) {
+      break;
+    }
+    const nameStart = index;
+    while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== "=" && htmlElement[index] !== ">" && htmlElement[index] !== "/") {
+      index += 1;
+    }
+    const name = htmlElement.slice(nameStart, index).toLowerCase();
+    while (index < htmlElement.length && isHtmlSpace(htmlElement[index])) {
+      index += 1;
+    }
+    if (htmlElement[index] !== "=") {
       continue;
     }
-    const rawValue = match.groups?.double ?? match.groups?.single ?? match.groups?.bare;
-    attrs[name] = rawValue === undefined ? null : unescapeHTML(rawValue);
+    if (name) {
+      assigned.add(name);
+    }
+    index += 1;
+    while (index < htmlElement.length && isHtmlSpace(htmlElement[index])) {
+      index += 1;
+    }
+    const quote = htmlElement[index];
+    if (quote === "\"" || quote === "'") {
+      index += 1;
+      while (index < htmlElement.length && htmlElement[index] !== quote) {
+        index += 1;
+      }
+      index += 1;
+    } else {
+      while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== ">") {
+        index += 1;
+      }
+    }
   }
-  return attrs;
+  return assigned;
+}
+
+function isHtmlSpace(char: string | undefined): boolean {
+  return char === " " || char === "\n" || char === "\r" || char === "\t" || char === "\f";
 }
 
 export const extract_attributes = extractAttributes;

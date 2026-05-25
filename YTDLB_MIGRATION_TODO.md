@@ -98,7 +98,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 - [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
-- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, minimal JSON-LD parsing, and Next.js data extraction for migrated extractors; full extractor helper surface still pending.
+- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, minimal JSON-LD parsing, and Next.js data/v13 flight extraction for migrated extractors; full extractor helper surface still pending.
 
 ## Complete Runtime Inventory
 
@@ -303,7 +303,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/cnbc.py` -> `yt_dlp/extractor/cnbc.ts`
 - [ ] `yt_dlp/extractor/cnn.py` -> `yt_dlp/extractor/cnn.ts`
 - [ ] `yt_dlp/extractor/comedycentral.py` -> `yt_dlp/extractor/comedycentral.ts`
-- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present)
+- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present; HTMLRewriter-backed metadata/script/title/HTML5 media parsing and Next.js v13 flight extraction added)
 - [x] `yt_dlp/extractor/commonmistakes.py` -> `yt_dlp/extractor/commonmistakes.ts`
 - [x] `yt_dlp/extractor/commonprotocols.py` -> `yt_dlp/extractor/commonprotocols.ts`
 - [ ] `yt_dlp/extractor/condenast.py` -> `yt_dlp/extractor/condenast.ts`

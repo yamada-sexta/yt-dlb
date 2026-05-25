@@ -6,13 +6,22 @@ import type { DownloaderHost } from "../downloader/common.ts";
 import { NotImplementedError } from "../errors.ts";
 import { Request as YtdlRequest } from "../networking/common.ts";
 import {
+  determineExt,
   ExtractorError,
   GeoRestrictedError,
+  intOrNone,
+  mimetype2ext,
   NO_DEFAULT,
+  parseResolution,
   RegexNotFoundError,
+  stripOrNone,
   UnsupportedError,
   truncateString,
+  urljoin,
 } from "../utils/index.ts";
+import { z } from "zod";
+
+const JsonObjectSchema = z.record(z.string(), z.unknown());
 
 export interface ExtractorInfo {
   id?: string;
@@ -379,33 +388,44 @@ export abstract class InfoExtractor {
 
   protected htmlSearchMeta(name: string | readonly string[], webpage: string, displayName = "metadata", fatal = false): string | null {
     const names = Array.isArray(name) ? name : [name];
-    const escaped = names.map((item) => RegExp.escape(item)).join("|");
-    const result = this.searchRegex(
-      [
-        new RegExp(`<meta[^>]+(?:name|property)=["'](?:${escaped})["'][^>]+content=["']([^"']+)["']`, "i"),
-        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:name|property)=["'](?:${escaped})["']`, "i"),
-      ],
-      webpage,
-      displayName,
-      { fatal },
-    );
-    return typeof result === "string" ? htmlUnescape(result) : null;
+    let bestIndex = Number.POSITIVE_INFINITY;
+    let result: string | null = null;
+    new HTMLRewriter()
+      .on("meta", {
+        element(element) {
+          const key = element.getAttribute("name") ?? element.getAttribute("property");
+          const index = key === null ? -1 : names.indexOf(key);
+          if (index >= 0 && index < bestIndex) {
+            bestIndex = index;
+            result = normalizeMetaContentAttribute(webpage, element.getAttribute("content"));
+          }
+        },
+      })
+      .transform(webpage);
+    if (result !== null) {
+      return htmlUnescape(result);
+    }
+    if (fatal) {
+      throw new RegexNotFoundError(`Unable to extract ${displayName}`);
+    }
+    this.reportWarning(`unable to extract ${displayName}`);
+    return null;
   }
 
   protected searchJsonLd(webpage: string | false, videoId: string, options: { defaultValue?: Record<string, unknown> } = {}): Record<string, unknown> {
     if (webpage === false) {
       return options.defaultValue ?? {};
     }
-    for (const match of webpage.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>(?<json>[\s\S]*?)<\/script>/gi)) {
-      const json = match.groups?.json?.trim();
+    for (const json of collectScriptText(webpage, 'script[type="application/ld+json" i]')) {
       if (!json) {
         continue;
       }
       const parsed = this.parseJson<unknown>(json, videoId, { fatal: false });
       const candidates = Array.isArray(parsed) ? parsed : [parsed];
       for (const candidate of candidates) {
-        if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
-          return candidate as Record<string, unknown>;
+        const checked = JsonObjectSchema.safeParse(candidate);
+        if (checked.success) {
+          return checked.data;
         }
       }
     }
@@ -413,16 +433,73 @@ export abstract class InfoExtractor {
   }
 
   protected searchNextjsData<T = unknown>(webpage: string, videoId: string, options: { defaultValue?: T | null; fatal?: boolean } = {}): T | null {
-    const json = this.searchRegex(
-      /<script[^>]+\bid=["']__NEXT_DATA__["'][^>]*>(?<json>[\s\S]*?)<\/script>/,
-      webpage,
-      "Next.js data",
-      { group: "json", fatal: options.fatal ?? true, defaultValue: options.defaultValue === undefined ? NO_DEFAULT : null },
-    );
-    if (typeof json !== "string") {
+    const json = collectScriptText(webpage, "script#__NEXT_DATA__").at(0);
+    if (json === undefined) {
+      if ("defaultValue" in options) {
+        return options.defaultValue ?? null;
+      }
+      if (options.fatal === false) {
+        return {} as T;
+      }
+      throw new RegexNotFoundError("Unable to extract Next.js data");
+    }
+    if (!json.trim()) {
       return options.defaultValue ?? null;
     }
     return this.parseJson<T>(json, videoId, { fatal: options.fatal ?? true });
+  }
+
+  protected searchNextjsV13Data(webpage: string | null | undefined, videoId: string | null, fatal = true): Record<string, unknown> {
+    const nextjsData: Record<string, unknown> = {};
+    if (!webpage) {
+      if (!fatal) {
+        return nextjsData;
+      }
+      throw new RegexNotFoundError("Unable to extract Next.js v13 data");
+    }
+
+    let flightText = "";
+    for (const scriptText of collectScriptText(webpage, "script")) {
+      const source = scriptText.trim();
+      if (!source.startsWith("self.__next_f.push(") || !source.endsWith(")")) {
+        continue;
+      }
+      const segment = this.parseJson<unknown>(source.slice("self.__next_f.push(".length, -1), videoId ?? "", { fatal });
+      if (!Array.isArray(segment) || segment.length !== 2) {
+        this.writeDebug(`${videoId ?? "unknown"}: Unsupported next.js flight data structure detected`);
+        continue;
+      }
+      const [payloadType, chunk] = segment;
+      if (payloadType === 1 && typeof chunk === "string") {
+        flightText += chunk;
+      }
+    }
+
+    for (const line of flightText.split(/\r?\n/)) {
+      const trimmed = line.trimStart();
+      const separator = trimmed.indexOf(":");
+      if (separator < 0) {
+        continue;
+      }
+      const prefix = trimmed.slice(0, separator);
+      const body = trimmed.slice(separator + 1);
+      if (!/^[0-9a-f]+$/.test(prefix)) {
+        continue;
+      }
+      if (body.startsWith("[") && body.endsWith("]")) {
+        flattenNextjsFlightData(this.parseJson<unknown>(body, videoId ?? "", { fatal: false }), nextjsData);
+      } else if (body.startsWith("{") && body.endsWith("}")) {
+        const data = this.parseJson<unknown>(body, videoId ?? "", { fatal: false });
+        if (data !== null) {
+          nextjsData[prefix] = data;
+        }
+      }
+    }
+    return nextjsData;
+  }
+
+  protected _search_nextjs_v13_data(webpage: string | null | undefined, videoId: string | null, fatal = true): Record<string, unknown> {
+    return this.searchNextjsV13Data(webpage, videoId, fatal);
   }
 
   static urlResult(url: string, ie: string | typeof InfoExtractor | null = null, videoId: string | null = null, videoTitle: string | null = null, options: Record<string, unknown> = {}): ExtractorInfo {
@@ -510,21 +587,21 @@ export abstract class InfoExtractor {
   }
 
   protected ogSearchProperty(property: string, webpage: string, fatal = true): string | null {
-    const escaped = RegExp.escape(property);
-    const result = this.searchRegex(
-      [
-        new RegExp(`<meta[^>]+(?:property|name)=["']og:${escaped}["'][^>]+content=["']([^"']+)["']`, "i"),
-        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:${escaped}["']`, "i"),
-      ],
-      webpage,
-      `OpenGraph ${property}`,
-      { fatal },
-    );
-    return typeof result === "string" ? htmlUnescape(result) : null;
+    const result = this.htmlSearchMeta(`og:${property}`, webpage, `OpenGraph ${property}`, fatal);
+    return typeof result === "string" ? result : null;
   }
 
   protected rtaSearch(html: string): number | null {
-    if (/<meta\s+name=["']rating["']\s+content=["']RTA-5042-1996-1400-1577-RTA["']/i.test(html)) {
+    let hasRtaMeta = false;
+    new HTMLRewriter()
+      .on("meta", {
+        element(element) {
+          hasRtaMeta ||= element.getAttribute("name") === "rating"
+            && element.getAttribute("content") === "RTA-5042-1996-1400-1577-RTA";
+        },
+      })
+      .transform(html);
+    if (hasRtaMeta) {
       return 18;
     }
 
@@ -548,8 +625,180 @@ export abstract class InfoExtractor {
   }
 
   protected htmlExtractTitle(webpage: string): string | null {
-    const title = this.searchRegex(/<title\b[^>]*>([^<]+)<\/title>/i, webpage, "title", { fatal: false });
-    return typeof title === "string" ? htmlUnescape(title.trim()) : null;
+    let title = "";
+    let found = false;
+    new HTMLRewriter()
+      .on("title", {
+        element() {
+          found = true;
+        },
+        text(chunk) {
+          title += chunk.text;
+        },
+      })
+      .transform(webpage);
+    return found ? htmlUnescape(title.trim()) : null;
+  }
+
+  protected parseHtml5MediaEntries(
+    baseUrl: string,
+    webpage: string,
+    videoId: string | null,
+    options: {
+      m3u8Id?: string | null;
+      m3u8EntryProtocol?: string;
+      mpdId?: string | null;
+      preference?: number | null;
+      quality?: number | null;
+      headers?: Record<string, string>;
+    } = {},
+  ): Array<Record<string, unknown>> {
+    const entries: Array<Record<string, unknown>> = [];
+    const mediaStack: Html5MediaInfo[] = [];
+    const mediaSelectors = [
+      "video",
+      "audio",
+      "amp-video",
+      "amp-audio",
+      "dl8-video",
+      "dl8-audio",
+      "dl8-live-video",
+      "dl8-live-audio",
+    ];
+    let rewriter = new HTMLRewriter();
+    for (const selector of mediaSelectors) {
+      rewriter = rewriter.on(selector, {
+        element: (element) => {
+          const mediaType = element.tagName.endsWith("audio") ? "audio" : "video";
+          const attrs = attrsFromElement(element);
+          const media = createHtml5MediaInfo(attrs, baseUrl, mediaType);
+          const src = stripOrNone(dictFirst(attrs, ["src", "data-video-src", "data-src", "data-source"]));
+          if (src) {
+            const [, formats] = this.html5MediaFormats(src, mediaType, baseUrl, videoId, parseHtml5ContentType(attrs.type), options);
+            media.formats.push(...formats);
+          }
+          if (element.selfClosing || !element.canHaveContent) {
+            appendHtml5MediaEntry(entries, media, baseUrl, options.headers);
+            return;
+          }
+          mediaStack.push(media);
+          element.onEndTag(() => {
+            const completed = mediaStack.pop();
+            if (completed) {
+              appendHtml5MediaEntry(entries, completed, baseUrl, options.headers);
+            }
+          });
+        },
+      });
+    }
+    rewriter
+      .on("source", {
+        element: (element) => {
+          const media = mediaStack.at(-1);
+          if (!media) {
+            return;
+          }
+          const attrs = attrsFromElement(element);
+          const src = stripOrNone(dictFirst(attrs, ["src", "data-video-src", "data-src", "data-source"]));
+          if (!src) {
+            return;
+          }
+          const typeInfo = parseHtml5ContentType(attrs.type);
+          const [isPlainUrl, formats] = this.html5MediaFormats(src, media.mediaType, baseUrl, videoId, typeInfo, options);
+          if (!isPlainUrl) {
+            media.formats.push(...formats);
+            return;
+          }
+          const labels = ["label", "title"].map((key) => stripOrNone(attrs[key])).filter((value): value is string => value !== null);
+          let width = intOrNone(attrs.width);
+          let height = intOrNone(attrs.height) ?? intOrNone(attrs.res);
+          if (!width || !height) {
+            for (const label of labels) {
+              const resolution = parseResolution(label);
+              width ||= resolution.width ?? null;
+              height ||= resolution.height ?? null;
+            }
+          }
+          const format = {
+            ...typeInfo,
+            ...formats[0],
+            ...(width ? { width } : {}),
+            ...(height ? { height } : {}),
+            ...(parseBitrate(labels) ? { tbr: parseBitrate(labels) } : {}),
+            ...((attrs.label ?? attrs.title) ? { format_id: attrs.label ?? attrs.title } : {}),
+          };
+          media.formats.push(format);
+        },
+      })
+      .on("track", {
+        element: (element) => {
+          const media = mediaStack.at(-1);
+          if (!media) {
+            return;
+          }
+          const attrs = attrsFromElement(element);
+          const kind = attrs.kind;
+          if (kind && kind !== "subtitles" && kind !== "captions") {
+            return;
+          }
+          const src = stripOrNone(attrs.src);
+          if (!src) {
+            return;
+          }
+          const lang = attrs.srclang ?? attrs.lang ?? attrs.label ?? "und";
+          media.subtitles[lang] ??= [];
+          media.subtitles[lang].push({ url: absoluteHtml5Url(baseUrl, src) });
+        },
+      })
+      .transform(webpage);
+    return entries;
+  }
+
+  protected _parse_html5_media_entries(
+    baseUrl: string,
+    webpage: string,
+    videoId: string | null,
+    m3u8Id: string | null = null,
+    m3u8EntryProtocol = "m3u8_native",
+    mpdId: string | null = null,
+    preference: number | null = null,
+    quality: number | null = null,
+    headers: Record<string, string> | null = null,
+  ): Array<Record<string, unknown>> {
+    return this.parseHtml5MediaEntries(baseUrl, webpage, videoId, {
+      m3u8Id,
+      m3u8EntryProtocol,
+      mpdId,
+      preference,
+      quality,
+      headers: headers ?? undefined,
+    });
+  }
+
+  private html5MediaFormats(
+    src: string,
+    mediaType: string,
+    baseUrl: string,
+    videoId: string | null,
+    typeInfo: Record<string, unknown>,
+    options: { m3u8Id?: string | null; m3u8EntryProtocol?: string; mpdId?: string | null },
+  ): [boolean, Array<Record<string, unknown>>] {
+    const fullUrl = absoluteHtml5Url(baseUrl, src) ?? src;
+    const ext = typeof typeInfo.ext === "string" ? typeInfo.ext : determineExt(fullUrl);
+    if (ext === "m3u8") {
+      return [false, this.extractM3u8Formats(fullUrl, videoId ?? "", "mp4", {
+        entryProtocol: options.m3u8EntryProtocol ?? "m3u8_native",
+        m3u8Id: options.m3u8Id ?? undefined,
+      })];
+    }
+    if (ext === "mpd") {
+      return [false, this.extractMpdFormats(fullUrl, videoId ?? "", { mpdId: options.mpdId ?? undefined, fatal: false })];
+    }
+    return [true, [{
+      url: fullUrl,
+      ...(mediaType === "audio" ? { vcodec: "none" } : {}),
+      ext,
+    }]];
   }
 
   protected extractM3u8Formats(
@@ -703,6 +952,132 @@ function headersRecord(headers: ConstructorParameters<typeof Headers>[0] | undef
   return Object.fromEntries(new Headers(headers));
 }
 
+function collectScriptText(webpage: string, selector: string): string[] {
+  const scripts: string[] = [];
+  let current: string | null = null;
+  new HTMLRewriter()
+    .on(selector, {
+      element(element) {
+        current = "";
+        element.onEndTag(() => {
+          if (current !== null) {
+            scripts.push(current.trim());
+            current = null;
+          }
+        });
+      },
+      text(chunk) {
+        if (current !== null) {
+          current += chunk.text;
+        }
+      },
+    })
+    .transform(webpage);
+  return scripts;
+}
+
+function flattenNextjsFlightData(flightData: unknown, nextjsData: Record<string, unknown>): void {
+  if (!Array.isArray(flightData)) {
+    return;
+  }
+  if (flightData.length === 4 && flightData[0] === "$") {
+    const [, name, , rawData] = flightData;
+    const checked = JsonObjectSchema.safeParse(rawData);
+    if (!checked.success) {
+      return;
+    }
+    const { children, ...data } = checked.data;
+    if (Object.keys(data).length && typeof name === "string" && /^\$L[0-9a-f]+$/.test(name)) {
+      nextjsData[name.slice(2)] = data;
+    }
+    flattenNextjsFlightData(children, nextjsData);
+    return;
+  }
+  for (const item of flightData) {
+    flattenNextjsFlightData(item, nextjsData);
+  }
+}
+
+interface Html5MediaInfo {
+  mediaType: string;
+  formats: Array<Record<string, unknown>>;
+  subtitles: Record<string, Array<Record<string, unknown>>>;
+  thumbnail?: string | null;
+}
+
+function createHtml5MediaInfo(
+  attrs: Record<string, string>,
+  baseUrl: string,
+  mediaType: string,
+): Html5MediaInfo {
+  return {
+    mediaType,
+    formats: [],
+    subtitles: {},
+    thumbnail: absoluteHtml5Url(baseUrl, attrs.poster ?? null),
+  };
+}
+
+function appendHtml5MediaEntry(
+  entries: Array<Record<string, unknown>>,
+  media: Html5MediaInfo,
+  baseUrl: string,
+  headers: Record<string, string> | undefined,
+): void {
+  for (const format of media.formats) {
+    const existingHeaders = format.http_headers && typeof format.http_headers === "object" && !Array.isArray(format.http_headers)
+      ? format.http_headers as Record<string, string>
+      : {};
+    format.http_headers = { ...existingHeaders, Referer: baseUrl, ...(headers ?? {}) };
+  }
+  if (media.formats.length || Object.keys(media.subtitles).length) {
+    entries.push({
+      formats: media.formats,
+      subtitles: media.subtitles,
+      ...(media.thumbnail ? { thumbnail: media.thumbnail } : {}),
+    });
+  }
+}
+
+function attrsFromElement(element: HTMLRewriterTypes.Element): Record<string, string> {
+  return Object.fromEntries([...element.attributes].map(([key, value]) => [key.toLowerCase(), value]));
+}
+
+function absoluteHtml5Url(baseUrl: string, itemUrl: string | null | undefined): string | null {
+  return itemUrl ? urljoin(baseUrl, itemUrl) : null;
+}
+
+function dictFirst(record: Record<string, string>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function parseHtml5ContentType(contentType: string | null | undefined): Record<string, unknown> {
+  if (!contentType) {
+    return {};
+  }
+  const match = /(?<mimetype>[^/]+\/[^;]+)(?:;\s*codecs="?([^"]+))?/i.exec(contentType);
+  if (!match?.groups?.mimetype) {
+    return {};
+  }
+  return { ext: mimetype2ext(match.groups.mimetype) };
+}
+
+function parseBitrate(labels: readonly string[]): number | null {
+  for (const label of labels) {
+    const match = /(?<tbr>\d+(?:\.\d+)?)\s*k(?:bit\/s|bps?)?/i.exec(label);
+    if (match?.groups?.tbr) {
+      return Number.parseFloat(match.groups.tbr);
+    }
+  }
+  return null;
+}
+
 function htmlUnescape(value: string): string {
   return value
     .replaceAll("&quot;", '"')
@@ -711,4 +1086,14 @@ function htmlUnescape(value: string): string {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replaceAll("&amp;", "&");
+}
+
+function normalizeMetaContentAttribute(webpage: string, value: string | null): string | null {
+  if (value === null || !value.endsWith("/")) {
+    return value;
+  }
+  if (webpage.includes(`content="${value}"`) || webpage.includes(`content='${value}'`)) {
+    return value;
+  }
+  return value.slice(0, -1);
 }
