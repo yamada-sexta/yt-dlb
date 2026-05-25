@@ -8,6 +8,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - Use `ytdlb` for the Bun rewrite entrypoint and exported package surface.
 - Add a source header to every TypeScript file that identifies the Python source or explains why the file is new.
 - Prefer Bun/Web APIs and Bun-compatible built-ins over Python dependencies or subprocessing Python.
+- Use Bun's native `HTMLRewriter` for HTML parsing and extraction in newly migrated code; avoid Cheerio, DOMParser polyfills, or regex-based HTML parsing where `HTMLRewriter` can express the extraction. XML-specific helpers may use XML parsers when HTMLRewriter is not a semantic fit.
 - Use JS package replacements where they are a real API match: `brotli` for Brotli decompression and `mediabunny` with `@mediabunny/server` for media metadata reads/writes through server-capable container rewrites.
 - Prefer Bun Shell over `Bun.spawn`/Node subprocess APIs for external tools; keep native HTTP on Bun `fetch`.
 - Keep IO/network paths async; keep pure transforms sync unless the native Bun API is async.

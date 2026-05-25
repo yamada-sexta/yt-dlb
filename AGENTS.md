@@ -12,6 +12,8 @@ Unimplemented migrated features must fail loudly with `NotImplementedError` or a
 
 Every new TS file must start with a short source header naming the Python source, or explaining that the file is new. Prefer Bun-native APIs (`Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, Bun Shell, Bun-compatible crypto) and avoid Python dependencies.
 
+For HTML parsing and extraction, use Bun's native `HTMLRewriter`. Do not introduce Cheerio, DOMParser polyfills, or regex-based HTML parsing for newly migrated code when `HTMLRewriter` can express the extraction. XML helpers may continue to use XML-specific parsers where `HTMLRewriter` is not a semantic fit.
+
 For browser cookies, prefer `@steipete/sweet-cookie` for `--cookies-from-browser`. It requires a target URL, so ytdlb loads browser cookies lazily per request origin in `YoutubeDL.urlopen`; keep file-cookie loading eager and browser-cookie loading URL-scoped.
 
 For YouTube JS challenges, prefer importing the installed `yt-dlp/ejs` package at runtime from Bun. Keep that import behind a typed dynamic boundary so this repo's strict `tsc` does not typecheck EJS internals.
