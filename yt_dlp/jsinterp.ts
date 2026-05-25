@@ -85,15 +85,22 @@ export class LocalNameSpace {
         return;
       }
     }
-    this.#scopes[0][key] = value;
+    const localScope = this.#scopes[0];
+    if (localScope) {
+      localScope[key] = value;
+    }
   }
 
   setLocal(key: string, value: unknown): void {
-    this.#scopes[0][key] = value;
+    const localScope = this.#scopes[0];
+    if (localScope) {
+      localScope[key] = value;
+    }
   }
 
   getLocal(key: string): unknown {
-    return key in this.#scopes[0] ? this.#scopes[0][key] : JS_Undefined;
+    const localScope = this.#scopes[0];
+    return localScope && key in localScope ? localScope[key] : JS_Undefined;
   }
 
   toObject(): Record<string, unknown> {

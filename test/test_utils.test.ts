@@ -26,6 +26,7 @@ import {
   cliBoolOption,
   cliOption,
   cliValuelessOption,
+  dfxp2srt,
   encodeBaseN,
   determineExt,
   escapeHTML,
@@ -35,6 +36,7 @@ import {
   floatOrNone,
   formatBytes,
   formatSeconds,
+  InAdvancePagedList,
   getCompatibleExt,
   getElementByClass,
   getElementById,
@@ -43,6 +45,8 @@ import {
   isHtml,
   isOutdatedVersion,
   joinNonempty,
+  OnDemandPagedList,
+  matchStr,
   limitLength,
   lowercaseEscape,
   mergeDicts,
@@ -51,6 +55,7 @@ import {
   orderedSet,
   parseBitrate,
   parseCodecs,
+  parseDfxpTimeExpr,
   parseDuration,
   parseFilesize,
   parseIso8601,
@@ -63,7 +68,9 @@ import {
   removeQuotes,
   removeStart,
   replaceExtension,
+  renderTable,
   rot47,
+  sanitizeFilename,
   sanitizeUrl,
   shellQuote,
   strOrNone,
@@ -284,9 +291,13 @@ describe("general utility helpers", () => {
 
   test("media parsers", () => {
     expect(parseFilesize("1.5MiB")).toBe(1572864);
+    expect(parseFilesize("1,24 KB")).toBe(1240);
     expect(parseResolution("1920x1080")).toEqual({ width: 1920, height: 1080 });
+    expect(parseResolution("1920×1080")).toEqual({ width: 1920, height: 1080 });
+    expect(parseResolution("1920, 1080")).toEqual({ width: 1920, height: 1080 });
     expect(parseResolution("720p")).toEqual({ height: 720 });
     expect(parseResolution("4k")).toEqual({ height: 2160 });
+    expect(parseResolution("1920w", { lenient: true })).toEqual({ width: 1920 });
     expect(parseBitrate("video 4500 kbps")).toBe(4500);
     expect(mimetype2ext(null)).toBeNull();
     expect(mimetype2ext("application/x-mpegURL")).toBe("m3u8");
@@ -339,6 +350,13 @@ describe("general utility helpers", () => {
   });
 
   test("path and shell helpers", () => {
+    expect(sanitizeFilename("")).toBe("");
+    expect(sanitizeFilename("abc/de")).toBe("abc⧸de");
+    expect(sanitizeFilename("abc/<>\\*|de", { is_id: false })).toBe("abc_de");
+    expect(sanitizeFilename("this: that", { is_id: false })).toBe("this - that");
+    expect(sanitizeFilename("New World record at 0:12:34")).toBe("New World record at 0_12_34");
+    expect(sanitizeFilename("--gasdgf", { is_id: false })).toBe("_-gasdgf");
+    expect(sanitizeFilename("aäb中国的c", { restricted: true })).toBe("aab_c");
     expect(replaceExtension("file.webm", "mp4")).toBe("file.mp4");
     expect(prependExtension("file.webm", "temp")).toBe("file.temp.webm");
     expect(subtitlesFilename("file.webm", "en", "vtt")).toBe(
@@ -373,9 +391,127 @@ describe("general utility helpers", () => {
     expect(ageRestricted(18, 17)).toBe(true);
     expect(ageRestricted(18, 18)).toBe(false);
     expect(isHtml("<!DOCTYPE html><html></html>")).toBe(true);
+    expect(isHtml(Uint8Array.from([0x49, 0x44, 0x43, 0x3c, 0x68, 0x74, 0x6d, 0x6c]))).toBe(false);
+    expect(isHtml(Uint8Array.from([0xef, 0xbb, 0xbf, 0x3c, 0x21, 0x44, 0x4f, 0x43, 0x54, 0x59, 0x50, 0x45]))).toBe(true);
     expect(encodeBaseN(255, 16, "0123456789abcdef")).toBe("ff");
     expect(caesar("abc", "abc", 1)).toBe("bca");
     expect(rot47("youtube-dl")).toBe("J@FEF36\\5=");
     expect(urshift(-1, 1)).toBe(2147483647);
+  });
+
+  test("renderTable", () => {
+    expect(renderTable(["a", "empty", "bcd"], [[123, "", 4], [9999, "", 51]])).toBe(
+      "a    empty bcd\n123        4\n9999       51",
+    );
+    expect(renderTable(["a", "empty", "bcd"], [[123, "", 4], [9999, "", 51]], { hide_empty: true })).toBe(
+      "a    bcd\n123  4\n9999 51",
+    );
+    expect(renderTable(["\ta", "bcd"], [["1\t23", 4], ["\t9999", 51]])).toBe(
+      "   a bcd\n1 23 4\n9999 51",
+    );
+    expect(renderTable(["a", "bcd"], [[123, 4], [9999, 51]], { delim: "-" })).toBe(
+      "a    bcd\n--------\n123  4\n9999 51",
+    );
+    expect(renderTable(["a", "bcd"], [[123, 4], [9999, 51]], { delim: "-", extra_gap: 2 })).toBe(
+      "a      bcd\n----------\n123    4\n9999   51",
+    );
+  });
+
+  test("dfxp2srt converts TTML timing, spans, style and UTF-16 input", () => {
+    expect(parseDfxpTimeExpr(null)).toBeNull();
+    expect(parseDfxpTimeExpr("00:00:01:100")).toBe(1.1);
+    const dfxpData = `<?xml version="1.0" encoding="UTF-8"?>
+      <tt xmlns="http://www.w3.org/ns/ttml"><body><div>
+        <p begin="0" end="1">The following line contains Chinese characters and special symbols</p>
+        <p begin="1" end="2">第二行<br/>♪♪</p>
+        <p begin="2" dur="1"><span>Third<br/>Line</span></p>
+        <p begin="3" end="-1">Lines with invalid timestamps are ignored</p>
+      </div></body></tt>`;
+    expect(dfxp2srt(dfxpData)).toBe(`1
+00:00:00,000 --> 00:00:01,000
+The following line contains Chinese characters and special symbols
+
+2
+00:00:01,000 --> 00:00:02,000
+第二行
+♪♪
+
+3
+00:00:02,000 --> 00:00:03,000
+Third
+Line
+
+`);
+    const styled = `<?xml version="1.0" encoding="utf-8"?>
+<tt xmlns="http://www.w3.org/2006/10/ttaf1" xmlns:tts="http://www.w3.org/2006/10/ttaf1#style">
+  <head><styling>
+    <style id="s2" style="s0" tts:color="cyan" tts:fontWeight="bold" />
+    <style id="s1" style="s0" tts:color="yellow" tts:fontStyle="italic" />
+    <style id="s3" style="s0" tts:color="lime" tts:textDecoration="underline" />
+    <style id="s0" tts:fontStyle="normal" tts:fontSize="16" tts:fontFamily="sansSerif" tts:color="white" />
+  </styling></head>
+  <body style="s0"><div>
+    <p begin="00:00:02.08" end="00:00:05.84">default style<span tts:color="red">custom style</span></p>
+    <p style="s2" begin="00:00:02.08" end="00:00:05.84"><span tts:color="lime">part 1<br /></span><span tts:color="cyan">part 2</span></p>
+    <p style="s3" begin="00:00:05.84" end="00:00:09.56">line 3<br />part 3</p>
+    <p style="s1" tts:textDecoration="underline" begin="00:00:09.56" end="00:00:12.36"><span style="s2" tts:color="lime">inner<br /> </span>style</p>
+  </div></body>
+</tt>`;
+    expect(dfxp2srt(styled)).toBe(`1
+00:00:02,080 --> 00:00:05,840
+<font color="white" face="sansSerif" size="16">default style<font color="red">custom style</font></font>
+
+2
+00:00:02,080 --> 00:00:05,840
+<b><font color="cyan" face="sansSerif" size="16"><font color="lime">part 1
+</font>part 2</font></b>
+
+3
+00:00:05,840 --> 00:00:09,560
+<u><font color="lime">line 3
+part 3</font></u>
+
+4
+00:00:09,560 --> 00:00:12,360
+<i><u><font color="yellow"><font color="lime">inner
+ </font>style</font></u></i>
+
+`);
+    const utf16 = Uint8Array.from([
+      0xff,
+      0xfe,
+      ...Buffer.from(
+        `<?xml version="1.0" encoding="UTF-16"?><tt><body><div><p begin="0" end="1">Line 1</p></div></body></tt>`,
+        "utf16le",
+      ),
+    ]);
+    expect(dfxp2srt(utf16)).toContain("Line 1");
+  });
+
+  test("paged list helpers", () => {
+    const getPage = (page: number) => {
+      const first = page * 2;
+      return [first, first + 1].filter((item) => item < 5);
+    };
+    const onDemand = new OnDemandPagedList(getPage, 2);
+    const inAdvance = new InAdvancePagedList(getPage, 3, 2);
+    expect(onDemand.getslice()).toEqual([0, 1, 2, 3, 4]);
+    expect(onDemand.getslice(1, 4)).toEqual([1, 2, 3]);
+    expect(inAdvance.getslice(2, 99)).toEqual([2, 3, 4]);
+    expect(inAdvance.at(4)).toBe(4);
+  });
+
+  test("matchStr filter expressions", () => {
+    expect(matchStr("x", { x: 0 })).toBe(true);
+    expect(matchStr("!xy", { x: 1200 })).toBe(true);
+    expect(matchStr("x>1K", { x: 1200 })).toBe(true);
+    expect(matchStr("x>2K", { x: 1200 })).toBe(false);
+    expect(matchStr("x>=1200 & x < 1300", { x: 1200 })).toBe(true);
+    expect(matchStr("x > 1:0:0", { x: 3700 })).toBe(true);
+    expect(matchStr("y=foobar42", { y: "foobar42" })).toBe(true);
+    expect(matchStr("y^=foo", { y: "foobar42" })).toBe(true);
+    expect(matchStr("y!*=baz", { y: "foobar42" })).toBe(true);
+    expect(matchStr(String.raw`x~=\bbar`, { x: "foo bar" })).toBe(true);
+    expect(matchStr(String.raw`x~=(?i)^FOO`, { x: "foo bar" })).toBe(true);
   });
 });

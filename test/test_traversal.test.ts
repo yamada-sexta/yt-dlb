@@ -2,7 +2,17 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { dictGet, Ellipsis, traverseObj } from "../yt_dlp/utils/traversal.ts";
+import {
+  dictGet,
+  Ellipsis,
+  findElement,
+  findElements,
+  require,
+  subsListToDict,
+  traverseObj,
+  trimStr,
+  unpack,
+} from "../yt_dlp/utils/traversal.ts";
 
 const testData = {
   100: 100,
@@ -16,6 +26,14 @@ const testData = {
   data: [{ index: 2 }, { index: 3 }],
   dict: {},
 };
+
+const testHtml = `<html><body>
+    <div class="a">1</div>
+    <div class="a" id="x" custom="z">2</div>
+    <div class="b" data-id="y" custom="z">3</div>
+    <p class="a">4</p>
+    <p id="d" custom="e">5</p>
+</body></html>`;
 
 describe("traverseObj", () => {
   test("base path handling", () => {
@@ -83,5 +101,47 @@ describe("dictGet", () => {
       "value",
     );
     expect(dictGet({ a: "" }, ["a"], "default", false)).toBe("");
+  });
+});
+
+describe("traversal helper functions", () => {
+  test("require passes values and rejects nullish traversal results", () => {
+    expect(traverseObj<unknown>(testData, ["str", new Set([require("value")])])).toBe("str");
+    expect(() => traverseObj(testData, ["None", new Set([require("value")])])).toThrow("Unable to extract value");
+  });
+
+  test("subsListToDict groups subtitles and filters incomplete entries", () => {
+    const convert = subsListToDict(undefined, { lang: "en", ext: "vtt" }) as (value: Array<Record<string, unknown>> | null) => Record<string, Array<Record<string, unknown>>>;
+    expect(convert([
+        { name: "de", url: "https://example.com/subs/de.ass" },
+        { name: "de" },
+        { name: "en", content: "content" },
+        { url: "https://example.com/subs/en" },
+      ].map((item) => ({
+        id: item.name,
+        data: item.content,
+        url: item.url,
+      })))).toEqual({
+      de: [{ url: "https://example.com/subs/de.ass", ext: "vtt" }],
+      en: [{ data: "content", ext: "vtt" }, { url: "https://example.com/subs/en", ext: "vtt" }],
+    });
+  });
+
+  test("trimStr and unpack", () => {
+    expect(trimStr({ start: "ab" })("abc")).toBe("c");
+    expect(trimStr({ end: "bc" })("abc")).toBe("a");
+    expect(trimStr({ start: "a", end: "c" })("abc")).toBe("b");
+    expect(unpack((...items: number[]) => items.join(""))([1, 2, 3])).toBe("123");
+  });
+
+  test("findElement and findElements", () => {
+    expect(findElement({ cls: "a" })(testHtml)).toBe("1");
+    expect(findElement({ cls: "a", html: true })(testHtml)).toBe('<div class="a">1</div>');
+    expect(findElement({ id: "x" })(testHtml)).toBe("2");
+    expect(findElement({ id: "[ex]", regex: true })(testHtml)).toBe("2");
+    expect(findElement({ attr: "data-id", value: "y" })(testHtml)).toBe("3");
+    expect(findElement({ attr: "data-id", value: "y(?:es)?", regex: true })(testHtml)).toBe("3");
+    expect(findElements({ cls: "a" })(testHtml)).toEqual(["1", "2", "4"]);
+    expect(findElements({ attr: "custom", value: "[ez]", regex: true })(testHtml)).toEqual(["2", "3", "5"]);
   });
 });

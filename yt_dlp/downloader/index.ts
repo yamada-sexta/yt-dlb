@@ -1,6 +1,5 @@
 // Source: yt_dlp/downloader/__init__.py
 
-import { NotImplementedError } from "../errors.ts";
 import { BunnyCdnFD } from "./bunnycdn.ts";
 import type { FileDownloader, DownloadInfo, DownloaderHost } from "./common.ts";
 import { DashSegmentsFD } from "./dash.ts";
@@ -66,7 +65,7 @@ export function getSuitableDownloader(
   defaultDownloader: DownloaderConstructor | null = HttpFD,
   protocol?: string,
   toStdout = false,
-): DownloaderConstructor {
+): DownloaderConstructor | null {
   const normalizedInfo = {
     ...info,
     protocol: determineProtocol(info),
@@ -96,16 +95,10 @@ export function getSuitableDownloader(
   ) {
     return DashSegmentsFD;
   }
-  const unique = new Set(downloaders);
-  if (unique.size === 1) {
-    const downloader = downloaders[0];
-    if (downloader) {
-      return downloader;
-    }
+  if (downloaders.length === 1) {
+    return downloaders[0] ?? null;
   }
-  throw new NotImplementedError(
-    `merged downloader for protocols ${protocols.join("+")}`,
-  );
+  return null;
 }
 
 export function shortenProtocolName(proto: string, simplify = false): string {

@@ -213,6 +213,11 @@ export class YoutubeDL {
       ...info,
       protocol: new URL(info.url).protocol.replace(/:$/, ""),
     });
+    if (!Downloader) {
+      throw new NotImplementedError(
+        `download for protocol ${new URL(info.url).protocol.replace(/:$/, "")}`,
+      );
+    }
     const fd = new Downloader(this, this.params as Record<string, unknown>);
     const ok = await fd.download(info.filename, {
       ...info,

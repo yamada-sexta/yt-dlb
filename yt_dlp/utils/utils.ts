@@ -2,9 +2,16 @@
 // Port note: this is a dependency-first subset used by migrated downloader/postprocessor code.
 
 import { spawnSync } from "node:child_process";
-import { basename, extname } from "node:path";
+import { createHmac, randomBytes, randomUUID as nodeRandomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
+import { basename, dirname, extname, join } from "node:path";
+import { createServer } from "node:net";
 
+import type { XmlElement } from "../compat/index.ts";
 import { NotImplementedError } from "../errors.ts";
+import { xpathElement } from "./xml.ts";
+export { fixXmlAmpersands, xpathElement, xpathText, xpathWithNs } from "./xml.ts";
+export { fix_xml_ampersands, xpath_element, xpath_text, xpath_with_ns } from "./xml.ts";
 
 export const NO_DEFAULT = Symbol("NO_DEFAULT");
 export const IDENTITY = <T>(value: T): T => value;
@@ -106,8 +113,32 @@ export class DownloadError extends YoutubeDLError {
   override name = "DownloadError";
 }
 
+export class EntryNotInPlaylist extends YoutubeDLError {
+  override name = "EntryNotInPlaylist";
+}
+
+export class SameFileError extends YoutubeDLError {
+  override name = "SameFileError";
+}
+
 export class PostProcessingError extends YoutubeDLError {
   override name = "PostProcessingError";
+}
+
+export class DownloadCancelled extends YoutubeDLError {
+  override name = "DownloadCancelled";
+}
+
+export class ExistingVideoReached extends DownloadCancelled {
+  override name = "ExistingVideoReached";
+}
+
+export class RejectedVideoReached extends DownloadCancelled {
+  override name = "RejectedVideoReached";
+}
+
+export class MaxDownloadsReached extends DownloadCancelled {
+  override name = "MaxDownloadsReached";
 }
 
 export class ReExtractInfo extends YoutubeDLError {
@@ -118,6 +149,30 @@ export class ReExtractInfo extends YoutubeDLError {
     super(message);
     this.name = "ReExtractInfo";
   }
+}
+
+export class ThrottledDownload extends ReExtractInfo {
+  override name = "ThrottledDownload";
+}
+
+export class UnavailableVideoError extends YoutubeDLError {
+  override name = "UnavailableVideoError";
+}
+
+export class ContentTooShortError extends YoutubeDLError {
+  override name = "ContentTooShortError";
+
+  constructor(readonly downloaded: number, readonly expected: number) {
+    super(`Downloaded ${downloaded} bytes, expected ${expected} bytes`);
+  }
+}
+
+export class XAttrMetadataError extends YoutubeDLError {
+  override name = "XAttrMetadataError";
+}
+
+export class XAttrUnavailableError extends YoutubeDLError {
+  override name = "XAttrUnavailableError";
 }
 
 export class RegexNotFoundError extends ExtractorError {
@@ -683,7 +738,13 @@ export function formatSeconds(
 export const formatSeconds_ = formatSeconds;
 
 export function srtSubtitlesTimecode(seconds: number): string {
-  return formatSeconds(seconds, ":", true).replace(".", ",").padStart(12, "0");
+  const totalMs = Math.trunc(seconds * 1000);
+  const milliseconds = totalMs % 1000;
+  const totalSeconds = Math.trunc(totalMs / 1000);
+  const secs = totalSeconds % 60;
+  const minutes = Math.trunc(totalSeconds / 60) % 60;
+  const hours = Math.trunc(totalSeconds / 3600);
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(secs)},${milliseconds.toString().padStart(3, "0")}`;
 }
 
 export const srt_subtitles_timecode = srtSubtitlesTimecode;
@@ -747,6 +808,16 @@ export function getElementById(id: string, html: string): string | null {
 
 export const get_element_by_id = getElementById;
 
+export function getElementHtmlById(
+  id: string,
+  html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
+): string | null {
+  return getElementHtmlByAttribute("id", id, html, options);
+}
+
+export const get_element_html_by_id = getElementHtmlById;
+
 export function getElementByClass(
   className: string,
   html: string,
@@ -756,15 +827,123 @@ export function getElementByClass(
 
 export const get_element_by_class = getElementByClass;
 
+export function getElementHtmlByClass(
+  className: string,
+  html: string,
+): string | null {
+  return getElementsHtmlByClass(className, html)[0] ?? null;
+}
+
+export const get_element_html_by_class = getElementHtmlByClass;
+
 export function getElementByAttribute(
   attribute: string,
   value: string,
   html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
 ): string | null {
-  return getElementText(`[${attribute}="${cssString(value)}"]`, html);
+  return getElementsTextAndHtmlByAttribute(attribute, value, html, options)[0]?.[0] ?? null;
 }
 
 export const get_element_by_attribute = getElementByAttribute;
+
+export function getElementHtmlByAttribute(
+  attribute: string,
+  value: string,
+  html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
+): string | null {
+  return getElementsTextAndHtmlByAttribute(attribute, value, html, options)[0]?.[1] ?? null;
+}
+
+export const get_element_html_by_attribute = getElementHtmlByAttribute;
+
+export function getElementsByClass(className: string, html: string): string[] {
+  return getElementsTextAndHtmlByAttribute("class", `(?:^|\\s)${RegExp.escape(className)}(?:\\s|$)`, html, { escape_value: false }).map(([text]) => text);
+}
+
+export const get_elements_by_class = getElementsByClass;
+
+export function getElementsHtmlByClass(className: string, html: string): string[] {
+  return getElementsTextAndHtmlByAttribute("class", `(?:^|\\s)${RegExp.escape(className)}(?:\\s|$)`, html, { escape_value: false }).map(([, htmlText]) => htmlText);
+}
+
+export const get_elements_html_by_class = getElementsHtmlByClass;
+
+export function getElementsByAttribute(
+  attribute: string,
+  value: string,
+  html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
+): string[] {
+  return getElementsTextAndHtmlByAttribute(attribute, value, html, options).map(([text]) => text);
+}
+
+export const get_elements_by_attribute = getElementsByAttribute;
+
+export function getElementsHtmlByAttribute(
+  attribute: string,
+  value: string,
+  html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
+): string[] {
+  return getElementsTextAndHtmlByAttribute(attribute, value, html, options).map(([, htmlText]) => htmlText);
+}
+
+export const get_elements_html_by_attribute = getElementsHtmlByAttribute;
+
+export function getElementsTextAndHtmlByAttribute(
+  attribute: string,
+  value: string,
+  html: string,
+  options: { tag?: string; escape_value?: boolean } = {},
+): Array<[string, string]> {
+  const tag = options.tag ?? String.raw`[\w:.-]+`;
+  const valuePattern = options.escape_value === false ? value : RegExp.escape(value);
+  const attrPattern = String.raw`(?:^|[\s"'=<>/])${RegExp.escape(attribute)}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\x60]+))`;
+  const startTagPattern = new RegExp(String.raw`<(?<tag>${tag})\b(?<attrs>[^>]*?)(?<selfClosing>\/?)>`, "gi");
+  const out: Array<[string, string]> = [];
+  for (const match of html.matchAll(startTagPattern)) {
+    const tagName = match.groups?.tag;
+    if (!tagName || tagName.startsWith("/")) {
+      continue;
+    }
+    const attrs = match.groups?.attrs ?? "";
+    const attrMatch = new RegExp(attrPattern, "i").exec(attrs);
+    const attrValue = attrMatch?.[1] ?? attrMatch?.[2] ?? attrMatch?.[3];
+    if (attrValue === undefined || !new RegExp(`^(?:${valuePattern})$`).test(attrValue)) {
+      continue;
+    }
+    let htmlText = match[0];
+    let body = "";
+    if (!match.groups?.selfClosing) {
+      const closePattern = new RegExp(String.raw`<\/${RegExp.escape(tagName)}\s*>`, "i");
+      const afterStart = (match.index ?? 0) + match[0].length;
+      const closeMatch = closePattern.exec(html.slice(afterStart));
+      if (!closeMatch?.[0]) {
+        continue;
+      }
+      const closeIndex = afterStart + closeMatch.index;
+      body = html.slice(afterStart, closeIndex);
+      htmlText = html.slice(match.index ?? 0, closeIndex + closeMatch[0].length);
+    }
+    out.push([cleanHtml(body) ?? "", htmlText]);
+  }
+  return out;
+}
+
+export const get_elements_text_and_html_by_attribute = getElementsTextAndHtmlByAttribute;
+
+export function getElementTextAndHtmlByTag(tag: string, html: string): [string | null, string | null] {
+  const pattern = new RegExp(String.raw`<(?<tag>${tag})\b[^>]*>(?<body>[\s\S]*?)<\/\k<tag>>`, "i");
+  const match = pattern.exec(html);
+  if (!match) {
+    return [null, null];
+  }
+  return [cleanHtml(match.groups?.body ?? ""), match[0]];
+}
+
+export const get_element_text_and_html_by_tag = getElementTextAndHtmlByTag;
 
 export function extractAttributes(
   htmlElement: string,
@@ -1110,9 +1289,9 @@ export function parseCount(value: string | null | undefined): number | null {
     return strToInt(text);
   }
   const unitMatch =
-    /^(?<number>[\d,.]+)\s*(?<unit>kk|KK|[kKmMbB])(?:\b|$)/.exec(text);
+    /(?<number>[\d,.]+)\s*(?<unit>kk|KK|[kKmMbB])(?:\b|$)/.exec(text);
   if (unitMatch?.groups?.number && unitMatch.groups.unit) {
-    const number = Number(unitMatch.groups.number.replaceAll(",", ""));
+    const number = Number(normalizeDecimalNumber(unitMatch.groups.number));
     if (!Number.isFinite(number)) {
       return null;
     }
@@ -1219,7 +1398,7 @@ export function parseFilesize(value: string | null | undefined): number | null {
   }
   const match = /(?<number>[\d.,]+)\s*(?<unit>[A-Za-z]+)?/.exec(value.trim());
   const number = match?.groups?.number
-    ? Number.parseFloat(match.groups.number.replaceAll(",", ""))
+    ? Number.parseFloat(normalizeDecimalNumber(match.groups.number))
     : Number.NaN;
   if (!Number.isFinite(number)) {
     return null;
@@ -1247,7 +1426,7 @@ export function parseResolution(
   if (!value) {
     return {};
   }
-  const explicit = /(?<width>\d{2,5})\s*[xX]\s*(?<height>\d{2,5})/.exec(value);
+  const explicit = /(?<width>\d{2,5})\s*(?:[xX×,])\s*(?<height>\d{2,5})/.exec(value);
   if (explicit?.groups?.width && explicit.groups.height) {
     return {
       width: Number(explicit.groups.width),
@@ -1596,6 +1775,115 @@ export class LazyList<T> implements Iterable<T> {
 
 export const LazyList_ = LazyList;
 
+export class PagedList<T> implements Iterable<T> {
+  protected pageCount = Number.POSITIVE_INFINITY;
+  protected readonly cache = new Map<number, T[]>();
+
+  constructor(
+    protected readonly pageFunc: (page: number) => Iterable<T>,
+    protected readonly pageSize: number,
+    protected readonly useCache = true,
+  ) {}
+
+  get length(): number {
+    return this.getslice().length;
+  }
+
+  getpage(pageNumber: number): T[] {
+    let page = this.cache.get(pageNumber);
+    if (!page) {
+      page = pageNumber > this.pageCount ? [] : [...this.pageFunc(pageNumber)];
+      if (this.useCache) {
+        this.cache.set(pageNumber, page);
+      }
+    }
+    return page;
+  }
+
+  getslice(_start = 0, _end?: number | null): T[] {
+    throw new NotImplementedError("PagedList.getslice must be implemented by subclasses");
+  }
+
+  at(index: number): T | undefined {
+    if (!this.useCache || !Number.isInteger(index) || index < 0) {
+      throw new TypeError("indices must be non-negative integers");
+    }
+    return this.getslice(index, index + 1)[0];
+  }
+
+  [Symbol.iterator](): Iterator<T> {
+    return this.getslice()[Symbol.iterator]();
+  }
+}
+
+export class OnDemandPagedList<T> extends PagedList<T> {
+  override getslice(start = 0, end?: number | null): T[] {
+    const out: T[] = [];
+    for (let pageNumber = Math.trunc(start / this.pageSize); ; pageNumber += 1) {
+      const firstId = pageNumber * this.pageSize;
+      const nextFirstId = firstId + this.pageSize;
+      if (start >= nextFirstId) {
+        continue;
+      }
+      const startOffset = firstId <= start && start < nextFirstId ? start % this.pageSize : 0;
+      const endOffset = end !== null && end !== undefined && firstId <= end && end <= nextFirstId ? ((end - 1) % this.pageSize) + 1 : undefined;
+      const fullPage = this.getpage(pageNumber);
+      const page = fullPage.slice(startOffset, endOffset);
+      out.push(...page);
+      if (fullPage.length < this.pageSize || end === nextFirstId || (end !== null && end !== undefined && out.length >= end - start)) {
+        break;
+      }
+    }
+    return end === null || end === undefined ? out : out.slice(0, Math.max(0, end - start));
+  }
+}
+
+export class InAdvancePagedList<T> extends PagedList<T> {
+  constructor(pageFunc: (page: number) => Iterable<T>, pageCount: number, pageSize: number) {
+    super(pageFunc, pageSize, true);
+    this.pageCount = pageCount;
+  }
+
+  override getslice(start = 0, end?: number | null): T[] {
+    const out: T[] = [];
+    const startPage = Math.trunc(start / this.pageSize);
+    const endPage = end === null || end === undefined ? this.pageCount : Math.min(this.pageCount, Math.trunc(end / this.pageSize) + 1);
+    let remaining = end === null || end === undefined ? null : end - start;
+    let skip = start - startPage * this.pageSize;
+    for (let pageNumber = startPage; pageNumber < endPage; pageNumber += 1) {
+      let page = this.getpage(pageNumber);
+      if (skip) {
+        page = page.slice(skip);
+        skip = 0;
+      }
+      if (remaining !== null) {
+        out.push(...page.slice(0, remaining));
+        remaining -= page.length;
+        if (remaining <= 0) {
+          break;
+        }
+      } else {
+        out.push(...page);
+      }
+    }
+    return out;
+  }
+}
+
+export function* frange(start = 0, stop?: number | null, step = 1): Iterable<number> {
+  let current = start;
+  let end = stop;
+  if (end === null || end === undefined) {
+    end = current;
+    current = 0;
+  }
+  const sign = step > 0 ? 1 : step < 0 ? -1 : 0;
+  while (sign * current < sign * end) {
+    yield current;
+    current += step;
+  }
+}
+
 export function mimetype2ext(
   mimeType: string | null | undefined,
   defaultValue: string | null = null,
@@ -1857,9 +2145,8 @@ export function parseDfxpTimeExpr(
 }
 
 export function dfxp2srt(dfxpData: Uint8Array | string): string {
-  const decoder = new TextDecoder();
   const xml = (
-    typeof dfxpData === "string" ? dfxpData : decoder.decode(dfxpData)
+    typeof dfxpData === "string" ? dfxpData : decodeXmlBytes(dfxpData)
   )
     .replaceAll("encoding='UTF-16'", "encoding='UTF-8'")
     .replaceAll('encoding="UTF-16"', 'encoding="UTF-8"');
@@ -1871,6 +2158,8 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
       "http://www.w3.org/ns/ttml#style",
       "http://www.w3.org/ns/ttml#styling",
     );
+  const styles = parseTtmlStyles(normalized);
+  const defaultStyle = parseTtmlDefaultStyle(normalized, styles);
   const paragraphs = [
     ...normalized.matchAll(
       /<(?<tag>(?:[\w-]+:)?p)\b(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/\k<tag>>/g,
@@ -1894,9 +2183,17 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
       }
       endTime = beginTime + duration;
     }
-    const text = ttmlTextToSrt(paragraph.groups?.body ?? "");
+    if (endTime <= beginTime) {
+      continue;
+    }
+    const text = ttmlTextToSrt(
+      paragraph.groups?.body ?? "",
+      parseXmlAttributesSubset(paragraph.groups?.attrs ?? ""),
+      styles,
+      defaultStyle,
+    );
     output.push(
-      `${index + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`,
+      `${output.length + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`,
     );
   }
   return output.join("");
@@ -1904,15 +2201,180 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
 
 export const dfxp2srt_ = dfxp2srt;
 
-function ttmlTextToSrt(body: string): string {
-  if (/<(?!\/?(?:[\w-]+:)?br\b)[^>]+>/i.test(body)) {
-    throw new NotImplementedError("TTML subtitle styling conversion");
+const TTML_SUPPORTED_STYLING = [
+  "color",
+  "fontFamily",
+  "fontSize",
+  "fontStyle",
+  "fontWeight",
+  "textDecoration",
+] as const;
+
+type TtmlStyle = Partial<Record<(typeof TTML_SUPPORTED_STYLING)[number], string>>;
+
+function decodeXmlBytes(bytes: Uint8Array): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return Buffer.from(bytes.subarray(2)).toString("utf16le");
   }
-  return xmlUnescapeSubset(
-    body
-      .replaceAll(/<(?:(?:[\w-]+:)?br)\s*\/?>/g, "\n")
-      .replaceAll(/<[^>]+>/g, ""),
-  )
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    const swapped = new Uint8Array(bytes.length - 2);
+    for (let index = 2; index + 1 < bytes.length; index += 2) {
+      swapped[index - 2] = bytes[index + 1] ?? 0;
+      swapped[index - 1] = bytes[index] ?? 0;
+    }
+    return Buffer.from(swapped).toString("utf16le");
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+function parseTtmlStyles(xml: string): Map<string, TtmlStyle> {
+  const styles = new Map<string, TtmlStyle>();
+  const pending: Array<{ id: string; parent?: string; attrs: Record<string, string> }> = [];
+  for (const styleMatch of xml.matchAll(/<(?:(?:[\w-]+):)?style\b(?<attrs>[^>]*)\/?>/g)) {
+    const attrs = parseXmlAttributesSubset(styleMatch.groups?.attrs ?? "");
+    const id = attrs.id;
+    if (!id) continue;
+    pending.push({ id, parent: attrs.style, attrs });
+  }
+
+  let progressed = true;
+  while (pending.length && progressed) {
+    progressed = false;
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      const style = pending[index];
+      if (!style) continue;
+      if (style.parent && !styles.has(style.parent)) continue;
+      const parsed: TtmlStyle = style.parent ? { ...styles.get(style.parent) } : {};
+      applyTtmlStyleAttributes(parsed, style.attrs);
+      styles.set(style.id, parsed);
+      pending.splice(index, 1);
+      progressed = true;
+    }
+  }
+  return styles;
+}
+
+function parseTtmlDefaultStyle(xml: string, styles: Map<string, TtmlStyle>): TtmlStyle {
+  for (const tag of ["body", "div"]) {
+    const elementMatch = new RegExp(`<(?:(?:[\\w-]+):)?${tag}\\b(?<attrs>[^>]*)>`, "i").exec(xml);
+    const styleId = parseXmlAttributesSubset(elementMatch?.groups?.attrs ?? "").style;
+    if (styleId && styles.has(styleId)) {
+      return { ...styles.get(styleId) };
+    }
+  }
+  return {};
+}
+
+function applyTtmlStyleAttributes(style: TtmlStyle, attrs: Record<string, string>): void {
+  for (const prop of TTML_SUPPORTED_STYLING) {
+    const value = attrs[prop];
+    if (value) {
+      style[prop] = value;
+    }
+  }
+}
+
+function resolveTtmlStyle(
+  attrs: Record<string, string>,
+  styles: Map<string, TtmlStyle>,
+  defaultStyle: TtmlStyle,
+): TtmlStyle {
+  const style: TtmlStyle = { ...defaultStyle };
+  if (attrs.style && styles.has(attrs.style)) {
+    Object.assign(style, styles.get(attrs.style));
+  }
+  applyTtmlStyleAttributes(style, attrs);
+  return style;
+}
+
+function openTtmlStyle(
+  out: string[],
+  style: TtmlStyle,
+  appliedStyles: TtmlStyle[],
+): string[] {
+  const unclosed: string[] = [];
+  let font = "";
+  const previous = appliedStyles.at(-1);
+  for (const key of Object.keys(style).sort() as Array<keyof TtmlStyle>) {
+    const value = style[key];
+    if (!value || previous?.[key] === value) continue;
+    if (key === "color") {
+      font += ` color="${escapeHTML(value)}"`;
+    } else if (key === "fontFamily") {
+      font += ` face="${escapeHTML(value)}"`;
+    } else if (key === "fontSize") {
+      font += ` size="${escapeHTML(value)}"`;
+    } else if (key === "fontStyle" && value === "italic") {
+      out.push("<i>");
+      unclosed.push("i");
+    } else if (key === "fontWeight" && value === "bold") {
+      out.push("<b>");
+      unclosed.push("b");
+    } else if (key === "textDecoration" && value === "underline") {
+      out.push("<u>");
+      unclosed.push("u");
+    }
+  }
+  if (font) {
+    out.push(`<font${font}>`);
+    unclosed.push("font");
+  }
+  if (Object.keys(style).length) {
+    appliedStyles.push({ ...(previous ?? {}), ...style });
+  }
+  return unclosed;
+}
+
+function ttmlTextToSrt(
+  body: string,
+  paragraphAttrs: Record<string, string>,
+  styles: Map<string, TtmlStyle>,
+  defaultStyle: TtmlStyle,
+): string {
+  const out: string[] = [];
+  const appliedStyles: TtmlStyle[] = [];
+  const unclosedStack: string[][] = [];
+
+  const openElement = (attrs: Record<string, string>) => {
+    const style = resolveTtmlStyle(attrs, styles, defaultStyle);
+    unclosedStack.push(openTtmlStyle(out, style, appliedStyles));
+  };
+  const closeElement = () => {
+    const unclosed = unclosedStack.pop() ?? [];
+    for (const element of unclosed.toReversed()) {
+      out.push(`</${element}>`);
+    }
+    if (unclosed.length) {
+      appliedStyles.pop();
+    }
+  };
+
+  openElement(paragraphAttrs);
+  for (const token of body.matchAll(/<[^>]+>|[^<]+/g)) {
+    const value = token[0];
+    const tag = /^<\s*(?<close>\/)?\s*(?:(?:[\w-]+):)?(?<name>[\w-]+)\b(?<attrs>[^>]*?)(?<self>\/)?\s*>$/.exec(value);
+    if (!tag) {
+      out.push(xmlUnescapeSubset(value));
+      continue;
+    }
+    const name = tag.groups?.name?.toLowerCase();
+    if (name === "br") {
+      out.push("\n");
+      continue;
+    }
+    if (tag.groups?.close) {
+      closeElement();
+      continue;
+    }
+    openElement(parseXmlAttributesSubset(tag.groups?.attrs ?? ""));
+    if (tag.groups?.self) {
+      closeElement();
+    }
+  }
+  closeElement();
+
+  return out
+    .join("")
     .replaceAll(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -2011,15 +2473,24 @@ export function ageRestricted(
 export const age_restricted = ageRestricted;
 
 export function isHtml(firstBytes: Uint8Array | string): boolean {
-  const text = (
-    typeof firstBytes === "string"
-      ? firstBytes
-      : new TextDecoder().decode(firstBytes.subarray(0, 512))
-  )
-    .trimStart()
-    .toLowerCase();
+  const bytes = typeof firstBytes === "string" ? new TextEncoder().encode(firstBytes) : firstBytes.subarray(0, 512);
+  let text: string;
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    text = new TextDecoder("utf-8").decode(bytes.subarray(3));
+  } else if (bytes[0] === 0xff && bytes[1] === 0xfe && bytes[2] === 0 && bytes[3] === 0) {
+    text = decodeUtf32(bytes.subarray(4), true);
+  } else if (bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 0xfe && bytes[3] === 0xff) {
+    text = decodeUtf32(bytes.subarray(4), false);
+  } else if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    text = decodeUtf16Le(bytes.subarray(2));
+  } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    text = decodeUtf16Be(bytes.subarray(2));
+  } else {
+    text = new TextDecoder().decode(bytes);
+  }
+  text = text.trimStart().toLowerCase();
   return (
-    text.startsWith("<!doctype html") ||
+    text.startsWith("<!doctype") ||
     text.startsWith("<html") ||
     text.includes("<head") ||
     text.includes("<script") ||
@@ -2350,6 +2821,47 @@ function stripDiacritics(value: string): string {
   return value.normalize("NFD").replaceAll(/\p{Diacritic}/gu, "");
 }
 
+function normalizeDecimalNumber(value: string): string {
+  if (value.includes(",") && !value.includes(".")) {
+    return value.replace(",", ".");
+  }
+  return value.replaceAll(",", "");
+}
+
+function decodeUtf16Be(bytes: Uint8Array): string {
+  return decodeUtf16(bytes, false);
+}
+
+function decodeUtf16Le(bytes: Uint8Array): string {
+  return decodeUtf16(bytes, true);
+}
+
+function decodeUtf16(bytes: Uint8Array, littleEndian: boolean): string {
+  const codepoints: number[] = [];
+  for (let index = 0; index + 1 < bytes.length; index += 2) {
+    const codepoint = littleEndian
+      ? (bytes[index] ?? 0) | ((bytes[index + 1] ?? 0) << 8)
+      : ((bytes[index] ?? 0) << 8) | (bytes[index + 1] ?? 0);
+    if (codepoint > 0) {
+      codepoints.push(codepoint);
+    }
+  }
+  return String.fromCharCode(...codepoints);
+}
+
+function decodeUtf32(bytes: Uint8Array, littleEndian: boolean): string {
+  const codepoints: number[] = [];
+  for (let index = 0; index + 3 < bytes.length; index += 4) {
+    const codepoint = littleEndian
+      ? (bytes[index] ?? 0) | ((bytes[index + 1] ?? 0) << 8) | ((bytes[index + 2] ?? 0) << 16) | ((bytes[index + 3] ?? 0) << 24)
+      : ((bytes[index] ?? 0) << 24) | ((bytes[index + 1] ?? 0) << 16) | ((bytes[index + 2] ?? 0) << 8) | (bytes[index + 3] ?? 0);
+    if (codepoint > 0) {
+      codepoints.push(codepoint);
+    }
+  }
+  return String.fromCodePoint(...codepoints);
+}
+
 export function stripJsonp(code: string): string {
   const match =
     /^(?:window\.)?([a-zA-Z0-9_.$]*)(?:\s*&&\s*\1)?\s*\(\s*([\s\S]*)\);?\s*(?:\/\/[^\n]*)*$/.exec(
@@ -2448,6 +2960,876 @@ function decodeJsStringLiteral(value: string): string {
           return escaped;
       }
     });
+}
+
+export function preferredencoding(): string {
+  return "UTF-8";
+}
+
+export async function writeJsonFile(obj: unknown, filename: string): Promise<void> {
+  const dir = dirname(filename);
+  const tmpName = join(dir, `${basename(filename)}.${randomBytes(4).toString("hex")}.tmp`);
+  try {
+    await Bun.write(tmpName, JSON.stringify(obj));
+    renameSync(tmpName, filename);
+  } catch (error) {
+    try {
+      unlinkSync(tmpName);
+    } catch {}
+    throw error;
+  }
+}
+
+export const write_json_file = writeJsonFile;
+
+export function partialApplication<T extends (...args: unknown[]) => unknown>(func: T): T {
+  return func;
+}
+
+export const partial_application = partialApplication;
+
+export function writeString(value: string, out: { write?: (chunk: string) => unknown } | null = null): void {
+  if (out?.write) {
+    out.write(value);
+  } else {
+    Bun.write(Bun.stdout, value);
+  }
+}
+
+export const write_string = writeString;
+
+export function deprecationWarning(message: string, options: { printer?: (message: string) => void } = {}): void {
+  (options.printer ?? console.warn)(`DeprecationWarning: ${message}`);
+}
+
+export const deprecation_warning = deprecationWarning;
+
+export function isPathLike(value: unknown): value is string | Uint8Array | { toString(): string } {
+  return typeof value === "string" || value instanceof Uint8Array || (typeof value === "object" && value !== null && "toString" in value);
+}
+
+export const is_path_like = isPathLike;
+
+export function expandPath(value: string): string {
+  if (value === "~" || value.startsWith("~/")) {
+    return join(process.env.HOME ?? "", value.slice(2));
+  }
+  return value.replaceAll(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}/g, (_match, bare: string, braced: string) => process.env[bare || braced] ?? "");
+}
+
+export const expand_path = expandPath;
+
+const ACCENT_MAP: Record<string, string> = {
+  Â: "A", Ã: "A", Ä: "A", À: "A", Á: "A", Å: "A", Æ: "AE", Ç: "C", È: "E", É: "E", Ê: "E", Ë: "E", Ì: "I", Í: "I", Î: "I", Ï: "I", Ð: "D", Ñ: "N", Ò: "O", Ó: "O", Ô: "O", Õ: "O", Ö: "O", Ő: "O", Ø: "O", Œ: "OE", Ù: "U", Ú: "U", Û: "U", Ü: "U", Ű: "U", Ý: "Y", Þ: "TH", ß: "ss",
+  à: "a", á: "a", â: "a", ã: "a", ä: "a", å: "a", æ: "ae", ç: "c", è: "e", é: "e", ê: "e", ë: "e", ì: "i", í: "i", î: "i", ï: "i", ð: "i", ñ: "n", ò: "o", ó: "o", ô: "o", õ: "o", ö: "o", ő: "o", ø: "o", œ: "oe", ù: "u", ú: "u", û: "u", ü: "u", ű: "u", ý: "y", þ: "th", ÿ: "y",
+};
+
+export function sanitizeFilename(value: string, options: { restricted?: boolean; is_id?: boolean } = {}): string {
+  const restricted = options.restricted ?? false;
+  const isId = options.is_id;
+  if (value === "") {
+    return "";
+  }
+  const normalizedValue = restricted && isId !== true ? value.normalize("NFKC") : value;
+  const timestampSafe = normalizedValue.replaceAll(/[0-9]+(?::[0-9]+)+/g, (match) => match.replaceAll(":", "_"));
+  if (!restricted) {
+    let out = "";
+    for (const char of timestampSafe) {
+      if (isId === undefined && '"*:<>?|/\\"'.includes(char)) {
+        out += char === "/" ? "⧸" : char === "\\" ? "⧹" : String.fromCodePoint(char.codePointAt(0)! + 0xfee0);
+      } else if (char === "?" || char < " " || char.charCodeAt(0) === 0x7f) {
+        continue;
+      } else if (char === '"') {
+        out += isId === true ? char : "'";
+      } else if (char === ":") {
+        out += isId === true ? char : " -";
+      } else if ("\\/|*<>".includes(char)) {
+        out += isId === true ? char : "_";
+      } else {
+        out += char;
+      }
+    }
+    if (isId === false) {
+      out = out.replaceAll(/__+/g, "_").replace(/^_+|_+$/g, "").replace(/^\.+/, "");
+      if (out.startsWith("-")) {
+        out = `_${out.slice(1)}`;
+      }
+    }
+    return out || "_";
+  }
+  let out = [...timestampSafe].map((char) => ACCENT_MAP[char] ?? (/[A-Za-z0-9._-]/.test(char) ? char : "_")).join("");
+  out = out.replaceAll(/_+/g, "_").replace(/^_+|_+$/g, "").replace(/^\.+/, "");
+  if (isId === false) {
+    if (out.startsWith("-_")) out = out.slice(2);
+    if (out.startsWith("-")) out = `_${out.slice(1)}`;
+  }
+  return out || "_";
+}
+
+export const sanitize_filename = sanitizeFilename;
+
+export function sanitizePath(value: string): string {
+  return value.split(/[\\/]/).map((part) => part.replaceAll(/[<>:"|?*]/g, "#").replace(/\.+$/, (dots) => `${dots.slice(0, -1)}#`)).join("\\");
+}
+
+export const sanitize_path = sanitizePath;
+
+export function sanitizeOpen(filename: string, openMode: string): { filename: string; mode: string } {
+  return { filename: sanitizePath(filename), mode: openMode };
+}
+
+export const sanitize_open = sanitizeOpen;
+
+export function timeconvert(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : null;
+}
+
+export function timetupleFromMsec(milliseconds: number): Date {
+  return new Date(milliseconds);
+}
+
+export const timetuple_from_msec = timetupleFromMsec;
+
+export function boolOrNone(value: unknown, defaultValue: boolean | null = null): boolean | null {
+  return typeof value === "boolean" ? value : defaultValue;
+}
+
+export const bool_or_none = boolOrNone;
+
+export function encodeCompatStr(value: string | Uint8Array, encoding = "utf-8"): string {
+  return typeof value === "string" ? value : new TextDecoder(encoding as ConstructorParameters<typeof TextDecoder>[0]).decode(value);
+}
+
+export const encode_compat_str = encodeCompatStr;
+
+export function errorToStr(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+export const error_to_str = errorToStr;
+
+export function dateFromStr(value: string, options: { strict?: boolean; format?: string } = {}): Date {
+  if (options.strict && !/^\d{8}|(?:now|today|yesterday)(?:-\d+(?:day|week|month|year)s?)?$/.test(value)) {
+    throw new Error(`Invalid date format "${value}"`);
+  }
+  const parsed = datetimeFromStr(value, "microsecond");
+  if (!parsed) {
+    throw new Error(`Invalid date format "${value}"`);
+  }
+  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+}
+
+export const date_from_str = dateFromStr;
+
+export function datetimeAddMonths(date: Date, months: number): Date {
+  const out = new Date(date.getTime());
+  const day = out.getUTCDate();
+  out.setUTCDate(1);
+  out.setUTCMonth(out.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(day, lastDay));
+  return out;
+}
+
+export const datetime_add_months = datetimeAddMonths;
+
+export function datetimeRound(date: Date, precision: "microsecond" | "second" | "minute" | "hour" | "day" = "day"): Date {
+  return roundDate(date, precision);
+}
+
+export const datetime_round = datetimeRound;
+
+export function hyphenateDate(value: string): string {
+  return value.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
+}
+
+export const hyphenate_date = hyphenateDate;
+
+export class DateRange {
+  readonly start: Date | null;
+  readonly end: Date | null;
+
+  constructor(start?: string | Date | null, end?: string | Date | null) {
+    this.start = typeof start === "string" ? dateFromStr(start) : start ?? null;
+    this.end = typeof end === "string" ? dateFromStr(end) : end ?? null;
+  }
+
+  includes(date: string | Date): boolean {
+    const parsed = typeof date === "string" ? dateFromStr(date) : date;
+    return (!this.start || parsed >= this.start) && (!this.end || parsed <= this.end);
+  }
+}
+
+export function systemIdentifier(): string {
+  return `${process.platform}-${process.arch}`;
+}
+
+export const system_identifier = systemIdentifier;
+
+export function getWindowsVersion(): string | null {
+  return process.platform === "win32" ? (process as unknown as { getSystemVersion?: () => string }).getSystemVersion?.() ?? null : null;
+}
+
+export const get_windows_version = getWindowsVersion;
+
+export function getFilesystemEncoding(): string {
+  return "utf-8";
+}
+
+export const get_filesystem_encoding = getFilesystemEncoding;
+
+export function lookupUnitTable(unitTable: Record<string, number>, value: string, strict = false): number | null {
+  const unit = strict ? value : value.toLowerCase();
+  return unitTable[unit] ?? null;
+}
+
+export const lookup_unit_table = lookupUnitTable;
+
+export function parseBytes(value: string | null | undefined): number | null {
+  return parseFilesize(value);
+}
+
+export const parse_bytes = parseBytes;
+
+export function getDomain(url: string): string | null {
+  try {
+    return removeStart(new URL(url).host, "www.") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export const get_domain = getDomain;
+
+export function readBatchUrls(textOrFile: string | { read?: () => string }): string[] {
+  const text = typeof textOrFile === "string" ? textOrFile : textOrFile.read?.() ?? "";
+  return text.replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#") && !line.startsWith(";"));
+}
+
+export const read_batch_urls = readBatchUrls;
+
+export function multipartEncode(data: Record<string | number, string | Uint8Array>, boundary = randomBytes(8).toString("hex")): [Uint8Array, string] {
+  const chunks: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (String(value).includes(boundary)) {
+      throw new Error("Boundary occurs in data");
+    }
+    chunks.push(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${typeof value === "string" ? value : new TextDecoder().decode(value)}\r\n`);
+  }
+  chunks.push(`--${boundary}--\r\n`);
+  return [new TextEncoder().encode(chunks.join("")), `multipart/form-data; boundary=${boundary}`];
+}
+
+export const multipart_encode = multipartEncode;
+
+export function isIterableLike(value: unknown): value is Iterable<unknown> {
+  return value !== null && value !== undefined && typeof value !== "string" && typeof (value as Iterable<unknown>)[Symbol.iterator] === "function";
+}
+
+export const is_iterable_like = isIterableLike;
+
+export function ytdlIsUpdateable(): boolean {
+  return true;
+}
+
+export const ytdl_is_updateable = ytdlIsUpdateable;
+
+export function getExeVersion(exe: string, args: readonly string[] = ["--version"]): string | false {
+  return detectExeVersion(getExeVersionOutput(exe, args));
+}
+
+export const get_exe_version = getExeVersion;
+
+export function determineProtocol(info: Record<string, unknown>): string {
+  const protocol = info.protocol;
+  if (typeof protocol === "string") {
+    return protocol;
+  }
+  const url = typeof info.url === "string" ? info.url : "";
+  const ext = typeof info.ext === "string" ? info.ext : determineExt(url);
+  if (ext === "m3u8") return "m3u8_native";
+  if (ext === "mpd") return "http_dash_segments";
+  return /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1] ?? "http";
+}
+
+export const determine_protocol = determineProtocol;
+
+export function renderTable(headerRow: readonly unknown[], data: readonly (readonly unknown[])[], options: { delim?: boolean | string; extra_gap?: number; hide_empty?: boolean } = {}): string {
+  const width = (value: string) => removeTerminalSequences(value).replaceAll("\t", "").length;
+  const maxLens = (rows: string[][]) => rows[0]?.map((_, index) => Math.max(...rows.map((row) => width(row[index] ?? "")))) ?? [];
+  const sourceRows = [headerRow, ...data].map((row) => row.map((cell) => String(cell ?? "")));
+  const visible = headerRow.map((_, index) => !options.hide_empty || Math.max(...data.map((row) => width(String(row[index] ?? ""))), 0) > 0);
+  const rows = sourceRows.map((row) => row.filter((_, index) => visible[index]));
+  const widths = maxLens(rows);
+  const gap = (options.extra_gap ?? 0) + 1;
+  const renderRow = (row: string[]) => row.map((cell, index) => {
+    const padding = Math.max((widths[index] ?? 0) - width(cell), 0);
+    return cell.includes("\t")
+      ? `${cell.replaceAll("\t", " ".repeat(padding))}${" ".repeat(gap)}`
+      : `${cell}${" ".repeat(padding + gap)}`;
+  }).join("").trimEnd();
+  const lines = rows.map(renderRow);
+  if (options.delim) {
+    const delim = options.delim === true ? "-" : String(options.delim);
+    const delimiterRow = widths.map((widthValue, index) => {
+      const length = widthValue + (index === widths.length - 1 ? 0 : gap);
+      return delim.repeat(length);
+    }).join("");
+    lines.splice(1, 0, delimiterRow);
+  }
+  return lines.join("\n");
+}
+
+export const render_table = renderTable;
+
+export function matchStr(filter: string, data: Record<string, unknown>): boolean {
+  return filter.split(/\s*&\s*/).every((part) => matchOneFilter(part.trim(), data));
+}
+
+export const match_str = matchStr;
+
+export function matchFilterFunc(filters: readonly string[] | null | undefined): (data: Record<string, unknown>) => string | null {
+  return (data) => {
+    for (const filter of filters ?? []) {
+      if (!matchStr(filter, data)) {
+        return filter;
+      }
+    }
+    return null;
+  };
+}
+
+export const match_filter_func = matchFilterFunc;
+
+export class download_range_func {
+  constructor(readonly ranges: Array<[number | null, number | null]>) {}
+
+  *[Symbol.iterator](): IterableIterator<[number | null, number | null]> {
+    yield* this.ranges;
+  }
+}
+
+export function assSubtitlesTimecode(seconds: number): string {
+  return formatSeconds(seconds, ":", true).replace(/(\.\d\d)\d$/, "$1");
+}
+
+export const ass_subtitles_timecode = assSubtitlesTimecode;
+export const parse_dfxp_time_expr = parseDfxpTimeExpr;
+
+export function cliConfigurationArgs(argdict: unknown, keys: readonly string[], defaultValue: readonly string[] = []): string[] {
+  return configurationArgs("default", argdict, "default", keys, defaultValue);
+}
+
+export const cli_configuration_args = cliConfigurationArgs;
+
+export function longToBytes(value: number | bigint, blocksize = 0): Uint8Array {
+  let hex = BigInt(value).toString(16);
+  if (hex.length % 2) hex = `0${hex}`;
+  let bytes = Uint8Array.from(hex.match(/../g)?.map((part) => Number.parseInt(part, 16)) ?? []);
+  if (blocksize && bytes.length % blocksize) {
+    bytes = Uint8Array.from([...new Uint8Array(blocksize - (bytes.length % blocksize)), ...bytes]);
+  }
+  return bytes;
+}
+
+export const long_to_bytes = longToBytes;
+
+export function bytesToLong(bytes: Uint8Array | number[]): bigint {
+  return BigInt(`0x${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("") || "0"}`);
+}
+
+export const bytes_to_long = bytesToLong;
+
+export function pkcs1pad(data: Uint8Array, length: number): Uint8Array {
+  if (data.length > length - 11) {
+    throw new Error("Message too long for PKCS#1 padding");
+  }
+  const paddingLength = length - data.length - 3;
+  const padding = new Uint8Array(paddingLength).map(() => {
+    let byte = 0;
+    while (!byte) byte = randomBytes(1)[0] ?? 0;
+    return byte;
+  });
+  return Uint8Array.from([0, 2, ...padding, 0, ...data]);
+}
+
+export function ohdaveRsaEncrypt(data: Uint8Array, exponent: number | bigint, modulus: number | bigint): Uint8Array {
+  const padded = bytesToLong(pkcs1pad(data, Math.ceil(BigInt(modulus).toString(16).length / 2)));
+  return longToBytes(modPow(padded, BigInt(exponent), BigInt(modulus)));
+}
+
+export const ohdave_rsa_encrypt = ohdaveRsaEncrypt;
+
+export function decodePackedCodes(code: string): string {
+  return code;
+}
+
+export const decode_packed_codes = decodePackedCodes;
+
+export function writeXattr(_path: string, _key: string, _value: string): void {
+  throw new NotImplementedError("Extended attributes are not implemented in the Bun utility layer");
+}
+
+export const write_xattr = writeXattr;
+
+export function randomBirthday(yearField: string, monthField: string, dayField: string): Record<string, string> {
+  const date = new Date(Date.UTC(1950 + Math.floor(Math.random() * 50), Math.floor(Math.random() * 12), 1 + Math.floor(Math.random() * 28)));
+  return {
+    [yearField]: String(date.getUTCFullYear()),
+    [monthField]: String(date.getUTCMonth() + 1),
+    [dayField]: String(date.getUTCDate()),
+  };
+}
+
+export const random_birthday = randomBirthday;
+
+export async function findAvailablePort(interfaceName = ""): Promise<number> {
+  return await new Promise((resolvePort, reject) => {
+    const server = createServer();
+    server.listen(0, interfaceName, () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+    server.on("error", reject);
+  });
+}
+
+export const find_available_port = findAvailablePort;
+
+export function toHighLimitPath(path: string): string {
+  return path;
+}
+
+export const to_high_limit_path = toHighLimitPath;
+
+export function randomUuidv4(): string {
+  return nodeRandomUUID();
+}
+
+export const random_uuidv4 = randomUuidv4;
+
+export function makeDir(path: string): boolean {
+  mkdirSync(path, { recursive: true });
+  return true;
+}
+
+export const make_dir = makeDir;
+
+export function getExecutablePath(): string {
+  return process.argv[1] ?? "ytdlb";
+}
+
+export const get_executable_path = getExecutablePath;
+
+export function getUserConfigDirs(packageName: string): string[] {
+  return [join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "", ".config"), packageName)];
+}
+
+export const get_user_config_dirs = getUserConfigDirs;
+
+export function getSystemConfigDirs(packageName: string): string[] {
+  return [`/etc/${packageName}`];
+}
+
+export const get_system_config_dirs = getSystemConfigDirs;
+
+export function timeSeconds(): number {
+  return Date.now() / 1000;
+}
+
+export const time_seconds = timeSeconds;
+
+export function jwtEncode(payloadData: Record<string, unknown>, key: string | Uint8Array, options: { alg?: "HS256"; headers?: Record<string, unknown> } = {}): string {
+  const header = { alg: options.alg ?? "HS256", typ: "JWT", ...(options.headers ?? {}) };
+  const encode = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const signingInput = `${encode(header)}.${encode(payloadData)}`;
+  const signature = createHmac("sha256", key).update(signingInput).digest("base64url");
+  return `${signingInput}.${signature}`;
+}
+
+export const jwt_encode = jwtEncode;
+
+export function supportsTerminalSequences(stream: unknown): boolean {
+  return Boolean((stream as { isTTY?: boolean } | null)?.isTTY);
+}
+
+export const supports_terminal_sequences = supportsTerminalSequences;
+
+export function windowsEnableVtMode(): boolean {
+  return process.platform !== "win32";
+}
+
+export const windows_enable_vt_mode = windowsEnableVtMode;
+
+export function removeTerminalSequences(value: string): string {
+  return value.replaceAll(new RegExp("\\x1B\\[[0-?]*[ -/]*[@-~]", "g"), "");
+}
+
+export const remove_terminal_sequences = removeTerminalSequences;
+
+export function numberOfDigits(number: number): number {
+  return Math.abs(Math.trunc(number)).toString().length;
+}
+
+export const number_of_digits = numberOfDigits;
+
+export function scaleThumbnailsToMaxFormatWidth(formats: Array<Record<string, unknown>>, thumbnails: Array<Record<string, unknown>>, urlWidthRe: RegExp): void {
+  const maxWidth = Math.max(...formats.map((format) => Number(format.width ?? 0)), 0);
+  for (const thumbnail of thumbnails) {
+    if (!thumbnail.width && typeof thumbnail.url === "string") {
+      const match = urlWidthRe.exec(thumbnail.url);
+      if (match?.[1]) thumbnail.width = Math.min(Number(match[1]), maxWidth || Number(match[1]));
+    }
+  }
+}
+
+export const scale_thumbnails_to_max_format_width = scaleThumbnailsToMaxFormatWidth;
+
+export function parseHttpRange(range: string | null | undefined): { start?: number; end?: number; length?: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(range ?? "");
+  if (!match) return null;
+  const start = match[1] ? Number(match[1]) : undefined;
+  const end = match[2] ? Number(match[2]) : undefined;
+  return { start, end, length: start !== undefined && end !== undefined ? end - start + 1 : undefined };
+}
+
+export const parse_http_range = parseHttpRange;
+
+export async function readStdin(_what = "data"): Promise<string> {
+  return await Bun.stdin.text();
+}
+
+export const read_stdin = readStdin;
+
+export function determineFileEncoding(data: Uint8Array | string): [string, number] {
+  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return ["utf-8", 3];
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return ["utf-16le", 2];
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return ["utf-16be", 2];
+  const firstLine = new TextDecoder().decode(bytes.subarray(0, 200)).split(/\r?\n/, 1)[0] ?? "";
+  return [/coding[:=]\s*([-\w.]+)/.exec(firstLine)?.[1] ?? "utf-8", 0];
+}
+
+export const determine_file_encoding = determineFileEncoding;
+
+export class Config {
+  configs: Config[] = [];
+  own_args: string[] | null = null;
+  parsed_args: string[] = [];
+  filename: string | null = null;
+
+  constructor(readonly parser: { parse_known_args?: (args?: Iterable<string>) => unknown; parse_args?: (args?: Iterable<string>) => unknown } | null = null, readonly label: string | null = null) {}
+
+  init(args: string[] | null = null, filename: string | null = null): boolean {
+    this.own_args = args ?? [];
+    this.parsed_args = this.own_args;
+    this.filename = filename;
+    return true;
+  }
+
+  static readFile(filename: string, defaultValue: string[] = []): string[] {
+    if (!existsSync(filename)) return defaultValue;
+    return shlexSplit(readFileSync(filename, "utf8"));
+  }
+
+  static hideLoginInfo(options: readonly string[]): string[] {
+    const privateOptions = new Set(["-p", "--password", "-u", "--username", "--video-password", "--ap-password", "--ap-username"]);
+    const out = [...options];
+    for (let index = 0; index < out.length; index += 1) {
+      const option = out[index] ?? "";
+      const eq = /^(?<key>-[A-Za-z]|--[A-Za-z-]+)=/.exec(option);
+      if (eq?.groups?.key && privateOptions.has(eq.groups.key)) out[index] = `${eq.groups.key}=PRIVATE`;
+      if (privateOptions.has(option) && index + 1 < out.length) out[index + 1] = "PRIVATE";
+    }
+    return out;
+  }
+
+  get all_args(): Iterable<string> {
+    return this.parsed_args;
+  }
+}
+
+export function mergeHeaders(...dicts: Array<Record<string, string | undefined>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const dict of dicts) {
+    for (const [key, value] of Object.entries(dict)) {
+      if (value !== undefined) out[key.toLowerCase().replace(/(^|-)./g, (part) => part.toUpperCase())] = value;
+    }
+  }
+  return out;
+}
+
+export const merge_headers = mergeHeaders;
+
+export function cachedMethod<This, Args extends unknown[], Return>(func: (self: This, ...args: Args) => Return): (self: This, ...args: Args) => Return {
+  const cache = new WeakMap<object, Map<string, Return>>();
+  return (self, ...args) => {
+    const key = JSON.stringify(args);
+    const objectSelf = self as object;
+    let selfCache = cache.get(objectSelf);
+    if (!selfCache) {
+      selfCache = new Map();
+      cache.set(objectSelf, selfCache);
+    }
+    if (!selfCache.has(key)) selfCache.set(key, func(self, ...args));
+    return selfCache.get(key) as Return;
+  };
+}
+
+export const cached_method = cachedMethod;
+
+export class Namespace {
+  constructor(entries: Record<string, unknown> = {}) {
+    Object.assign(this, entries);
+  }
+
+  [Symbol.iterator](): Iterator<unknown> {
+    return Object.values(this)[Symbol.iterator]();
+  }
+
+  get items_(): Array<[string, unknown]> {
+    return Object.entries(this);
+  }
+}
+
+export class classproperty {
+  constructor(readonly func: (klass: unknown) => unknown) {}
+}
+
+export class function_with_repr {
+  constructor(readonly func: (...args: unknown[]) => unknown, readonly repr?: string) {}
+  call(...args: unknown[]): unknown {
+    return this.func(...args);
+  }
+  toString(): string {
+    return this.repr ?? this.func.toString();
+  }
+}
+
+export function orderedSetFromOptions<T>(options: Iterable<T>, _aliasDict: Record<string, string> = {}): T[] {
+  return orderedSet(options);
+}
+
+export const orderedSet_from_options = orderedSetFromOptions;
+
+export class FormatSorter {
+  constructor(readonly ydl: unknown, readonly fieldPreference: unknown[] = []) {}
+
+  calculate_preference(format: Record<string, unknown>): unknown[] {
+    return this.fieldPreference.map((field) => format[String(field)]);
+  }
+}
+
+function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
+  let result = 1n;
+  let current = base % modulus;
+  let exp = exponent;
+  while (exp > 0n) {
+    if (exp & 1n) result = (result * current) % modulus;
+    current = (current * current) % modulus;
+    exp >>= 1n;
+  }
+  return result;
+}
+
+function matchOneFilter(filter: string, data: Record<string, unknown>): boolean {
+  const unary = /^!(?<key>[A-Za-z0-9_]+)$/.exec(filter);
+  if (unary?.groups?.key) {
+    const value = data[unary.groups.key];
+    return value === false || value === null || value === undefined;
+  }
+  if (/^[A-Za-z0-9_]+$/.test(filter)) {
+    const value = data[filter];
+    return value !== false && value !== null && value !== undefined;
+  }
+  const match = /^(?<key>[A-Za-z0-9_]+)\s*(?<op>>=\??|<=\??|>\??|<\??|!\^=|!\*=|!=|!\$=|\^=|\*=|\$=|~=|=)\s*(?<value>.*)$/.exec(filter);
+  if (!match?.groups?.key || !match.groups.op) {
+    return false;
+  }
+  const current = data[match.groups.key];
+  const optional = match.groups.op.includes("?");
+  if ((current === null || current === undefined) && optional) {
+    return true;
+  }
+  if (current === null || current === undefined) {
+    return false;
+  }
+  const op = match.groups.op.replace("?", "");
+  const expectedRaw = removeQuotes((match.groups.value ?? "").trim()) ?? "";
+  if ([">", ">=", "<", "<="].includes(op)) {
+    const left = Number(current);
+    const right = parseNumericFilterValue(expectedRaw);
+    if (!Number.isFinite(left) || right === null) return false;
+    if (op === ">") return left > right;
+    if (op === ">=") return left >= right;
+    if (op === "<") return left < right;
+    return left <= right;
+  }
+  const currentText = String(current);
+  if (op === "=") return currentText === expectedRaw;
+  if (op === "!=") return currentText !== expectedRaw;
+  if (op === "^=") return currentText.startsWith(expectedRaw);
+  if (op === "!^=") return !currentText.startsWith(expectedRaw);
+  if (op === "*=") return currentText.includes(expectedRaw);
+  if (op === "!*=") return !currentText.includes(expectedRaw);
+  if (op === "$=") return currentText.endsWith(expectedRaw);
+  if (op === "!$=") return !currentText.endsWith(expectedRaw);
+  if (op === "~=") {
+    const regexMatch = /^\(\?i\)(.*)$/.exec(expectedRaw);
+    const pattern = regexMatch?.[1] ?? expectedRaw;
+    return new RegExp(pattern, regexMatch ? "i" : "").test(currentText);
+  }
+  return false;
+}
+
+function parseNumericFilterValue(value: string): number | null {
+  return parseCount(value) ?? parseDuration(value) ?? parseFilesize(value) ?? floatOrNone(value);
+}
+
+function shlexSplit(input: string): string[] {
+  const matches = input.match(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|[^\s#]+/g) ?? [];
+  return matches.map((item) => removeQuotes(item) ?? item);
+}
+
+export function findXpathAttr(node: XmlElement, xpath: string, key: string, value: string | null = null): XmlElement | null {
+  const tag = xpath.split("/").pop()?.replace(/^\.?\/?/, "") ?? xpath;
+  const candidates = node.children.filter((child) => child.tag === tag || xpath === `.//${child.tag}`);
+  return candidates.find((child) => key in child.attrib && (value === null || child.attrib[key] === value)) ?? null;
+}
+
+export const find_xpath_attr = findXpathAttr;
+
+export function xpathAttr(node: XmlElement, xpath: string | readonly string[], key: string, name?: string | null, options: { fatal?: boolean; defaultValue?: string | null } = {}): string | null {
+  const element = xpathElement(node, xpath, name ?? key, { fatal: options.fatal });
+  const value = element?.attrib[key];
+  if (value !== undefined) return value;
+  if ("defaultValue" in options) return options.defaultValue ?? null;
+  if (options.fatal) throw new ExtractorError(`Could not find XML attribute ${name ?? key}`);
+  return null;
+}
+
+export const xpath_attr = xpathAttr;
+
+export class HTMLBreakOnClosingTagParser { feed(_html: string): void {} }
+
+export class HTMLAttributeParser {
+  attrs: Record<string, string | null> = {};
+  feed(html: string): void { this.attrs = extractAttributes(html); }
+}
+
+export class HTMLListAttrsParser extends HTMLAttributeParser {}
+
+export function parseList(webpage: string): string[] {
+  return [...webpage.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map((match) => cleanHtml(match[1] ?? "") ?? "");
+}
+
+export const parse_list = parseList;
+
+export class LenientJSONDecoder {
+  decode(text: string): unknown { return JSON.parse(jsToJson(text)); }
+}
+
+export class netrc_from_content {
+  readonly hosts: Record<string, { login?: string; password?: string; account?: string }> = {};
+  constructor(content: string) {
+    const tokens = shlexSplit(content);
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (tokens[index] !== "machine" || !tokens[index + 1]) continue;
+      index += 1;
+      const machine = tokens[index] ?? "";
+      const entry: { login?: string; password?: string; account?: string } = {};
+      while (index + 1 < tokens.length && tokens[index + 1] !== "machine") {
+        const key = tokens[++index];
+        const tokenValue = tokens[++index];
+        if ((key === "login" || key === "password" || key === "account") && tokenValue) entry[key] = tokenValue;
+      }
+      this.hosts[machine] = entry;
+    }
+  }
+  authenticators(host: string): [string | undefined, string | undefined, string | undefined] | null {
+    const entry = this.hosts[host];
+    return entry ? [entry.login, entry.account, entry.password] : null;
+  }
+}
+
+export class Popen {
+  static run(args: readonly string[], options: { text?: boolean } = {}): [string | Uint8Array, string | Uint8Array, number | null] {
+    const result = spawnSync(args[0] ?? "", args.slice(1), { encoding: options.text ? "utf8" : "buffer" });
+    return [result.stdout ?? "", result.stderr ?? "", result.status];
+  }
+}
+
+export function extractTimezone(dateStr: string, defaultValue: number | null = null): [number | null, string] {
+  const match = /(?<tz>Z|(?<sign>[+-])(?<hours>\d{2}):?(?<minutes>\d{2}))$/.exec(dateStr);
+  if (!match?.groups?.tz) return [defaultValue, dateStr];
+  if (match.groups.tz === "Z") return [0, dateStr.slice(0, -1)];
+  const sign = match.groups.sign === "-" ? -1 : 1;
+  return [sign * (Number(match.groups.hours) * 3600 + Number(match.groups.minutes) * 60), dateStr.slice(0, -match.groups.tz.length)];
+}
+
+export const extract_timezone = extractTimezone;
+
+export function dateFormats(dayFirst = true): string[] {
+  const base = ["%Y%m%d", "%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S"];
+  return dayFirst ? [...base, "%d/%m/%Y", "%d-%m-%Y"] : [...base, "%m/%d/%Y", "%m-%d-%Y"];
+}
+
+export const date_formats = dateFormats;
+
+export class LockingUnsupportedError extends Error { override name = "LockingUnsupportedError"; }
+
+export class locked_file {
+  constructor(readonly filename: string, readonly mode = "r") {}
+  async read(): Promise<string> { return await Bun.file(this.filename).text(); }
+  async write(data: string | Uint8Array): Promise<void> { await Bun.write(this.filename, data); }
+  close(): void {}
+}
+
+export function setproctitle(_title: string): void {}
+
+export class PlaylistEntries<T = unknown> implements Iterable<[number, T]> {
+  constructor(readonly ydl: { params?: Record<string, unknown> }, readonly infoDict: { entries?: Iterable<T> | null }) {
+    if (!infoDict.entries) throw new EntryNotInPlaylist("There are no entries");
+  }
+  static parsePlaylistItems(value: string): Array<number | { start: number | null; end: number | null; step: number | null }> {
+    return value.split(",").map((segment) => {
+      const match = /^(?<start>[+-]?\d+)?(?<range>[:-](?<end>[+-]?\d+|inf(?:inite)?)?(?::(?<step>[+-]?\d+))?)?$/.exec(segment);
+      if (!match?.groups) throw new Error(`${segment} is not a valid specification`);
+      if (!match.groups.range) return Number(match.groups.start);
+      return { start: intOrNone(match.groups.start ?? null), end: match.groups.end?.startsWith("inf") ? null : intOrNone(match.groups.end ?? null), step: intOrNone(match.groups.step ?? null) };
+    });
+  }
+  *[Symbol.iterator](): Iterator<[number, T]> {
+    let index = 1;
+    for (const entry of this.infoDict.entries ?? []) yield [index++, entry];
+  }
+}
+
+export function urlhandleDetectExt(urlHandle: { headers?: { get?: (key: string) => string | null | undefined } }, defaultValue: string | null = null): string | null {
+  const getHeader = (key: string) => urlHandle.headers?.get?.(key) ?? null;
+  const contentDisposition = getHeader("Content-Disposition");
+  const filename = /filename="([^"]+)"/.exec(contentDisposition ?? "")?.[1];
+  return determineExt(filename ?? getHeader("x-amz-meta-name") ?? undefined, getHeader("x-amz-meta-file-type") ?? mimetype2ext(getHeader("Content-Type"), defaultValue));
+}
+
+export const urlhandle_detect_ext = urlhandleDetectExt;
+
+export class ISO3166Utils {
+  private static readonly map: Record<string, string> = { US: "United States", GB: "United Kingdom", JP: "Japan", DE: "Germany", FR: "France", CA: "Canada", AU: "Australia" };
+  static short2full(code: string): string | undefined { return ISO3166Utils.map[code.toUpperCase()]; }
+}
+
+export class GeoUtils {
+  static randomIPv4(block: string): string {
+    const parts = block.split(/[./]/).map(Number).filter(Number.isFinite);
+    while (parts.length < 4) parts.push(Math.floor(Math.random() * 256));
+    return parts.slice(0, 4).join(".");
+  }
 }
 
 export class ISO639Utils {

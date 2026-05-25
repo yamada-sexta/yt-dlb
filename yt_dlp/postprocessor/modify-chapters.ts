@@ -373,15 +373,17 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
             start_time: chapter.end_time,
             _categories: [],
           });
+          const afterCategories = afterChapter._categories ?? [];
           const currentCategories: CategoryTuple[] = [];
           for (const category of currentChapter._categories) {
             if (category[1] < chapter.start_time) {
               currentCategories.push(category);
             }
             if (category[2] > chapter.end_time) {
-              afterChapter._categories.push(category);
+              afterCategories.push(category);
             }
           }
+          afterChapter._categories = afterCategories;
           currentChapter._categories = currentCategories;
           if (
             JSON.stringify(currentChapter._categories) !==
