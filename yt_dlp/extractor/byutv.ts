@@ -59,7 +59,7 @@ export class BYUtvIE extends InfoExtractor {
       }
       const ext = determineExt(videoUrl);
       if (ext === "m3u8") {
-        const [m3u8Formats, m3u8Subtitles] = this.extractM3u8FormatsAndSubtitles(
+        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(
           videoUrl,
           videoId,
           "mp4",
@@ -68,7 +68,7 @@ export class BYUtvIE extends InfoExtractor {
         formats.push(...m3u8Formats);
         this.mergeSubtitles(m3u8Subtitles, subtitles);
       } else if (ext === "mpd") {
-        const [mpdFormats, mpdSubtitles] = this.extractMpdFormatsAndSubtitles(videoUrl, videoId, { mpdId: "dash", fatal: false });
+        const [mpdFormats, mpdSubtitles] = await this.extractMpdFormatsAndSubtitles(videoUrl, videoId, { mpdId: "dash", fatal: false });
         formats.push(...mpdFormats);
         this.mergeSubtitles(mpdSubtitles, subtitles);
       } else {

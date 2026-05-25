@@ -114,12 +114,32 @@ class TestInfoExtractor extends InfoExtractor {
     return this.extractM3u8Formats(...args);
   }
 
+  parseM3u8FormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseM3u8FormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseM3u8FormatsAndSubtitles"]> {
+    return this.parseM3u8FormatsAndSubtitles(...args);
+  }
+
   extractMpdFormatsPublic(...args: Parameters<InfoExtractor["extractMpdFormats"]>): ReturnType<InfoExtractor["extractMpdFormats"]> {
     return this.extractMpdFormats(...args);
   }
 
+  parseMpdFormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseMpdFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseMpdFormatsAndSubtitles"]> {
+    return this.parseMpdFormatsAndSubtitles(...args);
+  }
+
+  parseIsmFormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseIsmFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseIsmFormatsAndSubtitles"]> {
+    return this.parseIsmFormatsAndSubtitles(...args);
+  }
+
   mergeSubtitlesPublic(...args: Parameters<InfoExtractor["mergeSubtitles"]>): ReturnType<InfoExtractor["mergeSubtitles"]> {
     return this.mergeSubtitles(...args);
+  }
+
+  parseF4mFormatsPublic(...args: Parameters<InfoExtractor["parseF4mFormats"]>): ReturnType<InfoExtractor["parseF4mFormats"]> {
+    return this.parseF4mFormats(...args);
+  }
+
+  parseXspfPublic(...args: Parameters<InfoExtractor["parseXspf"]>): ReturnType<InfoExtractor["parseXspf"]> {
+    return this.parseXspf(...args);
   }
 
   parseHtml5MediaEntriesPublic(...args: Parameters<InfoExtractor["parseHtml5MediaEntries"]>): ReturnType<InfoExtractor["parseHtml5MediaEntries"]> {
@@ -129,6 +149,22 @@ class TestInfoExtractor extends InfoExtractor {
   extractJwplayerDataPublic(...args: Parameters<InfoExtractor["extractJwplayerData"]>): ReturnType<InfoExtractor["extractJwplayerData"]> {
     return this.extractJwplayerData(...args);
   }
+
+  getNetrcLoginInfoPublic(...args: Parameters<InfoExtractor["getNetrcLoginInfo"]>): ReturnType<InfoExtractor["getNetrcLoginInfo"]> {
+    return this.getNetrcLoginInfo(...args);
+  }
+}
+
+function fakeDownloader(params: Record<string, unknown>) {
+  return {
+    params,
+    async urlopen(url: string | URL | Request) {
+      return await fetch(url);
+    },
+    toScreen() {},
+    reportWarning() {},
+    writeDebug() {},
+  };
 }
 
 describe("InfoExtractor HTML helpers", () => {
@@ -462,6 +498,22 @@ describe("InfoExtractor common helpers", () => {
     expect(await getInfoExtractor(YoutubeIE.ieKey())).toBe(YoutubeIE);
   });
 
+  test("netrc login info matches Python fixture behavior", async () => {
+    for (const params of [
+      { usenetrc: true, netrc_location: "./test/testdata/netrc/netrc" },
+      { netrc_cmd: "cat ./test/testdata/netrc/netrc" },
+    ]) {
+      const netrcIe = new TestInfoExtractor();
+      netrcIe.setDownloader(fakeDownloader(params));
+      expect(await netrcIe.getNetrcLoginInfoPublic("normal_use")).toEqual(["user", "pass"]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("empty_user")).toEqual(["", "pass"]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("empty_pass")).toEqual(["user", ""]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("both_empty")).toEqual(["", ""]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("nonexistent")).toEqual([null, null]);
+      await expect(netrcIe.getNetrcLoginInfoPublic(";echo rce")).rejects.toThrow();
+    }
+  });
+
   test("url and playlist result helpers", () => {
     expect(InfoExtractor.urlResult("https://example.com/v", "Example", "id", "title")).toEqual({
       _type: "url",
@@ -527,6 +579,205 @@ describe("InfoExtractor common helpers", () => {
       en: [{ url: "base" }, { url: "a" }],
       fr: [{ url: "b" }],
     });
+  });
+
+  test("parse_m3u8_formats matches local Python fixture cases", async () => {
+    const bipbopUrl = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8";
+    const bipbop = await Bun.file("./test/testdata/m3u8/bipbop_16x9.m3u8").text();
+    const [bipbopFormats, bipbopSubs] = ie.parseM3u8FormatsAndSubtitlesPublic(bipbop, bipbopUrl, { ext: "mp4" });
+    expect(bipbopFormats).toContainEqual(expect.objectContaining({
+      format_id: "bipbop_audio-BipBop Audio 2",
+      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/alternate_audio_aac/prog_index.m3u8",
+      language: "eng",
+      vcodec: "none",
+      protocol: "m3u8_native",
+    }));
+    expect(bipbopFormats).toContainEqual(expect.objectContaining({
+      format_id: "263.851",
+      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8",
+      width: 416,
+      height: 234,
+      vcodec: "avc1.4d400d",
+      acodec: "mp4a.40.2",
+    }));
+    expect(bipbopSubs.en).toEqual([
+      { url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" },
+      { url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng_forced/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" },
+    ]);
+
+    const fmp4Url = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
+    const fmp4 = await Bun.file("./test/testdata/m3u8/img_bipbop_adv_example_fmp4.m3u8").text();
+    const [fmp4Formats, fmp4Subs] = ie.parseM3u8FormatsAndSubtitlesPublic(fmp4, fmp4Url, { ext: "mp4" });
+    expect(fmp4Formats).toContainEqual(expect.objectContaining({
+      format_id: "aud1-English",
+      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/a1/prog_index.m3u8",
+      language: "en",
+      vcodec: "none",
+      source_preference: 0,
+    }));
+    expect(fmp4Formats).toContainEqual(expect.objectContaining({
+      format_id: "530.721",
+      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/v2/prog_index.m3u8",
+      width: 480,
+      height: 270,
+      vcodec: "avc1.640015",
+      acodec: "none",
+    }));
+    expect(fmp4Subs.en).toEqual([{ url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/s1/en/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" }]);
+  });
+
+  test("parse_mpd_formats matches local Python fixture cases", async () => {
+    const floatDuration = await Bun.file("./test/testdata/mpd/float_duration.mpd").text();
+    const [floatFormats] = ie.parseMpdFormatsAndSubtitlesPublic(floatDuration, { mpdUrl: "http://unknown/manifest.mpd" });
+    expect(floatFormats).toContainEqual(expect.objectContaining({
+      manifest_url: "http://unknown/manifest.mpd",
+      ext: "m4a",
+      format_id: "318597",
+      format_note: "DASH audio",
+      acodec: "mp4a.40.2",
+      vcodec: "none",
+      tbr: 61.587,
+    }));
+    expect(floatFormats).toContainEqual(expect.objectContaining({
+      ext: "mp4",
+      format_id: "5997485",
+      vcodec: "avc1.640032",
+      acodec: "none",
+      width: 1920,
+      height: 1080,
+      tbr: 5997.485,
+    }));
+
+    const unfragmented = await Bun.file("./test/testdata/mpd/unfragmented.mpd").text();
+    const [unfragmentedFormats] = ie.parseMpdFormatsAndSubtitlesPublic(unfragmented, {
+      mpdUrl: "https://v.redd.it/hw1x7rcg7zl21/DASHPlaylist.mpd",
+      mpdBaseUrl: "https://v.redd.it/hw1x7rcg7zl21",
+    });
+    expect(unfragmentedFormats).toContainEqual(expect.objectContaining({
+      url: "https://v.redd.it/hw1x7rcg7zl21/audio",
+      ext: "m4a",
+      format_id: "AUDIO-1",
+      asr: 48000,
+      acodec: "mp4a.40.2",
+      vcodec: "none",
+    }));
+    expect(unfragmentedFormats).toContainEqual(expect.objectContaining({
+      url: "https://v.redd.it/hw1x7rcg7zl21/DASH_360",
+      ext: "mp4",
+      format_id: "VIDEO-1",
+      width: 360,
+      height: 360,
+      fps: 30,
+    }));
+
+    const subtitles = await Bun.file("./test/testdata/mpd/subtitles.mpd").text();
+    const [subtitleFormats, subtitleEntries] = ie.parseMpdFormatsAndSubtitlesPublic(subtitles, {
+      mpdUrl: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/manifest.mpd",
+      mpdBaseUrl: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/",
+    });
+    expect(subtitleFormats).toContainEqual(expect.objectContaining({
+      format_id: "audio=128001",
+      ext: "m4a",
+      tbr: 128.001,
+      asr: 48000,
+      fragment_base_url: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
+    }));
+    expect(subtitleEntries.en).toEqual([expect.objectContaining({
+      ext: "mp4",
+      protocol: "http_dash_segments",
+      fragment_base_url: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
+    })]);
+  });
+
+  test("parse_f4m_formats matches local Python fixture case", async () => {
+    const f4mUrl = "http://api.new.livestream.com/accounts/6115179/events/6764928/videos/144884262.f4m";
+    const f4m = await Bun.file("./test/testdata/f4m/custom_base_url.f4m").text();
+    expect(ie.parseF4mFormatsPublic(f4m, f4mUrl, null)).toEqual([expect.objectContaining({
+      manifest_url: f4mUrl,
+      ext: "flv",
+      format_id: "2148",
+      protocol: "f4m",
+      tbr: 2148,
+      width: 1280,
+      height: 720,
+    })]);
+  });
+
+  test("parse_xspf matches local Python fixture case", async () => {
+    const xspfUrl = "https://example.org/src/foo_xspf.xspf";
+    const xspf = await Bun.file("./test/testdata/xspf/foo_xspf.xspf").text();
+    expect(ie.parseXspfPublic(xspf, "foo_xspf", { xspfUrl, xspfBaseUrl: xspfUrl })).toMatchObject([{
+      id: "foo_xspf",
+      title: "Pandemonium",
+      description: "Visit http://bigbrother404.bandcamp.com",
+      duration: 202.416,
+      formats: [{ manifest_url: xspfUrl, url: "https://example.org/src/cd1/track%201.mp3" }],
+    }, {
+      id: "foo_xspf",
+      title: "Final Cartridge (Nichico Twelve Remix)",
+      duration: 255.857,
+      formats: [{ manifest_url: xspfUrl, url: "https://example.org/%E3%83%88%E3%83%A9%E3%83%83%E3%82%AF%E3%80%80%EF%BC%92.mp3" }],
+    }, {
+      id: "foo_xspf",
+      title: "Rebuilding Nightingale",
+      duration: 287.915,
+      formats: [
+        { manifest_url: xspfUrl, url: "https://example.org/src/track3.mp3" },
+        { manifest_url: xspfUrl, url: "https://example.com/track3.mp3" },
+      ],
+    }]);
+  });
+
+  test("parse_ism_formats matches local Python fixture cases", async () => {
+    const sintelUrl = "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/Manifest";
+    const sintel = await Bun.file("./test/testdata/ism/sintel.Manifest").text();
+    const [sintelFormats, sintelSubs] = ie.parseIsmFormatsAndSubtitlesPublic(sintel, sintelUrl);
+    expect(sintelFormats).toContainEqual(expect.objectContaining({
+      format_id: "audio-128",
+      url: sintelUrl,
+      ext: "isma",
+      tbr: 128,
+      asr: 48000,
+      vcodec: "none",
+      acodec: "AACL",
+      protocol: "ism",
+      audio_channels: 2,
+    }));
+    expect(sintelFormats).toContainEqual(expect.objectContaining({
+      format_id: "video-4482",
+      url: sintelUrl,
+      ext: "ismv",
+      width: 1688,
+      height: 720,
+      tbr: 4482,
+      vcodec: "AVC1",
+      acodec: "none",
+    }));
+    expect(sintelSubs.eng).toEqual([expect.objectContaining({
+      ext: "ismt",
+      protocol: "ism",
+      url: sintelUrl,
+      manifest_url: sintelUrl,
+    })]);
+
+    const ec3Url = "https://smstr01.dmm.t-online.de/smooth24/smoothstream_m1/streaming/sony/9221438342941275747/636887760842957027/25_km_h-Trailer-9221571562372022953_deu_20_1300k_HD_H_264_ISMV.ism/Manifest";
+    const ec3 = await Bun.file("./test/testdata/ism/ec-3_test.Manifest").text();
+    const [ec3Formats] = ie.parseIsmFormatsAndSubtitlesPublic(ec3, ec3Url);
+    expect(ec3Formats).toContainEqual(expect.objectContaining({
+      format_id: "audio_deu_1-224",
+      language: "deu",
+      ext: "isma",
+      acodec: "EC-3",
+      audio_channels: 6,
+    }));
+    expect(ec3Formats).toContainEqual(expect.objectContaining({
+      format_id: "video_deu-8079",
+      language: "deu",
+      ext: "ismv",
+      width: 1920,
+      height: 1080,
+      tbr: 8079,
+    }));
   });
 
   test("expected status returns content", async () => {
@@ -709,12 +960,6 @@ describe("InfoExtractor HTML5 media entries", () => {
 });
 
 describe("Python test_InfoExtractor.py inventory", () => {
-  test.todo("test_get_netrc_login_info", () => undefined);
-  test.todo("test_parse_m3u8_formats", () => undefined);
-  test.todo("test_parse_mpd_formats", () => undefined);
-  test.todo("test_parse_ism_formats", () => undefined);
-  test.todo("test_parse_f4m_formats", () => undefined);
-  test.todo("test_parse_xspf", () => undefined);
   test.todo("test_extract_m3u8_formats", () => undefined);
   test.todo("test_extract_m3u8_formats_warning", () => undefined);
 });

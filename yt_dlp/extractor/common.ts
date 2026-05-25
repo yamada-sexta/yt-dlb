@@ -1,6 +1,10 @@
 // Source: yt_dlp/extractor/common.py
 // Port note: extractor IO is async and uses Bun/Web Request/Response primitives.
 
+import { $ } from "bun";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+
 import { compatEtreeFromstring, type XmlElement } from "../compat/index.ts";
 import type { DownloaderHost } from "../downloader/common.ts";
 import { NotImplementedError } from "../errors.ts";
@@ -16,6 +20,7 @@ import {
   NO_DEFAULT,
   parseDuration,
   parseIso8601,
+  parseM3u8Attributes,
   parseResolution,
   RegexNotFoundError,
   stripOrNone,
@@ -61,6 +66,7 @@ export interface DownloadOptions {
 
 export abstract class InfoExtractor {
   static readonly _VALID_URL: string | RegExp | readonly (string | RegExp)[] | false = false;
+  static readonly _EMBED_REGEX: readonly string[] = [];
   static readonly _WORKING: boolean = true;
   static readonly _NETRC_MACHINE: string | false = false;
   static readonly _GEO_COUNTRIES: readonly string[] = [];
@@ -144,11 +150,11 @@ export abstract class InfoExtractor {
     this.downloader = downloader;
   }
 
-  initialize(): void | Promise<void> {
+  async initialize(): Promise<void> {
     this.printedMessages.clear();
     if (!this.ready) {
-      this.initializePreLogin();
-      this.realInitialize();
+      await this.initializePreLogin();
+      await this.realInitialize();
       this.ready = true;
     }
   }
@@ -188,9 +194,9 @@ export abstract class InfoExtractor {
     }
   }
 
-  protected initializePreLogin(): void {}
+  protected initializePreLogin(): void | Promise<void> {}
 
-  protected realInitialize(): void {}
+  protected realInitialize(): void | Promise<void> {}
 
   protected async realExtract(_url: string): Promise<ExtractorInfo | null> {
     throw new Error("This method must be implemented by subclasses");
@@ -218,6 +224,111 @@ export abstract class InfoExtractor {
 
   protected writeDebug(message: string): void {
     this.downloader?.writeDebug?.(`[${this.IE_NAME}] ${message}`);
+  }
+
+  protected async getNetrcLoginInfo(netrcMachine: string | null = null): Promise<[string | null, string | null]> {
+    const machine = netrcMachine ?? ((this.constructor as typeof InfoExtractor)._NETRC_MACHINE || null);
+    if (!machine) {
+      throw new ExtractorError(`Missing netrc_machine and ${this.constructor.name}._NETRC_MACHINE`);
+    }
+    if (machine.startsWith("-") || machine.startsWith("_") || !/^[A-Za-z0-9._-]+$/.test(machine)) {
+      throw new ExtractorError(`Invalid netrc machine: ${JSON.stringify(machine)}`, { expected: true });
+    }
+
+    const netrcCmd = this.getParam<string | null>("netrc_cmd", null);
+    let content: string | null = null;
+    if (netrcCmd) {
+      const cmd = netrcCmd.replaceAll("{}", machine);
+      this.toScreen(`Executing command: ${cmd}`);
+      const output = await $`${{ raw: cmd }}`.nothrow().quiet();
+      if (output.exitCode !== 0) {
+        throw new Error(`Command returned error code ${output.exitCode}`);
+      }
+      content = new TextDecoder().decode(output.stdout);
+    } else if (this.getParam("usenetrc", false)) {
+      let netrcFile = expandUserPath(this.getParam("netrc_location", "~"));
+      try {
+        if ((await stat(netrcFile)).isDirectory()) {
+          netrcFile = join(netrcFile, ".netrc");
+        }
+      } catch {
+        // Match Python netrc behavior: the read below raises if the file is missing.
+      }
+      content = await Bun.file(netrcFile).text();
+    } else {
+      return [null, null];
+    }
+
+    const authenticators = parseNetrcAuthenticators(content, machine);
+    if (!authenticators) {
+      this.toScreen(`No authenticators for ${machine}`);
+      return [null, null];
+    }
+    this.writeDebug(`Using netrc for ${machine} authentication`);
+    return authenticators;
+  }
+
+  protected _get_netrc_login_info(...args: Parameters<InfoExtractor["getNetrcLoginInfo"]>): ReturnType<InfoExtractor["getNetrcLoginInfo"]> {
+    return this.getNetrcLoginInfo(...args);
+  }
+
+  protected async getLoginInfo(netrcMachine: string | null = null): Promise<[string | null, string | null]> {
+    const username = this.getParam<string | null>("username", null) ?? this.getParam<string | null>("ap_username", null);
+    const password = this.getParam<string | null>("password", null) ?? this.getParam<string | null>("ap_password", null);
+    if (username !== null || password !== null) {
+      return [username, password];
+    }
+    return await this.getNetrcLoginInfo(netrcMachine);
+  }
+
+  protected getTfaInfo(note = "two-factor verification code"): string | null {
+    return this.getParam<string | null>("twofactor", null) ?? this.getParam<string | null>("2fa", null) ?? this.getParam<string | null>(note, null);
+  }
+
+  protected raiseLoginRequired(message = "This video requires login", options: { metadataAvailable?: boolean; method?: string | null } = {}): never {
+    void options;
+    throw new ExtractorError(message, { expected: true });
+  }
+
+  protected raiseNoFormats(message: string, options: { expected?: boolean; videoId?: string | null } = {}): never {
+    throw new ExtractorError(message, { expected: options.expected, videoId: options.videoId });
+  }
+
+  protected raiseGeoRestricted(message = "This video is not available from your location", options: { countries?: readonly string[]; metadataAvailable?: boolean } = {}): never {
+    void options;
+    throw new GeoRestrictedError(message, options.countries ?? (this.constructor as typeof InfoExtractor)._GEO_COUNTRIES);
+  }
+
+  protected formHiddenInputs(formId: string, webpage: string): Record<string, string> {
+    const inputs: Record<string, string> = {};
+    let inForm = false;
+    new HTMLRewriter()
+      .on("form", {
+        element(element) {
+          if (element.getAttribute("id") === formId || element.getAttribute("name") === formId) {
+            inForm = true;
+            element.onEndTag(() => {
+              inForm = false;
+            });
+          }
+        },
+      })
+      .on("input", {
+        element(element) {
+          if (!inForm || element.getAttribute("type") !== "hidden") {
+            return;
+          }
+          const name = element.getAttribute("name");
+          if (name) {
+            inputs[name] = element.getAttribute("value") ?? "";
+          }
+        },
+      })
+      .transform(webpage);
+    if (!Object.keys(inputs).length) {
+      throw new ExtractorError(`Unable to extract ${formId} hidden inputs`);
+    }
+    return inputs;
   }
 
   protected async requestWebpage(urlOrRequest: string | URL | Request, videoId: string, options: DownloadOptions = {}): Promise<Response | false> {
@@ -1041,28 +1152,331 @@ export abstract class InfoExtractor {
     }];
   }
 
-  protected extractM3u8FormatsAndSubtitles(
+  protected parseM3u8FormatsAndSubtitles(
+    m3u8Doc: string,
+    m3u8Url: string | null = null,
+    options: {
+      ext?: string | null;
+      entryProtocol?: string;
+      preference?: number | null;
+      quality?: number | null;
+      m3u8Id?: string | null;
+      live?: boolean;
+    } = {},
+  ): [Array<Record<string, unknown>>, Record<string, Array<Record<string, unknown>>>] {
+    const ext = options.ext ?? "mp4";
+    const entryProtocol = options.entryProtocol ?? "m3u8_native";
+    const formats: Array<Record<string, unknown>> = [];
+    const subtitles: Record<string, Array<Record<string, unknown>>> = {};
+    const groups: Record<string, Array<Record<string, string>>> = {};
+
+    const formatUrl = (url: string): string => urljoin(m3u8Url, url) ?? url;
+    if (m3u8Doc.includes("#EXT-X-TARGETDURATION")) {
+      return [[filterUndefined({
+        format_id: options.m3u8Id ?? undefined,
+        url: m3u8Url ?? `data:application/x-mpegurl,${encodeURIComponent(m3u8Doc)}`,
+        ext,
+        protocol: entryProtocol,
+        preference: options.preference ?? undefined,
+        quality: options.quality ?? undefined,
+      })], subtitles];
+    }
+
+    const extractMedia = (line: string): void => {
+      const media = parseM3u8Attributes(line);
+      const mediaType = media.TYPE;
+      const groupId = media["GROUP-ID"];
+      const name = media.NAME;
+      if (!mediaType || !groupId || !name) {
+        return;
+      }
+      groups[groupId] ??= [];
+      groups[groupId]!.push(media);
+      if (mediaType === "SUBTITLES") {
+        if (!media.URI) {
+          return;
+        }
+        const url = formatUrl(media.URI);
+        const subInfo: Record<string, unknown> = {
+          url,
+          ext: determineExt(url),
+        };
+        if (subInfo.ext === "m3u8") {
+          subInfo.ext = "vtt";
+          subInfo.protocol = "m3u8_native";
+        }
+        const lang = media.LANGUAGE ?? "und";
+        subtitles[lang] ??= [];
+        subtitles[lang]!.push(subInfo);
+        return;
+      }
+      if ((mediaType === "AUDIO" || mediaType === "VIDEO") && media.URI) {
+        const isAudio = mediaType === "AUDIO";
+        formats.push(filterUndefined({
+          format_id: joinNonempty(options.m3u8Id, groupId, name),
+          format_note: name,
+          url: formatUrl(media.URI),
+          manifest_url: m3u8Url ?? undefined,
+          language: media.LANGUAGE,
+          ext,
+          protocol: entryProtocol,
+          preference: options.preference ?? undefined,
+          quality: options.quality ?? undefined,
+          vcodec: isAudio ? "none" : undefined,
+          _audio_group_id: isAudio && media.DEFAULT !== "NO" && media.AUTOSELECT !== "NO" ? groupId : undefined,
+        }));
+      }
+    };
+
+    for (const line of m3u8Doc.split(/\r?\n/)) {
+      if (line.startsWith("#EXT-X-MEDIA:")) {
+        extractMedia(line);
+      }
+    }
+
+    let lastStreamInf: Record<string, string> = {};
+    for (const rawLine of m3u8Doc.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (line.startsWith("#EXT-X-STREAM-INF:")) {
+        lastStreamInf = parseM3u8Attributes(line);
+        continue;
+      }
+      if (!line || line.startsWith("#")) {
+        continue;
+      }
+      const tbr = floatOrNone(lastStreamInf["AVERAGE-BANDWIDTH"] ?? lastStreamInf.BANDWIDTH, 1000);
+      const resolution = lastStreamInf.RESOLUTION ? parseResolution(lastStreamInf.RESOLUTION) : {};
+      const codecs = parseM3u8Codecs(lastStreamInf.CODECS);
+      const formatId = options.live ? options.m3u8Id ?? undefined : joinNonempty(options.m3u8Id, lastStreamInf.NAME ?? String(tbr ?? formats.length));
+      const format: Record<string, unknown> = filterUndefined({
+        format_id: formatId,
+        url: formatUrl(line),
+        manifest_url: m3u8Url ?? undefined,
+        tbr: tbr ?? undefined,
+        ext,
+        fps: floatOrNone(lastStreamInf["FRAME-RATE"]) ?? undefined,
+        protocol: entryProtocol,
+        preference: options.preference ?? undefined,
+        quality: options.quality ?? undefined,
+        width: resolution.width,
+        height: resolution.height,
+        ...codecs,
+        _audio_group_id: lastStreamInf.AUDIO && codecs.vcodec !== "none" ? lastStreamInf.AUDIO : undefined,
+      });
+      if (lastStreamInf.AUDIO && codecs.vcodec !== "none" && groups[lastStreamInf.AUDIO]?.[0]?.URI) {
+        format.acodec = "none";
+      }
+      formats.push(format);
+      lastStreamInf = {};
+    }
+
+    const audioGroups = [...new Set(
+      formats
+        .filter((format) => format.vcodec !== "none" && typeof format._audio_group_id === "string")
+        .sort((left, right) => Number(left.tbr ?? 0) - Number(right.tbr ?? 0))
+        .map((format) => String(format._audio_group_id)),
+    )];
+    for (const format of formats) {
+      const audioGroupId = typeof format._audio_group_id === "string" ? format._audio_group_id : null;
+      delete format._audio_group_id;
+      if (format.vcodec === "none" && audioGroupId && audioGroups.length > 1) {
+        format.source_preference = audioGroups.indexOf(audioGroupId);
+      }
+    }
+    return [formats, subtitles];
+  }
+
+  protected _parse_m3u8_formats_and_subtitles(...args: Parameters<InfoExtractor["parseM3u8FormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseM3u8FormatsAndSubtitles"]> {
+    return this.parseM3u8FormatsAndSubtitles(...args);
+  }
+
+  protected async extractM3u8FormatsAndSubtitles(
     m3u8Url: string,
     videoId: string,
     ext = "mp4",
-    options: { entryProtocol?: string; m3u8Id?: string; live?: boolean } = {},
-  ): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
-    void m3u8Url;
-    void videoId;
-    void ext;
-    void options;
-    throw new NotImplementedError("HLS manifest subtitle extraction");
+    options: { entryProtocol?: string; m3u8Id?: string; live?: boolean; fatal?: boolean } = {},
+  ): Promise<[Array<Record<string, unknown>>, Record<string, unknown[]>]> {
+    const manifest = await this.downloadWebpage(m3u8Url, videoId, {
+      note: "Downloading m3u8 information",
+      errnote: "Failed to download m3u8 information",
+      fatal: options.fatal ?? true,
+    });
+    if (manifest === false) {
+      return [[], {}];
+    }
+    return this.parseM3u8FormatsAndSubtitles(manifest, m3u8Url, {
+      ext,
+      entryProtocol: options.entryProtocol,
+      m3u8Id: options.m3u8Id,
+      live: options.live,
+    });
   }
 
-  protected extractMpdFormatsAndSubtitles(
+  protected async extractMpdFormatsAndSubtitles(
     mpdUrl: string,
     videoId: string,
     options: { mpdId?: string; fatal?: boolean } = {},
-  ): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
-    void mpdUrl;
-    void videoId;
-    void options;
-    throw new NotImplementedError("DASH manifest subtitle extraction");
+  ): Promise<[Array<Record<string, unknown>>, Record<string, unknown[]>]> {
+    const manifest = await this.downloadXml(mpdUrl, videoId, {
+      note: "Downloading MPD manifest",
+      errnote: "Failed to download MPD manifest",
+      fatal: options.fatal ?? true,
+    });
+    if (manifest === false) {
+      return [[], {}];
+    }
+    const [formats, subtitles] = this.parseMpdFormatsAndSubtitles(manifest, { mpdUrl });
+    if (options.mpdId) {
+      for (const format of formats) {
+        format.format_id = joinNonempty(options.mpdId, format.format_id);
+      }
+    }
+    return [formats, subtitles];
+  }
+
+  protected parseMpdFormatsAndSubtitles(
+    mpdDoc: XmlElement | string,
+    options: { mpdUrl?: string | null; mpdBaseUrl?: string | null } = {},
+  ): [Array<Record<string, unknown>>, Record<string, Array<Record<string, unknown>>>] {
+    const root = typeof mpdDoc === "string" ? compatEtreeFromstring(mpdDoc) : mpdDoc;
+    const formats: Array<Record<string, unknown>> = [];
+    const subtitles: Record<string, Array<Record<string, unknown>>> = {};
+    const rootBase = firstChildText(root, "BaseURL") ?? normalizeMpdBaseUrl(options.mpdBaseUrl) ?? options.mpdUrl ?? null;
+
+    for (const period of childrenByName(root, "Period")) {
+      const periodBase = urljoin(rootBase, firstChildText(period, "BaseURL")) ?? rootBase;
+      for (const adaptation of childrenByName(period, "AdaptationSet")) {
+        const adaptationBase = urljoin(periodBase, firstChildText(adaptation, "BaseURL")) ?? periodBase;
+        const adaptationTemplate = firstChild(adaptation, "SegmentTemplate");
+        for (const representation of childrenByName(adaptation, "Representation")) {
+          const attrs = { ...adaptation.attrib, ...representation.attrib };
+          const representationBase = urljoin(adaptationBase, firstChildText(representation, "BaseURL")) ?? adaptationBase;
+          const contentType = mpdContentType(attrs);
+          const codecs = parseMpdCodecs(attrs.codecs);
+          const tbr = floatOrNone(attrs.bandwidth, 1000);
+          const segmentTemplate = firstChild(representation, "SegmentTemplate") ?? adaptationTemplate;
+          const common = filterUndefined({
+            manifest_url: options.mpdUrl ?? undefined,
+            format_id: attrs.id,
+            ext: contentType === "audio" ? "m4a" : "mp4",
+            tbr: tbr ?? undefined,
+            asr: intOrNone(attrs.audioSamplingRate) ?? undefined,
+            width: intOrNone(attrs.width) ?? undefined,
+            height: intOrNone(attrs.height) ?? undefined,
+            fps: floatOrNone(attrs.frameRate) ?? undefined,
+            protocol: "http_dash_segments",
+            url: firstChild(representation, "BaseURL") ? representationBase : options.mpdUrl ?? representationBase ?? undefined,
+            fragment_base_url: segmentTemplate && adaptationBase ? adaptationBase : undefined,
+          });
+          if (contentType === "text") {
+            const lang = attrs.lang ?? adaptation.attrib.lang ?? "und";
+            subtitles[lang] ??= [];
+            subtitles[lang]!.push(filterUndefined({
+              ...common,
+              ext: "mp4",
+            }));
+            continue;
+          }
+          formats.push(filterUndefined({
+            ...common,
+            format_note: contentType === "audio" ? "DASH audio" : "DASH video",
+            container: contentType === "audio" ? "m4a_dash" : "mp4_dash",
+            acodec: contentType === "audio" ? codecs.acodec ?? attrs.codecs : "none",
+            vcodec: contentType === "audio" ? "none" : codecs.vcodec ?? attrs.codecs,
+            audio_ext: contentType === "audio" ? "m4a" : codecs.acodec ? "none" : undefined,
+            video_ext: contentType === "audio" ? "none" : "mp4",
+            abr: contentType === "audio" ? tbr ?? undefined : undefined,
+            vbr: contentType === "video" ? tbr ?? undefined : undefined,
+          }));
+        }
+      }
+    }
+    return [formats, subtitles];
+  }
+
+  protected _parse_mpd_formats_and_subtitles(...args: Parameters<InfoExtractor["parseMpdFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseMpdFormatsAndSubtitles"]> {
+    return this.parseMpdFormatsAndSubtitles(...args);
+  }
+
+  protected parseIsmFormatsAndSubtitles(
+    ismDoc: XmlElement | string,
+    ismUrl: string,
+    ismId: string | null = null,
+  ): [Array<Record<string, unknown>>, Record<string, Array<Record<string, unknown>>>] {
+    const root = typeof ismDoc === "string" ? compatEtreeFromstring(ismDoc) : ismDoc;
+    if (root.attrib.IsLive === "TRUE") {
+      return [[], {}];
+    }
+    const duration = intOrNone(root.attrib.Duration) ?? 0;
+    const timescale = intOrNone(root.attrib.TimeScale) ?? 10000000;
+    const formats: Array<Record<string, unknown>> = [];
+    const subtitles: Record<string, Array<Record<string, unknown>>> = {};
+
+    for (const stream of childrenByName(root, "StreamIndex")) {
+      const streamType = stream.attrib.Type;
+      if (streamType !== "video" && streamType !== "audio" && streamType !== "text") {
+        continue;
+      }
+      const streamTimescale = intOrNone(stream.attrib.TimeScale) ?? timescale;
+      const streamName = stream.attrib.Name;
+      const language = stream.attrib.Language ?? "und";
+      for (const track of childrenByName(stream, "QualityLevel")) {
+        const fourcc = track.attrib.FourCC ?? ({ "255": "AACL", "65534": "EC-3" }[track.attrib.AudioTag ?? ""]);
+        if (!fourcc || !["H264", "AVC1", "AACL", "TTML", "EC-3"].includes(fourcc)) {
+          continue;
+        }
+        const tbr = intOrNone(track.attrib.Bitrate, 1000);
+        const width = intOrNone(track.attrib.MaxWidth ?? track.attrib.Width);
+        const height = intOrNone(track.attrib.MaxHeight ?? track.attrib.Height);
+        const samplingRate = intOrNone(track.attrib.SamplingRate);
+        const common = filterUndefined({
+          url: ismUrl,
+          manifest_url: ismUrl,
+          protocol: "ism",
+          language,
+          _download_params: filterUndefined({
+            stream_type: streamType,
+            duration,
+            timescale: streamTimescale,
+            width: width ?? 0,
+            height: height ?? 0,
+            fourcc,
+            language,
+            codec_private_data: track.attrib.CodecPrivateData,
+            sampling_rate: samplingRate ?? undefined,
+            channels: intOrNone(track.attrib.Channels, 1, 2) ?? undefined,
+            bits_per_sample: intOrNone(track.attrib.BitsPerSample, 1, 16) ?? undefined,
+            nal_unit_length_field: intOrNone(track.attrib.NALUnitLengthField, 1, 4) ?? undefined,
+          }),
+        });
+        if (streamType === "text") {
+          subtitles[language] ??= [];
+          subtitles[language]!.push(filterUndefined({
+            ...common,
+            ext: "ismt",
+          }));
+          continue;
+        }
+        formats.push(filterUndefined({
+          ...common,
+          format_id: joinNonempty(ismId, streamName, tbr),
+          ext: streamType === "video" ? "ismv" : "isma",
+          width: width ?? undefined,
+          height: height ?? undefined,
+          tbr: tbr ?? undefined,
+          asr: samplingRate ?? undefined,
+          vcodec: streamType === "audio" ? "none" : fourcc,
+          acodec: streamType === "video" ? "none" : fourcc,
+          audio_channels: intOrNone(track.attrib.Channels) ?? undefined,
+          has_drm: firstChild(root, "Protection") !== null ? true : undefined,
+        }));
+      }
+    }
+    return [formats, subtitles];
+  }
+
+  protected _parse_ism_formats_and_subtitles(...args: Parameters<InfoExtractor["parseIsmFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseIsmFormatsAndSubtitles"]> {
+    return this.parseIsmFormatsAndSubtitles(...args);
   }
 
   protected mergeSubtitles(
@@ -1087,6 +1501,75 @@ export abstract class InfoExtractor {
       format_id: options.f4mId ?? "hds",
       manifest_url: f4mUrl,
     }];
+  }
+
+  protected parseF4mFormats(
+    manifest: XmlElement | string,
+    manifestUrl: string,
+    _videoId: string | null = null,
+    options: { preference?: number | null; quality?: number | null; f4mId?: string | null } = {},
+  ): Array<Record<string, unknown>> {
+    const root = typeof manifest === "string" ? compatEtreeFromstring(manifest) : manifest;
+    const bootstrapInfo = firstChild(root, "bootstrapInfo");
+    const manifestBaseUrl = firstChildText(root, "baseURL");
+    return childrenByName(root, "media").flatMap((media, index) => {
+      const tbr = intOrNone(media.attrib.bitrate);
+      let url = manifestUrl;
+      if (!bootstrapInfo) {
+        const mediaUrl = media.attrib.href ?? media.attrib.url;
+        if (!mediaUrl) {
+          return [];
+        }
+        url = urljoin(manifestBaseUrl ?? manifestUrl.replace(/\/[^/]*$/, "/"), mediaUrl) ?? mediaUrl;
+      }
+      return [filterUndefined({
+        format_id: joinNonempty(options.f4mId, tbr ?? index),
+        url,
+        manifest_url: manifestUrl,
+        ext: bootstrapInfo ? "flv" : undefined,
+        protocol: "f4m",
+        tbr: tbr ?? undefined,
+        width: intOrNone(media.attrib.width) ?? undefined,
+        height: intOrNone(media.attrib.height) ?? undefined,
+        vcodec: firstChildText(root, "mimeType")?.startsWith("audio/") ? "none" : undefined,
+        preference: options.preference ?? undefined,
+        quality: options.quality ?? undefined,
+      })];
+    });
+  }
+
+  protected _parse_f4m_formats(...args: Parameters<InfoExtractor["parseF4mFormats"]>): ReturnType<InfoExtractor["parseF4mFormats"]> {
+    return this.parseF4mFormats(...args);
+  }
+
+  protected parseXspf(
+    xspfDoc: XmlElement | string,
+    playlistId: string,
+    options: { xspfUrl?: string | null; xspfBaseUrl?: string | null } = {},
+  ): ExtractorInfo[] {
+    const root = typeof xspfDoc === "string" ? compatEtreeFromstring(xspfDoc) : xspfDoc;
+    const trackList = firstChild(root, "trackList");
+    return childrenByName(trackList ?? root, "track").map((track) => ({
+      id: playlistId,
+      title: firstChildText(track, "title") ?? playlistId,
+      description: firstChildText(track, "annotation") ?? undefined,
+      thumbnail: firstChildText(track, "image") ?? undefined,
+      duration: floatOrNone(firstChildText(track, "duration"), 1000) ?? undefined,
+      formats: childrenByName(track, "location").flatMap((location) => {
+        const formatUrl = urljoin(options.xspfBaseUrl ?? options.xspfUrl, location.text);
+        return formatUrl ? [filterUndefined({
+          url: formatUrl,
+          manifest_url: options.xspfUrl ?? undefined,
+          format_id: location.attrib["{http://static.streamone.nl/player/ns/0}label"],
+          width: intOrNone(location.attrib["{http://static.streamone.nl/player/ns/0}width"]) ?? undefined,
+          height: intOrNone(location.attrib["{http://static.streamone.nl/player/ns/0}height"]) ?? undefined,
+        })] : [];
+      }),
+    })).map(filterUndefined);
+  }
+
+  protected _parse_xspf(...args: Parameters<InfoExtractor["parseXspf"]>): ReturnType<InfoExtractor["parseXspf"]> {
+    return this.parseXspf(...args);
   }
 
   protected extractSmilFormats(smilUrl: string, _videoId: string, options: { smilId?: string; fatal?: boolean } = {}): Array<Record<string, unknown>> {
@@ -1599,6 +2082,124 @@ function setDefined(record: Record<string, unknown>, key: string, value: unknown
 
 function filterUndefined<T extends Record<string, unknown>>(record: T): T {
   return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
+}
+
+function joinNonempty(...parts: Array<string | number | null | undefined>): string | undefined {
+  const joined = parts.filter((part) => part !== null && part !== undefined && part !== "").map(String).join("-");
+  return joined || undefined;
+}
+
+function parseM3u8Codecs(codecs: string | null | undefined): Record<string, unknown> {
+  if (!codecs) {
+    return {};
+  }
+  const parts = codecs.split(",").map((codec) => codec.trim()).filter(Boolean);
+  const video = parts.find((codec) => /^(?:avc|hev|hvc|vp0?[89]|av01|theora)/i.test(codec));
+  const audio = parts.find((codec) => /^(?:mp4a|ac-?3|ec-?3|opus|vorbis|flac)/i.test(codec));
+  if (video) {
+    return {
+      vcodec: video,
+      acodec: audio ?? "none",
+      video_ext: "mp4",
+      audio_ext: audio ? "none" : undefined,
+    };
+  }
+  if (audio) {
+    return {
+      vcodec: "none",
+      acodec: audio,
+      audio_ext: "mp4",
+      video_ext: "none",
+      abr: null,
+    };
+  }
+  return {};
+}
+
+function localXmlName(tag: string): string {
+  return tag.replace(/^\{[^}]+}/, "");
+}
+
+function childrenByName(element: XmlElement, name: string): XmlElement[] {
+  return element.children.filter((child) => localXmlName(child.tag) === name);
+}
+
+function firstChild(element: XmlElement, name: string): XmlElement | null {
+  return childrenByName(element, name)[0] ?? null;
+}
+
+function firstChildText(element: XmlElement, name: string): string | null {
+  return firstChild(element, name)?.text?.trim() || null;
+}
+
+function mpdContentType(attrs: Record<string, string>): "audio" | "video" | "text" {
+  const contentType = attrs.contentType?.toLowerCase();
+  if (contentType === "audio" || contentType === "video" || contentType === "text") {
+    return contentType;
+  }
+  const mimeType = attrs.mimeType?.toLowerCase();
+  if (mimeType?.startsWith("audio/")) {
+    return "audio";
+  }
+  if (mimeType?.startsWith("text/") || attrs.codecs === "stpp" || attrs.codecs === "wvtt") {
+    return "text";
+  }
+  return "video";
+}
+
+function normalizeMpdBaseUrl(url: string | null | undefined): string | null {
+  return url ? url.endsWith("/") ? url : `${url}/` : null;
+}
+
+function parseMpdCodecs(codecs: string | null | undefined): { acodec?: string; vcodec?: string } {
+  const parsed = parseM3u8Codecs(codecs);
+  return {
+    acodec: typeof parsed.acodec === "string" ? parsed.acodec : undefined,
+    vcodec: typeof parsed.vcodec === "string" ? parsed.vcodec : undefined,
+  };
+}
+
+function expandUserPath(path: string): string {
+  if (path === "~") {
+    return process.env.HOME ?? path;
+  }
+  return path.startsWith("~/") ? `${process.env.HOME ?? "~"}${path.slice(1)}` : path;
+}
+
+function parseNetrcAuthenticators(content: string, machine: string): [string, string] | null {
+  const tokens = tokenizeNetrc(content);
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index] !== "machine" || tokens[index + 1] !== machine) {
+      continue;
+    }
+    let login: string | null = null;
+    let password: string | null = null;
+    for (let item = index + 2; item < tokens.length; item += 1) {
+      if (tokens[item] === "machine" || tokens[item] === "default") {
+        break;
+      }
+      if (tokens[item] === "login") {
+        login = tokens[++item] ?? "";
+      } else if (tokens[item] === "password") {
+        password = tokens[++item] ?? "";
+      } else if (tokens[item] === "account") {
+        item++;
+      }
+    }
+    return [login ?? "", password ?? ""];
+  }
+  return null;
+}
+
+function tokenizeNetrc(content: string): string[] {
+  const tokens: string[] = [];
+  for (const line of content.split(/\r?\n/)) {
+    const stripped = line.replace(/(^|\s)#.*$/, "").trim();
+    for (const match of stripped.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|(\S+)/g)) {
+      tokens.push(match[1] ?? match[2] ?? match[3] ?? "");
+    }
+  }
+  return tokens.map((token) => token === "\"\"" ? "" : token);
 }
 
 function findMatchingJsBracket(source: string, openIndex: number): number {

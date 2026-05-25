@@ -51,7 +51,7 @@ export class AirTVIE extends InfoExtractor {
       return this.urlResult(`https://www.youtube.com/watch?v=${nextjsJson.youtube_id}`, YoutubeIE);
     }
 
-    const [formats, subtitles] = this.getFormatsAndSubtitles(nextjsJson, displayId);
+    const [formats, subtitles] = await this.getFormatsAndSubtitles(nextjsJson, displayId);
     return {
       id: displayId,
       title: nextjsJson.title ?? this.htmlSearchMeta("og:title", webpage) ?? undefined,
@@ -67,7 +67,7 @@ export class AirTVIE extends InfoExtractor {
     };
   }
 
-  private getFormatsAndSubtitles(jsonData: AirTvVideo, videoId: string): [Array<Record<string, unknown>>, Record<string, unknown[]>] {
+  private async getFormatsAndSubtitles(jsonData: AirTvVideo, videoId: string): Promise<[Array<Record<string, unknown>>, Record<string, unknown[]>]> {
     const formats: Array<Record<string, unknown>> = [];
     let subtitles: Record<string, unknown[]> = {};
     for (const source of [...(jsonData.sources ?? []), ...(jsonData.sources_desktop ?? [])]) {
@@ -76,7 +76,7 @@ export class AirTVIE extends InfoExtractor {
       }
       const ext = determineExt(source.src, mimetype2ext(source.type));
       if (ext === "m3u8") {
-        const [m3u8Formats, m3u8Subtitles] = this.extractM3u8FormatsAndSubtitles(source.src, videoId);
+        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(source.src, videoId);
         formats.push(...m3u8Formats);
         subtitles = { ...subtitles, ...m3u8Subtitles };
       } else {

@@ -11,6 +11,7 @@ import {
   aesEcbEncrypt,
   aesGcmDecryptAndVerifyBytes,
   padBlock,
+  pkcs7Padding,
 } from "../yt_dlp/aes.ts";
 
 const key = Uint8Array.from([0x20, 0x15, ...Array(14).fill(0)]);
@@ -39,6 +40,12 @@ describe("AES helpers", () => {
     expect(aesGcmDecryptAndVerifyBytes(data, key, tag, iv.slice(0, 12))).toEqual(secretMsg);
   });
 
+  test("GCM aligned decrypt", () => {
+    const data = Uint8Array.from([0x15, 0x39, 0x59, 0xcf, 0x35, 0x65, 0x75, 0x64, 0x90, 0x9c, 0x85, 0x26, 0x5d, 0x14, 0x1d, 0x0f]);
+    const tag = Uint8Array.from([0x08, 0xb1, 0x9d, 0x21, 0x26, 0x98, 0xd0, 0xea, 0x52, 0x71, 0x90, 0xe6, 0x3b, 0xb5, 0x5d, 0xd8]);
+    expect(aesGcmDecryptAndVerifyBytes(data, key, tag, iv.slice(0, 12))).toEqual(secretMsg.slice(0, 16));
+  });
+
   test("ECB encrypt/decrypt", () => {
     const encrypted = Uint8Array.from([0xaa, 0x86, 0x5d, 0x81, 0x97, 0x3e, 0x02, 0x92, 0x9d, 0x1b, 0x52, 0x5b, 0x5b, 0x4c, 0x2f, 0x75, 0xd3, 0x26, 0xd1, 0x28, 0x68, 0xde, 0x7b, 0x81, 0x94, 0xba, 0x02, 0xae, 0xbd, 0xa6, 0xd0, 0x3a]);
     expect(aesEcbEncrypt(secretMsg, key)).toEqual(encrypted);
@@ -51,7 +58,21 @@ describe("AES helpers", () => {
     expect(padBlock(block, "iso7816")).toEqual(Uint8Array.from([...block, 0x80, ...Array(11).fill(0x00)]));
     expect(padBlock(block, "whitespace")).toEqual(Uint8Array.from([...block, ...Array(12).fill(0x20)]));
     expect(padBlock(block, "zero")).toEqual(Uint8Array.from([...block, ...Array(12).fill(0x00)]));
+
+    const fullBlock = Uint8Array.from(Array.from({ length: 16 }, (_, index) => index));
+    for (const mode of ["pkcs7", "iso7816", "whitespace", "zero"] as const) {
+      expect(padBlock(fullBlock, mode)).toEqual(fullBlock);
+    }
   });
+
+  test("pkcs7Padding pads full blocks", () => {
+    const fullBlock = Uint8Array.from(Array.from({ length: 16 }, (_, index) => index));
+    expect(pkcs7Padding(fullBlock)).toEqual(Uint8Array.from([...fullBlock, ...Array(16).fill(0x10)]));
+  });
+
+  test.todo("test_encrypt once aesEncrypt/aesDecrypt compatibility wrappers are ported", () => undefined);
+  test.todo("test_decrypt_text once aesDecryptText compatibility is ported", () => undefined);
+  test.todo("test_key_expansion once keyExpansion compatibility is ported", () => undefined);
 });
 
 function pkcs7(data: Uint8Array): Uint8Array {

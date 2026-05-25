@@ -49,7 +49,7 @@ export class BigoIE extends InfoExtractor {
       throw new ExtractorError("Unable to extract HLS URL", { videoId: userId });
     }
 
-    const [formats, subtitles] = this.extractM3u8FormatsAndSubtitles(
+    const [formats, subtitles] = await this.extractM3u8FormatsAndSubtitles(
       info.hls_src,
       userId,
       "mp4",

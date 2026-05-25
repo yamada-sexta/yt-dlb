@@ -33,7 +33,7 @@ export class AitubeKZVideoIE extends InfoExtractor {
     const nextData = this.searchNextjsData<AitubeNextData>(webpage, videoId);
     const videoInfo = nextData?.props?.pageProps?.videoInfo ?? {};
     const jsonLdData = this.searchJsonLd(webpage, videoId, { defaultValue: {} });
-    const [formats, subtitles] = this.extractM3u8FormatsAndSubtitles(
+    const [formats, subtitles] = await this.extractM3u8FormatsAndSubtitles(
       `https://api-http.aitube.kz/kz.aitudala.aitube.staticaccess/video/${videoId}/video`,
       videoId,
     );

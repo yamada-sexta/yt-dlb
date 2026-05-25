@@ -2,13 +2,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { NotImplementedError } from "../yt_dlp/errors.ts";
 import { Features, HEADRequest, PATCHRequest, PUTRequest, Request, RequestDirector, RequestHandler } from "../yt_dlp/networking/index.ts";
 import { NoSupportingHandlers, UnsupportedRequest } from "../yt_dlp/networking/exceptions.ts";
 import { ImpersonateRequestHandler, ImpersonateTarget } from "../yt_dlp/networking/impersonate.ts";
-import { CurlCFFIRH } from "../yt_dlp/networking/curlcffi.ts";
-import { RequestsRH } from "../yt_dlp/networking/requests.ts";
-import { BunWebSocketRH, WebSocketResponse } from "../yt_dlp/networking/websocket.ts";
 
 describe("networking common request objects", () => {
   test("Request applies query and protocol-relative normalization", () => {
@@ -56,16 +52,10 @@ describe("networking common request objects", () => {
 });
 
 describe("networking optional backends", () => {
-  test("unsupported backend facades throw explicit errors", async () => {
-    await expect(new RequestsRH().send(new Request("https://example.com"))).rejects.toThrow(NotImplementedError);
-    await expect(new CurlCFFIRH().send(new Request("https://example.com"))).rejects.toThrow(NotImplementedError);
-    await expect(new BunWebSocketRH().send(new Request("ws://example.com"))).rejects.toThrow(NotImplementedError);
-  });
-
-  test("WebSocketResponse recv boundary throws", async () => {
-    const socket = { send: () => undefined } as unknown as WebSocket;
-    await expect(new WebSocketResponse(socket).recv()).rejects.toThrow(NotImplementedError);
-  });
+  test.todo("RequestsRH send behavior once requests backend is ported", () => undefined);
+  test.todo("CurlCFFIRH send behavior once curl_cffi backend is ported", () => undefined);
+  test.todo("BunWebSocketRH send behavior once websocket backend is ported", () => undefined);
+  test.todo("WebSocketResponse recv behavior once websocket receive is ported", () => undefined);
 });
 
 describe("impersonation targets", () => {

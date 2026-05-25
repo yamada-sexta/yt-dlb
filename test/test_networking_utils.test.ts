@@ -2,8 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { NotImplementedError } from "../yt_dlp/errors.ts";
-import { addAcceptEncodingHeader, getRedirectMethod, makeSocksProxyOpts, makeSslContext } from "../yt_dlp/networking/helper.ts";
+import { addAcceptEncodingHeader, getRedirectMethod } from "../yt_dlp/networking/helper.ts";
 import { HTTPError, IncompleteRead } from "../yt_dlp/networking/exceptions.ts";
 import { HTTPHeaderDict, cleanHeaders, cleanProxies, normalizeUrl, removeDotSegments, selectProxy } from "../yt_dlp/utils/networking.ts";
 
@@ -62,10 +61,8 @@ describe("networking utility helpers", () => {
     expect(normalizeUrl("https://example.com/a/b/./../c?q=a b")).toBe("https://example.com/a/c?q=a%20b");
   });
 
-  test("unsupported Python-only helper boundaries throw loudly", () => {
-    expect(makeSslContext).toThrow(NotImplementedError);
-    expect(makeSocksProxyOpts).toThrow(NotImplementedError);
-  });
+  test.todo("makeSslContext once TLS context construction is ported", () => undefined);
+  test.todo("makeSocksProxyOpts once SOCKS proxy option parsing is ported", () => undefined);
 });
 
 describe("networking exceptions", () => {

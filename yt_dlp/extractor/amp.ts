@@ -103,7 +103,7 @@ export class AMPIE extends InfoExtractor {
             { f4mId: "hds", fatal: false }
           ));
         } else if (ext === "m3u8") {
-          const [fmts, subs] = this.extractM3u8FormatsAndSubtitles(
+          const [fmts, subs] = await this.extractM3u8FormatsAndSubtitles(
             mediaUrl,
             videoId,
             "mp4",

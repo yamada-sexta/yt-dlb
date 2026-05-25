@@ -64,7 +64,7 @@ export class BerufeTVIE extends InfoExtractor {
         continue;
       }
       if (key === "auto") {
-        const [m3u8Formats, m3u8Subtitles] = this.extractM3u8FormatsAndSubtitles(source.source, videoId);
+        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(source.source, videoId);
         formats.push(...m3u8Formats);
         subtitles = m3u8Subtitles as Record<string, Array<Record<string, unknown>>>;
       } else {

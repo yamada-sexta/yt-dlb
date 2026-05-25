@@ -33,8 +33,6 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/main.ts`
 - [x] `yt_dlp/options.ts`
 - [x] `yt_dlp/errors.ts`
-- [x] `yt_dlp/__pyinstaller/index.ts`
-- [x] `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
 - [x] `yt_dlp/compat/index.ts`
 - [x] `yt_dlp/compat/deprecated.ts`
 - [x] `yt_dlp/compat/legacy.ts`
@@ -107,8 +105,6 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts` (Bun CLI/download shell is present; full `YoutubeDL.py` orchestration remains pending)
 - [ ] `yt_dlp/__init__.py` -> `yt_dlp/index.ts` (staged CLI entry is present; full option validation/postprocessor/extractor wiring remains pending)
 - [x] `yt_dlp/__main__.py` -> `yt_dlp/main.ts`
-- [x] `yt_dlp/__pyinstaller/__init__.py` -> `yt_dlp/__pyinstaller/index.ts`
-- [x] `yt_dlp/__pyinstaller/hook-yt_dlp.py` -> `yt_dlp/__pyinstaller/hook-yt-dlp.ts`
 - [x] `yt_dlp/aes.py` -> `yt_dlp/aes.ts`
 - [x] `yt_dlp/cache.py` -> `yt_dlp/cache.ts`
 - [x] `yt_dlp/compat/__init__.py` -> `yt_dlp/compat/index.ts`
@@ -152,10 +148,10 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/adn.py` -> `yt_dlp/extractor/adn.ts`
 - [x] `yt_dlp/extractor/adobeconnect.py` -> `yt_dlp/extractor/adobeconnect.ts`
 - [ ] `yt_dlp/extractor/adobepass.py` -> `yt_dlp/extractor/adobepass.ts`
-- [ ] `yt_dlp/extractor/adobetv.py` -> `yt_dlp/extractor/adobetv.ts`
+- [x] `yt_dlp/extractor/adobetv.py` -> `yt_dlp/extractor/adobetv.ts`
 - [ ] `yt_dlp/extractor/adultswim.py` -> `yt_dlp/extractor/adultswim.ts`
 - [ ] `yt_dlp/extractor/aenetworks.py` -> `yt_dlp/extractor/aenetworks.ts`
-- [ ] `yt_dlp/extractor/aeonco.py` -> `yt_dlp/extractor/aeonco.ts`
+- [x] `yt_dlp/extractor/aeonco.py` -> `yt_dlp/extractor/aeonco.ts`
 - [ ] `yt_dlp/extractor/afreecatv.py` -> `yt_dlp/extractor/afreecatv.ts`
 - [ ] `yt_dlp/extractor/agalega.py` -> `yt_dlp/extractor/agalega.ts`
 - [ ] `yt_dlp/extractor/agora.py` -> `yt_dlp/extractor/agora.ts`
@@ -170,7 +166,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/alsace20tv.py` -> `yt_dlp/extractor/alsace20tv.ts`
 - [ ] `yt_dlp/extractor/altcensored.py` -> `yt_dlp/extractor/altcensored.ts`
 - [ ] `yt_dlp/extractor/alura.py` -> `yt_dlp/extractor/alura.ts`
-- [ ] `yt_dlp/extractor/amadeustv.py` -> `yt_dlp/extractor/amadeustv.ts`
+- [x] `yt_dlp/extractor/amadeustv.py` -> `yt_dlp/extractor/amadeustv.ts`
 - [ ] `yt_dlp/extractor/amara.py` -> `yt_dlp/extractor/amara.ts`
 - [ ] `yt_dlp/extractor/amazon.py` -> `yt_dlp/extractor/amazon.ts`
 - [ ] `yt_dlp/extractor/amazonminitv.py` -> `yt_dlp/extractor/amazonminitv.ts`

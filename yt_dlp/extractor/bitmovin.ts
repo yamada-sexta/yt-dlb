@@ -24,7 +24,7 @@ export class BitmovinIE extends InfoExtractor {
       throw new ExtractorError("Unable to download Bitmovin config", { videoId });
     }
     const playerConfig = BitmovinConfigSchema.parse(rawConfig).sources;
-    const [formats, subtitles] = this.extractM3u8FormatsAndSubtitles(playerConfig.hls, videoId, "mp4");
+    const [formats, subtitles] = await this.extractM3u8FormatsAndSubtitles(playerConfig.hls, videoId, "mp4");
 
     return {
       id: videoId,

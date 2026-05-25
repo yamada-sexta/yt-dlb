@@ -123,6 +123,9 @@ export function urlOrNone(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
+  if (value.startsWith("//")) {
+    return `http:${value}`;
+  }
   try {
     return new URL(value).toString();
   } catch {
@@ -200,6 +203,19 @@ export function intOrNone(value: unknown, scale = 1, defaultValue: number | null
 }
 
 export const int_or_none = intOrNone;
+
+export function parseAgeLimit(value: unknown): number {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  const text = String(value).trim().toLowerCase();
+  if (!text || /^(?:all|everyone|general|u|g|pg)$/i.test(text)) {
+    return 0;
+  }
+  return intOrNone(text) ?? 0;
+}
+
+export const parse_age_limit = parseAgeLimit;
 
 export function floatOrNone(value: unknown, scale = 1, defaultValue: number | null = null, invscale = 1): number | null {
   if (value === null || value === undefined || value === "") {
@@ -570,6 +586,13 @@ export function parseDuration(value: string | number | null | undefined): number
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
   }
+  const isoMatch = /^(?:P(?:(?<days>\d+(?:\.\d+)?)D)?(?:T(?:(?<hours>\d+(?:\.\d+)?)H)?(?:(?<minutes>\d+(?:\.\d+)?)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?)$/i.exec(value);
+  if (isoMatch?.[0] && Object.values(isoMatch.groups ?? {}).some((part) => part !== undefined)) {
+    return (Number(isoMatch.groups?.days ?? 0) * 86400)
+      + (Number(isoMatch.groups?.hours ?? 0) * 3600)
+      + (Number(isoMatch.groups?.minutes ?? 0) * 60)
+      + Number(isoMatch.groups?.seconds ?? 0);
+  }
   const colonParts = value.split(":").map((part) => Number.parseFloat(part));
   if (colonParts.length > 1 && colonParts.every(Number.isFinite)) {
     return colonParts.reduce((total, part) => total * 60 + part, 0);
@@ -794,6 +817,21 @@ export function mimetype2ext(mimeType: string | null | undefined, defaultValue =
   return mimeType?.split(";")[0]?.split("/").pop() ?? defaultValue;
 }
 
+export function parseCodecs(codecs: string | null | undefined): { acodec?: string; vcodec?: string } {
+  const out: { acodec?: string; vcodec?: string } = {};
+  for (const codec of codecs?.split(",").map((item) => item.trim()).filter(Boolean) ?? []) {
+    const normalized = codec.toLowerCase();
+    if (/^(?:avc|hvc|hev|vp0?[89]|av01|theora|dvh|dvav|dva1)/.test(normalized)) {
+      out.vcodec ??= codec;
+    } else if (/^(?:mp4a|ac-?3|ec-?3|opus|vorbis|flac|alac|aac|dts|mp3)/.test(normalized)) {
+      out.acodec ??= codec;
+    }
+  }
+  return out;
+}
+
+export const parse_codecs = parseCodecs;
+
 export function parseDfxpTimeExpr(timeExpr: string | null | undefined): number | null {
   if (!timeExpr) {
     return null;
@@ -902,6 +940,49 @@ export function formatField<T>(
 
 export const format_field = formatField;
 
+export function jwtDecodeHs256(token: string): Record<string, unknown> {
+  const part = token.split(".")[1];
+  if (!part) {
+    throw new ExtractorError("Invalid JWT token", { expected: true });
+  }
+  const padded = part.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
+}
+
+export const jwt_decode_hs256 = jwtDecodeHs256;
+
+export function makeArchiveId(ie: { IE_NAME?: string } | string, videoId: unknown): string {
+  return `${typeof ie === "string" ? ie : ie.IE_NAME ?? "unknown"} ${videoId}`;
+}
+
+export const make_archive_id = makeArchiveId;
+
+const SMUGGLE_KEY = "__youtubedl_smuggle";
+
+export function smuggleUrl(url: string, data: Record<string, unknown>): string {
+  const parsed = new URL(url);
+  parsed.searchParams.set(SMUGGLE_KEY, Buffer.from(JSON.stringify(data), "utf8").toString("base64url"));
+  return parsed.toString();
+}
+
+export const smuggle_url = smuggleUrl;
+
+export function unsmuggleUrl(url: string, defaultValue: Record<string, unknown> = {}): [string, Record<string, unknown>] {
+  const parsed = new URL(url);
+  const encoded = parsed.searchParams.get(SMUGGLE_KEY);
+  if (!encoded) {
+    return [url, defaultValue];
+  }
+  parsed.searchParams.delete(SMUGGLE_KEY);
+  try {
+    return [parsed.toString(), JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<string, unknown>];
+  } catch {
+    return [parsed.toString(), defaultValue];
+  }
+}
+
+export const unsmuggle_url = unsmuggleUrl;
+
 function objectToParams(query: Record<string, string | readonly string[]>): URLSearchParams {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
@@ -928,3 +1009,291 @@ function paramsToRecord(params: URLSearchParams): Record<string, string[]> {
 function pad2(value: number): string {
   return value.toString().padStart(2, "0");
 }
+
+export function stripJsonp(code: string): string {
+  const match = /^(?:window\.)?([a-zA-Z0-9_.$]*)(?:\s*&&\s*\1)?\s*\(\s*([\s\S]*)\);?\s*(?:\/\/[^\n]*)*$/.exec(code.trim());
+  return match ? match[2]!.trim() : code;
+}
+
+export const strip_jsonp = stripJsonp;
+
+export function jsToJson(code: string, vars: Record<string, string> = {}, strict = false): string {
+  let processed = code.replace(/(?:new\s+)?Array\((.*?)\)/g, "[$1]");
+  const PATTERN = /(?<str>'(?:\\.|[^\\'])*'|"(?:\\.|[^\\"])*"|`(?:\\.|[^\\`])*`)|(?<comment>\/\*(?:(?!\*\/)[\s\S])*\*\/|\/\/[^\n]*\n)|(?<comma>,\s*(?=[\]}]))|(?<void>\bvoid\s+0\b|\bundefined\b)|(?<ident>(?:(?<![0-9])[eE]|[a-df-zA-DF-Z_$])[.a-zA-Z_$0-9]*)|(?<hex>\b(?:0[xX][0-9a-fA-F]+|(?<!\.)0+[0-7]+)(?:\s*:)?)|(?<num>[0-9]+(?=\s*:))|(?<excl>!+)/g;
+  processed = processed.replace(PATTERN, (...args) => {
+    const groups = args.at(-1) as Record<string, string>;
+    if (groups.str) {
+      let content = decodeJsStringLiteral(groups.str);
+      if (groups.str.startsWith("`")) {
+        content = content.replace(/\$\{(.*?)\}/g, (_, key) => {
+          const trimmed = key.trim();
+          return vars[trimmed] !== undefined ? JSON.parse(vars[trimmed]) : "";
+        });
+      }
+      return JSON.stringify(content);
+    }
+    if (groups.comment || groups.comma || groups.excl) {
+      return "";
+    }
+    if (groups.void) {
+      return "null";
+    }
+    if (groups.hex) {
+      const hasColon = groups.hex.endsWith(":");
+      const numStr = hasColon ? groups.hex.slice(0, -1).trim() : groups.hex;
+      const num = Number(numStr);
+      if (Number.isNaN(num)) return groups.hex;
+      return hasColon ? `"${num}":` : String(num);
+    }
+    if (groups.num) {
+      return `"${groups.num}"`;
+    }
+    if (groups.ident) {
+      const m = groups.ident;
+      if (m === "true" || m === "false" || m === "null") {
+        return m;
+      }
+      if (vars[m] !== undefined) {
+        return vars[m];
+      }
+      if (!strict) {
+        return `"${m}"`;
+      }
+      return m;
+    }
+    return args[0];
+  });
+  return processed;
+}
+
+export const js_to_json = jsToJson;
+
+function decodeJsStringLiteral(value: string): string {
+  if (value.startsWith('"')) {
+    try {
+      return JSON.parse(value) as string;
+    } catch {
+      return value.slice(1, -1);
+    }
+  }
+  return value.slice(1, -1)
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)))
+    .replace(/\\([\\'"`/bfnrt])/g, (_, escaped: string) => {
+      switch (escaped) {
+        case "b": return "\b";
+        case "f": return "\f";
+        case "n": return "\n";
+        case "r": return "\r";
+        case "t": return "\t";
+        default: return escaped;
+      }
+    });
+}
+
+export class ISO639Utils {
+  private static readonly langMap: Record<string, string> = {
+    aa: "aar",
+    ab: "abk",
+    ae: "ave",
+    af: "afr",
+    ak: "aka",
+    am: "amh",
+    an: "arg",
+    ar: "ara",
+    as: "asm",
+    av: "ava",
+    ay: "aym",
+    az: "aze",
+    ba: "bak",
+    be: "bel",
+    bg: "bul",
+    bh: "bih",
+    bi: "bis",
+    bm: "bam",
+    bn: "ben",
+    bo: "bod",
+    br: "bre",
+    bs: "bos",
+    ca: "cat",
+    ce: "che",
+    ch: "cha",
+    co: "cos",
+    cr: "cre",
+    cs: "ces",
+    cu: "chu",
+    cv: "chv",
+    cy: "cym",
+    da: "dan",
+    de: "deu",
+    dv: "div",
+    dz: "dzo",
+    ee: "ewe",
+    el: "ell",
+    en: "eng",
+    eo: "epo",
+    es: "spa",
+    et: "est",
+    eu: "eus",
+    fa: "fas",
+    ff: "ful",
+    fi: "fin",
+    fj: "fij",
+    fo: "fao",
+    fr: "fra",
+    fy: "fry",
+    ga: "gle",
+    gd: "gla",
+    gl: "glg",
+    gn: "grn",
+    gu: "guj",
+    gv: "glv",
+    ha: "hau",
+    he: "heb",
+    iw: "heb",
+    hi: "hin",
+    ho: "hmo",
+    hr: "hrv",
+    ht: "hat",
+    hu: "hun",
+    hy: "hye",
+    hz: "her",
+    ia: "ina",
+    id: "ind",
+    in: "ind",
+    ie: "ile",
+    ig: "ibo",
+    ii: "iii",
+    ik: "ipk",
+    io: "ido",
+    is: "isl",
+    it: "ita",
+    iu: "iku",
+    ja: "jpn",
+    jv: "jav",
+    ka: "kat",
+    kg: "kon",
+    ki: "kik",
+    kj: "kua",
+    kk: "kaz",
+    kl: "kal",
+    km: "khm",
+    kn: "kan",
+    ko: "kor",
+    kr: "kau",
+    ks: "kas",
+    ku: "kur",
+    kv: "kom",
+    kw: "cor",
+    ky: "kir",
+    la: "lat",
+    lb: "ltz",
+    lg: "lug",
+    li: "lim",
+    ln: "lin",
+    lo: "lao",
+    lt: "lit",
+    lu: "lub",
+    lv: "lav",
+    mg: "mlg",
+    mh: "mah",
+    mi: "mri",
+    mk: "mkd",
+    ml: "mal",
+    mn: "mon",
+    mr: "mar",
+    ms: "msa",
+    mt: "mlt",
+    my: "mya",
+    na: "nau",
+    nb: "nob",
+    nd: "nde",
+    ne: "nep",
+    ng: "ndo",
+    nl: "nld",
+    nn: "nno",
+    no: "nor",
+    nr: "nbl",
+    nv: "nav",
+    ny: "nya",
+    oc: "oci",
+    oj: "oji",
+    om: "orm",
+    or: "ori",
+    os: "oss",
+    pa: "pan",
+    pe: "per",
+    pi: "pli",
+    pl: "pol",
+    ps: "pus",
+    pt: "por",
+    qu: "que",
+    rm: "roh",
+    rn: "run",
+    ro: "ron",
+    ru: "rus",
+    rw: "kin",
+    sa: "san",
+    sc: "srd",
+    sd: "snd",
+    se: "sme",
+    sg: "sag",
+    si: "sin",
+    sk: "slk",
+    sl: "slv",
+    sm: "smo",
+    sn: "sna",
+    so: "som",
+    sq: "sqi",
+    sr: "srp",
+    ss: "ssw",
+    st: "sot",
+    su: "sun",
+    sv: "swe",
+    sw: "swa",
+    ta: "tam",
+    te: "tel",
+    tg: "tgk",
+    th: "tha",
+    ti: "tir",
+    tk: "tuk",
+    tl: "tgl",
+    tn: "tsn",
+    to: "ton",
+    tr: "tur",
+    ts: "tso",
+    tt: "tat",
+    tw: "twi",
+    ty: "tah",
+    ug: "uig",
+    uk: "ukr",
+    ur: "urd",
+    uz: "uzb",
+    ve: "ven",
+    vi: "vie",
+    vo: "vol",
+    wa: "wln",
+    wo: "wol",
+    xh: "xho",
+    yi: "yid",
+    ji: "yid",
+    yo: "yor",
+    za: "zha",
+    zh: "zho",
+    zu: "zul",
+  };
+
+  static short2long(code: string): string | undefined {
+    return ISO639Utils.langMap[code.slice(0, 2)];
+  }
+
+  static long2short(code: string): string | undefined {
+    for (const [shortName, longName] of Object.entries(ISO639Utils.langMap)) {
+      if (longName === code) {
+        return shortName;
+      }
+    }
+    return undefined;
+  }
+}
+

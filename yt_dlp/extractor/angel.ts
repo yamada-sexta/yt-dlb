@@ -19,7 +19,7 @@ export class AngelIE extends InfoExtractor {
       throw new ExtractorError("Unable to extract HLS URL", { videoId });
     }
 
-    const [formats, subtitles] = this.extractM3u8FormatsAndSubtitles(
+    const [formats, subtitles] = await this.extractM3u8FormatsAndSubtitles(
       hlsUrl,
       videoId,
       "mp4",
