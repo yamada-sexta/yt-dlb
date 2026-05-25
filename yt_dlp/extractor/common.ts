@@ -1315,12 +1315,17 @@ export abstract class InfoExtractor {
     if (manifest === false) {
       return [[], {}];
     }
-    return this.parseM3u8FormatsAndSubtitles(manifest, m3u8Url, {
+    if (!manifest.trimStart().startsWith("#EXTM3U")) {
+      this.reportWarning("Failed to parse m3u8 manifest");
+      return [[], {}];
+    }
+    const result = this.parseM3u8FormatsAndSubtitles(manifest, m3u8Url, {
       ext,
       entryProtocol: options.entryProtocol,
       m3u8Id: options.m3u8Id,
       live: options.live,
     });
+    return result;
   }
 
   protected async extractMpdFormatsAndSubtitles(

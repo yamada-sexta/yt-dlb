@@ -516,13 +516,14 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
       ? (this.downloader?.params as Record<string, unknown>).extractor_args
       : undefined);
     const args = parsedArgs.success ? parsedArgs.data.youtube ?? [] : [];
+    const results: Array<string | null> = [];
     for (const arg of args) {
       const [argKey, ...valueParts] = String(arg).split("=");
       if (argKey === key) {
-        return [valueParts.join("=") || null];
+        results.push(valueParts.join("=") || null);
       }
     }
-    return [...defaultValue];
+    return results.length ? results : [...defaultValue];
   }
 
   protected extractContext(ytcfg: unknown = null, defaultClient = "web"): Record<string, unknown> {
@@ -970,6 +971,18 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     }
     const match = new RegExp(String.raw`^(?:https?://(?:www\.)?youtube\.com)?/(${YoutubeBaseInfoExtractor._YT_HANDLE_RE})`).exec(decodeURIComponent(url));
     return match?.[1] ?? null;
+  }
+
+  protected ucidFromUrl(url: unknown): string | null {
+    if (typeof url !== "string") {
+      return null;
+    }
+    const match = new RegExp(String.raw`^(?:https?://(?:www\.)?youtube\.com)?/channel/(${YoutubeBaseInfoExtractor._YT_CHANNEL_UCID_RE})`).exec(decodeURIComponent(url));
+    return match?.[1] ?? null;
+  }
+
+  protected ucid_from_url(url: unknown): string | null {
+    return this.ucidFromUrl(url);
   }
 
   static isMusicUrl(url: string): boolean {

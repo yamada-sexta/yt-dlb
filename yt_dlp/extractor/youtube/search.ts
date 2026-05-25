@@ -1,27 +1,83 @@
 // Source: yt_dlp/extractor/youtube/_search.py
-// Port note: URL parsing is migrated; actual YouTube search pagination is blocked on the tab layer.
+// Port note: search extraction uses the shared tab renderer walkers and Bun/Web request primitives.
 
-import { NotImplementedError } from "../../errors.ts";
 import { joinNonempty, parseQs } from "../../utils/index.ts";
 import { type ExtractorInfo } from "../common.ts";
+import { z } from "zod";
 import { YoutubeTabBaseInfoExtractor } from "./tab.ts";
 
-export class YoutubeSearchIE extends YoutubeTabBaseInfoExtractor {
+const RecordSchema = z.record(z.string(), z.unknown());
+const DEFAULT_SEARCH_PARAMS = "EgIQAfABAQ==";
+
+abstract class YoutubeSearchBaseIE extends YoutubeTabBaseInfoExtractor {
+  protected async searchResults(query: string, params: string | null | undefined, defaultClient = "web", maxResults = Number.POSITIVE_INFINITY): Promise<ExtractorInfo[]> {
+    const firstQuery: Record<string, unknown> = { query };
+    if (params) {
+      firstQuery.params = params;
+    }
+
+    const entries: ExtractorInfo[] = [];
+    const seenContinuations = new Set<string>();
+    let nextQuery: Record<string, unknown> | null = firstQuery;
+    let pageNum = 1;
+    while (nextQuery && entries.length < maxResults) {
+      const response = await this.callApi<unknown>("search", nextQuery, `query "${query}" page ${pageNum}`, {
+        defaultClient,
+        note: "Downloading search API JSON",
+        errnote: "Unable to download search API page",
+      });
+      const parsedResponse = RecordSchema.safeParse(response);
+      if (!parsedResponse.success) {
+        break;
+      }
+
+      const continuationList: Array<Record<string, unknown> | null> = [null];
+      const pageEntries = [...this._extract_entries({ contents: searchContentItems(parsedResponse.data) }, continuationList)];
+      for (const entry of pageEntries) {
+        entries.push(entry);
+        if (entries.length >= maxResults) {
+          break;
+        }
+      }
+
+      const continuation = continuationList[0];
+      const continuationToken = typeof continuation?.continuation === "string" ? continuation.continuation : null;
+      if (!continuation || (continuationToken && seenContinuations.has(continuationToken))) {
+        break;
+      }
+      if (continuationToken) {
+        seenContinuations.add(continuationToken);
+      }
+      nextQuery = continuation;
+      pageNum += 1;
+    }
+    return entries;
+  }
+}
+
+export class YoutubeSearchIE extends YoutubeSearchBaseIE {
   static readonly IE_DESC = "YouTube search";
-  static override readonly _VALID_URL = String.raw`ytsearch(?:date|all)?(?<prefix>[0-9]*):(?<id>[\s\S]+)`;
+  static override readonly _VALID_URL = String.raw`ytsearch(?<prefix>|[1-9][0-9]*|all):(?<id>[\s\S]+)`;
   static readonly _SEARCH_KEY = "ytsearch";
-  static readonly _SEARCH_PARAMS = "EgIQAfABAQ==";
+  static readonly _SEARCH_PARAMS = DEFAULT_SEARCH_PARAMS;
 
   static override get IE_NAME(): string {
     return "youtube:search";
   }
 
-  protected override async realExtract(_url: string): Promise<ExtractorInfo | null> {
-    throw new NotImplementedError("YouTube search result pagination");
+  protected override async realExtract(url: string): Promise<ExtractorInfo | null> {
+    const match = YoutubeSearchIE.matchValidUrl(url);
+    const query = match?.groups?.id;
+    if (!query) {
+      throw new Error("Unable to extract YouTube search query");
+    }
+    const prefix = match.groups?.prefix ?? "";
+    const maxResults = prefix === "" ? 1 : prefix === "all" ? Number.POSITIVE_INFINITY : Number(prefix);
+    return this.playlistResult(await this.searchResults(query, YoutubeSearchIE._SEARCH_PARAMS, "web", maxResults), query, query);
   }
 }
 
-export class YoutubeSearchURLIE extends YoutubeTabBaseInfoExtractor {
+export class YoutubeSearchURLIE extends YoutubeSearchBaseIE {
   static override readonly _VALID_URL = String.raw`https?://(?:www\.)?youtube\.com/(?:results|search)\?([^#]+&)?(?:search_query|q)=(?:[^&]+)(?:[&#]|$)`;
 
   static override get IE_NAME(): string {
@@ -36,11 +92,11 @@ export class YoutubeSearchURLIE extends YoutubeTabBaseInfoExtractor {
     if (!query) {
       throw new Error("Unable to extract YouTube search query");
     }
-    throw new NotImplementedError(`YouTube search results for ${JSON.stringify(query)}${qs.sp?.[0] ? " with params" : ""}`);
+    return this.playlistResult(await this.searchResults(query, qs.sp?.[0], "web"), query, query);
   }
 }
 
-export class YoutubeMusicSearchURLIE extends YoutubeTabBaseInfoExtractor {
+export class YoutubeMusicSearchURLIE extends YoutubeSearchBaseIE {
   static override readonly _VALID_URL = String.raw`https?://music\.youtube\.com/search\?([^#]+&)?(?:search_query|q)=(?:[^&]+)(?:[&#]|$)`;
 
   static override get IE_NAME(): string {
@@ -76,6 +132,43 @@ export class YoutubeMusicSearchURLIE extends YoutubeTabBaseInfoExtractor {
       }
     }
     const title = joinNonempty(query, section, { delim: " - " });
-    throw new NotImplementedError(`YouTube Music search results for ${JSON.stringify(title)}${params ? " with params" : ""}`);
+    return this.playlistResult(await this.searchResults(query, params, "web_music"), title, title);
   }
+}
+
+function searchContentItems(response: Record<string, unknown>): unknown[] {
+  return [
+    nestedUnknown(response, ["contents", "twoColumnSearchResultsRenderer", "primaryContents", "sectionListRenderer", "contents"]),
+    nestedUnknown(response, ["onResponseReceivedCommands", 0, "appendContinuationItemsAction", "continuationItems"]),
+    nestedUnknown(response, ["onResponseReceivedActions", 0, "appendContinuationItemsAction", "continuationItems"]),
+    nestedUnknown(response, ["contents", "tabbedSearchResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents"]),
+    nestedUnknown(response, ["continuationContents"]),
+  ].flatMap((value) => Array.isArray(value) ? value : isRecord(value) ? [value] : [])
+    .map((item) => isDirectRendererItem(item) ? { itemSectionRenderer: { contents: [item] } } : item);
+}
+
+function isDirectRendererItem(item: unknown): item is Record<string, unknown> {
+  return isRecord(item) && !Object.keys(item).some((key) => key === "itemSectionRenderer" || key === "musicShelfRenderer" || key === "musicShelfContinuation" || key === "richItemRenderer" || key === "reportHistorySectionRenderer");
+}
+
+function nestedUnknown(value: unknown, path: readonly (string | number)[]): unknown {
+  let current = value;
+  for (const key of path) {
+    if (typeof key === "number") {
+      if (!Array.isArray(current)) {
+        return null;
+      }
+      current = current[key];
+      continue;
+    }
+    if (!isRecord(current)) {
+      return null;
+    }
+    current = current[key];
+  }
+  return current ?? null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return RecordSchema.safeParse(value).success;
 }

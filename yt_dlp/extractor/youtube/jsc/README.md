@@ -1,5 +1,7 @@
 # YoutubeIE JS Challenge Provider Framework
 
+This document is retained from the upstream yt-dlp parent project for plugin API provenance. YTDLB's Bun/TypeScript migration may expose different APIs as the migration progresses.
+
 As part of the YouTube extractor, we have a framework for solving n/sig JS Challenges programmatically. This can be used by plugins.
 
 > [!TIP]

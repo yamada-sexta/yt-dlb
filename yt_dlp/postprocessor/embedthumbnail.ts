@@ -47,7 +47,8 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
 
     const converter = new FFmpegThumbnailsConvertorPP(this.downloader);
     await converter.fixupWebp(info, thumbnailIndex);
-    const originalThumbnail = thumbnailFilename = requireString(thumbnails[thumbnailIndex]?.filepath, "thumbnail filepath is missing");
+    thumbnailFilename = requireString(thumbnails[thumbnailIndex]?.filepath, "thumbnail filepath is missing");
+    const originalThumbnail = thumbnailFilename;
 
     let thumbnailExt = extname(thumbnailFilename).slice(1).toLowerCase();
     if (!["mkv", "mka"].includes(ext) && !["jpg", "jpeg", "png"].includes(thumbnailExt)) {

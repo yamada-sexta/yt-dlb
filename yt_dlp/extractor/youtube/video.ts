@@ -3,11 +3,14 @@
 // responses and progressive HTTP formats; DASH/HLS merging remains a later downloader-layer port.
 
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
-import { InfoExtractor, type ExtractorInfo } from "../common.ts";
+import { intOrNone } from "../../utils/index.ts";
+import { type ExtractorInfo } from "../common.ts";
 import { z } from "zod";
 import { initializeJscDirector, JsChallengeType, type JsChallengeRequest, type NChallengeOutput, type SigChallengeOutput } from "./jsc/index.ts";
+import { YoutubeBaseInfoExtractor } from "./base.ts";
+import { cleanPot, initializePotDirector, PoTokenContext as ProviderPoTokenContext } from "./pot/index.ts";
 
-export class YoutubeIE extends InfoExtractor {
+export class YoutubeIE extends YoutubeBaseInfoExtractor {
   static override readonly _VALID_URL = [
     String.raw`^(?:(?:https?:)?//(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com|(?:www\.)?deturl\.com/www\.youtube\.com|(?:www\.)?pwnyoutube\.com|(?:www\.)?hooktube\.com|(?:www\.)?yourepeat\.com|tube\.majestyc\.net|youtube\.googleapis\.com)/(?:.*?#/)?(?:(?:v|embed|e|shorts|live)/(?!videoseries|live_stream)|(?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?(?:\?|#!?)(?:.*?[&;])?v=)|(?:(?:youtu\.be|vid\.plus|zwearz\.com/watch)/)|(?:(?:www\.)?cleanvideosearch\.com/media/action/yt/watch\?videoId=)))(?<id>[0-9A-Za-z_-]{11})(?:[^\s]*)?(?:#|$)`,
     String.raw`^(?<id>[0-9A-Za-z_-]{11})(?:#|$)`,
@@ -25,6 +28,155 @@ export class YoutubeIE extends InfoExtractor {
       throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
     }
     return { ...await extractYoutubeVideo(url, this.downloader) };
+  }
+
+  static getCheckOkParams(): Record<string, true> {
+    return { contentCheckOk: true, racyCheckOk: true };
+  }
+
+  static _get_checkok_params(): Record<string, true> {
+    return this.getCheckOkParams();
+  }
+
+  static generatePlayerContext(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
+    const contentPlaybackContext: Record<string, unknown> = {
+      html5Preference: "HTML5_PREF_WANTS",
+    };
+    if (sts !== null) {
+      contentPlaybackContext.signatureTimestamp = sts;
+    }
+    if (encryptedContext) {
+      contentPlaybackContext.encryptedHostFlags = encryptedContext;
+    }
+    const playbackContext: Record<string, unknown> = { contentPlaybackContext };
+    if (useAdPlaybackContext) {
+      playbackContext.adPlaybackContext = { pyv: true };
+    }
+    return {
+      playbackContext,
+      ...this.getCheckOkParams(),
+    };
+  }
+
+  static _generate_player_context(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
+    return this.generatePlayerContext(sts, useAdPlaybackContext, encryptedContext);
+  }
+
+  protected async extractSignatureTimestamp(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false): Promise<number | null> {
+    const configuredSts = intOrNone(z.object({ STS: z.union([z.string(), z.number()]).optional() }).passthrough().safeParse(ytcfg).success
+      ? (ytcfg as { STS?: string | number }).STS
+      : null);
+    if (configuredSts) {
+      return configuredSts;
+    }
+    if (!playerUrl) {
+      const message = "Cannot extract signature timestamp without player url";
+      if (fatal) {
+        throw new DownloadError(message);
+      }
+      this.reportWarning(message, videoId, true);
+      return null;
+    }
+    const cached = stsCache.get(playerUrl);
+    if (cached) {
+      return cached;
+    }
+    if (!isYoutubeDL(this.downloader)) {
+      throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
+    }
+    const player = await loadPlayer(playerUrl, this.downloader);
+    const sts = intOrNone(/(?:signatureTimestamp|sts)\s*:\s*(?<sts>[0-9]{5})/.exec(player)?.groups?.sts);
+    if (!sts && fatal) {
+      throw new DownloadError("Could not extract JS player signature timestamp");
+    }
+    if (sts) {
+      stsCache.set(playerUrl, sts);
+    }
+    return sts;
+  }
+
+  protected _extract_signature_timestamp(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false): Promise<number | null> {
+    return this.extractSignatureTimestamp(videoId, playerUrl, ytcfg, fatal);
+  }
+
+  protected getConfigPoToken(client: string, context: ProviderPoTokenContext): string | null {
+    for (const tokenStr of this.youtubeConfigurationArg("po_token", [])) {
+      if (!tokenStr) {
+        continue;
+      }
+      const [metadata, poToken = ""] = tokenStr.split("+", 2);
+      if (!metadata) {
+        this.reportWarning("Invalid po_token configuration format.", null, true);
+        continue;
+      }
+      const [tokenClient, tokenContext = ProviderPoTokenContext.GVS] = metadata.split(".", 2);
+      if (tokenClient?.toLowerCase() !== client.toLowerCase() || tokenContext.toLowerCase() !== context) {
+        continue;
+      }
+      try {
+        return cleanPot(poToken);
+      } catch {
+        this.reportWarning(`Invalid po_token configuration for ${client} client: ${tokenContext} PO Token should be a base64url-encoded string.`, null, true);
+      }
+    }
+    return null;
+  }
+
+  protected _get_config_po_token(client: string, context: ProviderPoTokenContext): string | null {
+    return this.getConfigPoToken(client, context);
+  }
+
+  protected async fetchPoToken(client = "web", context: ProviderPoTokenContext = ProviderPoTokenContext.GVS, options: {
+    ytcfg?: unknown;
+    visitorData?: string | null;
+    dataSyncId?: string | null;
+    videoId?: string | null;
+    playerUrl?: string | null;
+    videoWebpage?: string | null;
+    required?: boolean;
+    bypassCache?: boolean;
+  } = {}): Promise<string | null> {
+    const configPoToken = this.getConfigPoToken(client, context);
+    if (configPoToken) {
+      this.writeDebug(`${options.videoId ?? "unknown"}: Retrieved a ${context} PO Token for ${client} client from config`);
+      return configPoToken;
+    }
+    const fetchPolicy = this.youtubeConfigurationArg("fetch_pot", [""])[0];
+    const policy = fetchPolicy === "never" || fetchPolicy === "always" || fetchPolicy === "auto" ? fetchPolicy : "auto";
+    if (policy === "never" || (policy === "auto" && !options.required)) {
+      return null;
+    }
+    if (!isYoutubeDL(this.downloader)) {
+      throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
+    }
+    const visitorData = options.visitorData ?? this.extractVisitorData(options.ytcfg);
+    const dataSyncId = options.dataSyncId ?? this.extractDataSyncId(options.ytcfg);
+    if (context === ProviderPoTokenContext.GVS && !this.isAuthenticated && !visitorData) {
+      this.reportWarning(`Unable to fetch GVS PO Token for ${client} client: Missing required Visitor Data.`, options.videoId ?? null, true);
+      return null;
+    }
+    if (context === ProviderPoTokenContext.PLAYER && !options.videoId) {
+      this.reportWarning(`Unable to fetch Player PO Token for ${client} client: Missing required Video ID`, null, true);
+      return null;
+    }
+    return await getPotDirector(this.downloader).getPoToken({
+      context,
+      innertubeContext: this.extractContext(options.ytcfg, client),
+      innertubeHost: this.getInnertubeHost(client),
+      playerUrl: options.playerUrl ?? undefined,
+      isAuthenticated: this.isAuthenticated,
+      videoWebpage: options.videoWebpage ?? undefined,
+      internalClientName: client,
+      visitorData: visitorData ?? undefined,
+      dataSyncId: dataSyncId ?? undefined,
+      videoId: options.videoId ?? undefined,
+      gvsBindToVideoId: Boolean(options.videoId),
+      bypassCache: options.bypassCache,
+    });
+  }
+
+  protected fetch_po_token(client = "web", context: ProviderPoTokenContext = ProviderPoTokenContext.GVS, options: Parameters<YoutubeIE["fetchPoToken"]>[2] = {}): Promise<string | null> {
+    return this.fetchPoToken(client, context, options);
   }
 }
 
@@ -241,7 +393,9 @@ async function resolveFormat(
 const signatureCache = new Map<string, string>();
 const nCache = new Map<string, string>();
 const playerCache = new Map<string, string>();
+const stsCache = new Map<string, number>();
 const jscDirectorCache = new WeakMap<YoutubeDL, ReturnType<typeof initializeJscDirector>>();
+const potDirectorCache = new WeakMap<YoutubeDL, ReturnType<typeof initializePotDirector>>();
 
 async function decipherSignature(
   signature: string,
@@ -323,6 +477,30 @@ function getJscDirector(ydl: YoutubeDL): ReturnType<typeof initializeJscDirector
   });
   jscDirectorCache.set(ydl, director);
   return director;
+}
+
+function getPotDirector(ydl: YoutubeDL): ReturnType<typeof initializePotDirector> {
+  const cached = potDirectorCache.get(ydl);
+  if (cached) {
+    return cached;
+  }
+  const director = initializePotDirector({
+    params: {
+      verbose: ydl.params.verbose,
+      extractor_args: normalizeExtractorArgs(ydl.params.extractor_args),
+    },
+    request: async (request) => await ydl.urlopen(request),
+    reportWarning: (message) => ydl.reportWarning(message),
+    reportError: (message) => ydl.reportError(message),
+    writeDebug: (message) => ydl.writeDebug(message),
+    toScreen: (message) => ydl.toScreen(message),
+  });
+  potDirectorCache.set(ydl, director);
+  return director;
+}
+
+function normalizeExtractorArgs(args: YoutubeDL["params"]["extractor_args"]): Record<string, readonly string[] | undefined> {
+  return args ? { ...args } : {};
 }
 
 function selectFormat(

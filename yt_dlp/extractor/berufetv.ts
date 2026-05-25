@@ -80,7 +80,11 @@ export class BerufeTVIE extends InfoExtractor {
       if (track.type !== "SUBTITLES" || !track.language || !track.source) {
         continue;
       }
-      const languageSubtitles = subtitles[track.language] ??= [];
+      let languageSubtitles = subtitles[track.language];
+      if (!languageSubtitles) {
+        languageSubtitles = [];
+        subtitles[track.language] = languageSubtitles;
+      }
       languageSubtitles.push({
         url: track.source,
         name: track.label,

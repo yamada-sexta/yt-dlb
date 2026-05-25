@@ -117,6 +117,7 @@ describe("general utility helpers", () => {
     expect(urlOrNone("not a url")).toBeNull();
     expect(updateUrlQuery("https://example.com/path?a=1", { a: "2", b: ["x", "y"] })).toBe("https://example.com/path?a=2&b=x&b=y");
     expect(parseQs("https://example.com/path?a=1&a=2&b=x")).toEqual({ a: ["1", "2"], b: ["x"] });
+    expect(parseQs("a=1")).toEqual({});
     expect(urlBasename("https://example.com/a/video.mp4?x=1")).toBe("video.mp4");
   });
 

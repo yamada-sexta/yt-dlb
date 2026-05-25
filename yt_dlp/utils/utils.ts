@@ -196,7 +196,7 @@ export function updateUrlQuery(url: string, query: URLSearchParams | Record<stri
 export const update_url_query = updateUrlQuery;
 
 export function parseQs(url: string): Record<string, string[]> {
-  const query = URL.canParse(url) ? new URL(url).search : url.includes("?") ? url.slice(url.indexOf("?")) : url;
+  const query = URL.canParse(url) ? new URL(url).search : url.includes("?") ? url.slice(url.indexOf("?")) : "";
   const params = new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
   const out: Record<string, string[]> = {};
   for (const [key, value] of params) {

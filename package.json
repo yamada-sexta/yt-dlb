@@ -1,7 +1,17 @@
 {
   "name": "yt-dlb",
+  "description": "YTDLB, a Bun/TypeScript downloader fork and migration of yt-dlp",
   "module": "index.ts",
   "type": "module",
+  "author": "yamada-sexta",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yamada-sexta/yt-dlb"
+  },
+  "bugs": {
+    "url": "https://github.com/yamada-sexta/yt-dlb/issues"
+  },
+  "homepage": "https://github.com/yamada-sexta/yt-dlb",
   "private": true,
   "scripts": {
     "ytdl": "$npm_execpath run ./ytdlb.ts",
@@ -9,15 +19,29 @@
     "compile": "$npm_execpath build --compile ./ytdlb.ts --outfile=./dist/ytdlb",
     "bundle": "$npm_execpath build ./ytdlb.ts --target=bun --outfile=./dist/ytdlb.js",
     "typecheck": "tsc --noEmit",
+    "lint:ts": "biome lint index.ts ytdlb.ts yt_dlp test package.json tsconfig.json biome.json",
+    "format": "biome format --write index.ts ytdlb.ts yt_dlp test package.json tsconfig.json biome.json",
+    "format:check": "biome format index.ts ytdlb.ts yt_dlp test package.json tsconfig.json biome.json",
     "lint:headers": "rg --files -g '*.ts' yt_dlp ytdlb.ts | xargs -r awk 'FNR==1 && $0 !~ /^\\/\\/ Source:/ { print FILENAME \":\" FNR \":\" $0; failed=1 } END { exit failed }'",
     "smoke:extractors": "$npm_execpath -e \"import { genExtractorClasses } from './yt_dlp/extractor/index.ts'; const classes = await genExtractorClasses(); console.log(classes.length);\"",
     "smoke:help": "$npm_execpath run ./ytdlb.ts --help",
     "test:bun": "$npm_execpath test test",
-    "check": "$npm_execpath run typecheck && $npm_execpath run lint:headers && $npm_execpath run smoke:extractors",
+    "check": "$npm_execpath run typecheck && $npm_execpath run lint:ts && $npm_execpath run lint:headers && $npm_execpath run smoke:extractors",
     "ci": "$npm_execpath run check && $npm_execpath run test:bun",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "clean:test": "rm -rf tmp/ *.annotations.xml *.aria2 *.description *.dump *.frag *.frag.aria2 *.frag.urls *.info.json *.live_chat.json *.meta *.part* *.tmp *.temp *.unknown_video *.ytdl *.3gp *.ape *.ass *.avi *.desktop *.f4v *.flac *.flv *.gif *.jpeg *.jpg *.lrc *.m4a *.m4v *.mhtml *.mkv *.mov *.mp3 *.mp4 *.mpg *.mpga *.oga *.ogg *.opus *.png *.sbv *.srt *.ssa *.swf *.tt *.ttml *.url *.vtt *.wav *.webloc *.webm *.webp",
+    "clean:cache": "find . \\( -type d -name '.*_cache' -o -type d -name '__pycache__' -o -name '*.pyc' -o -name '*.class' -o -type d -name '.pytest_cache' -o -type d -name '.ruff_cache' \\) -prune -exec rm -rf {} +",
+    "clean:all": "bun run clean && bun run clean:test && bun run clean:cache",
+    "lint:python": "ruff check . && autopep8 --diff .",
+    "test:python": "python3 -m pytest -Werror",
+    "test:python-offline": "python3 -m pytest -Werror -m 'not download'",
+    "devscripts:supportedsites": "python3 devscripts/make_supportedsites.py supportedsites.md",
+    "devscripts:issuetemplates": "python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/1_broken_site.yml .github/ISSUE_TEMPLATE/1_broken_site.yml && python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/2_site_support_request.yml .github/ISSUE_TEMPLATE/2_site_support_request.yml && python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/3_site_feature_request.yml .github/ISSUE_TEMPLATE/3_site_feature_request.yml && python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/4_bug_report.yml .github/ISSUE_TEMPLATE/4_bug_report.yml && python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/5_feature_request.yml .github/ISSUE_TEMPLATE/5_feature_request.yml && python3 devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/6_question.yml .github/ISSUE_TEMPLATE/6_question.yml",
+    "devscripts:completions": "python3 devscripts/bash-completion.py && python3 devscripts/zsh-completion.py && python3 devscripts/fish-completion.py",
+    "devscripts:readme": "COLUMNS=80 bun run ytdl --ignore-config --help | python3 devscripts/make_readme.py"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.15",
     "@types/bun": "latest"
   },
   "peerDependencies": {

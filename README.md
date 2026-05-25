@@ -1,16 +1,22 @@
-# ytdlb
+# YTDLB
 
 `ytdlb` is an independent Bun/TypeScript fork and rewrite of yt-dlp. It is not associated with, endorsed by, or maintained by the upstream yt-dlp project.
 
 The project is still early software and is not a drop-in replacement for yt-dlp. Use upstream yt-dlp for production downloads; use `ytdlb` if you want to try the Bun runtime while the migration is in progress.
+
+Repository: https://github.com/yamada-sexta/yt-dlb
 
 <img width="525" height="169" alt="image" src="https://github.com/user-attachments/assets/a6ca526d-4bce-4a8a-9912-c172f209ea0a" />
 
 ## What Works
 
 - Bun CLI entrypoint: `bun ytdl ...`
-- YouTube watch URL downloads for currently supported progressive HTTP formats.
-- YouTube JS challenge solving through the `yt-dlp/ejs` package.
+- YouTube watch URL downloads for currently supported webpage player responses and progressive HTTP formats.
+- YouTube JS challenge solving through the ported JSC director and Bun/EJS provider.
+- YouTube PO-token framework support, including memory/cache-spec providers and configured `po_token` parsing.
+- YouTube URL routing for watch, playlist/tab, redirect, clip, notifications keyword, shorts audio pivot, and common mistake URLs.
+- YouTube renderer helper coverage for video/channel/grid items, playlist videos, music responsive rows, shelves, rich grid items, lockup view models, shorts lockups, community post attachments, notification renderers, continuations, and alerts.
+- YouTube `ytsearch`, search URL, and YouTube Music search URL extraction through Innertube search pagination.
 - Direct HTTP/HTTPS downloads.
 - Some native downloader support for DASH, HLS, F4M, ISM, MHTML, RTMP/RTSP wrappers, WebSocket fragments, and selected live/site-specific flows.
 - Netscape cookie file loading and URL-scoped browser cookie extraction through Sweet Cookie.
@@ -20,12 +26,18 @@ The project is still early software and is not a drop-in replacement for yt-dlp.
 ## Still In Progress
 
 - Full yt-dlp site support.
-- Full YouTube parity, including all clients, live streams, subtitles, playlists, and account-gated flows.
+- Full YouTube parity, including channel extra-tab routing, notification pagination, all player clients, live streams, subtitles, comments, complete metadata, account-gated flows, and full format/manifest PO-token application.
 - Full format selection, postprocessing, and media merging from the CLI.
 - Complete yt-dlp option compatibility.
 - TypeScript coverage for every upstream Python test expectation. Ported behavior should assert the same result as the Python test; unavailable behavior should remain as `test.todo`.
 
 See [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the migration inventory and current status.
+
+## Current Check Status
+
+- `bun check` currently passes: typecheck, Biome lint, source-header linting, and extractor smoke import all complete.
+- `bun run typecheck` currently passes.
+- `bun run test:bun` currently has 356 passing tests, 38 `test.todo` entries, and 0 failures.
 
 ## Requirements
 
@@ -70,6 +82,8 @@ Run the current project checks:
 ```bash
 bun check
 ```
+
+`bun check` is the preferred short form for the package `check` script. It runs typecheck, Biome lint, source-header linting, and the extractor smoke check.
 
 Run the Bun test suite:
 

@@ -25,6 +25,22 @@ export enum LinuxKeyring {
   BASICTEXT = "BASICTEXT",
 }
 
+export enum LinuxDesktopEnvironment {
+  OTHER = "OTHER",
+  CINNAMON = "CINNAMON",
+  DEEPIN = "DEEPIN",
+  GNOME = "GNOME",
+  KDE3 = "KDE3",
+  KDE4 = "KDE4",
+  KDE5 = "KDE5",
+  KDE6 = "KDE6",
+  PANTHEON = "PANTHEON",
+  UKUI = "UKUI",
+  UNITY = "UNITY",
+  XFCE = "XFCE",
+  LXQT = "LXQT",
+}
+
 export const SUPPORTED_KEYRINGS = Object.keys(LinuxKeyring);
 
 export interface CookieLogger {
@@ -436,6 +452,10 @@ export class LinuxChromeCookieDecryptor extends ChromeCookieDecryptor {
     this.#metaVersion = metaVersion;
   }
 
+  static deriveKey(password: Uint8Array): Buffer {
+    return deriveLinuxKey(password);
+  }
+
   override decrypt(encryptedValue: Uint8Array): string | null {
     const version = Buffer.from(encryptedValue.subarray(0, 3)).toString();
     const ciphertext = encryptedValue.subarray(3);
@@ -467,8 +487,12 @@ export class MacChromeCookieDecryptor extends ChromeCookieDecryptor {
   constructor(browserKeyringName: string, readonly logger: CookieLogger, metaVersion: number) {
     super();
     const password = getMacKeyringPassword(browserKeyringName, logger);
-    this.#key = password ? pbkdf2Sha1(password, Buffer.from("saltysalt"), 1003, 16) : null;
+    this.#key = password ? MacChromeCookieDecryptor.deriveKey(password) : null;
     this.#metaVersion = metaVersion;
+  }
+
+  static deriveKey(password: Uint8Array): Buffer {
+    return pbkdf2Sha1(password, Buffer.from("saltysalt"), 1003, 16);
   }
 
   override decrypt(encryptedValue: Uint8Array): string | null {
@@ -655,11 +679,11 @@ export class LenientSimpleCookie {
         continue;
       }
       const [rawKey, ...rawValue] = trimmed.split("=");
-      if (!rawKey || /[\x00-\x1F\x7F]/.test(rawKey)) {
+      if (!rawKey || hasCookieControlChar(rawKey)) {
         continue;
       }
       const value = rawValue.join("=");
-      if (/[\x00-\x1F\x7F]/.test(value)) {
+      if (hasCookieControlChar(value)) {
         continue;
       }
       this.cookies.set(rawKey, stripCookieQuotes(value));
@@ -669,6 +693,16 @@ export class LenientSimpleCookie {
   get(key: string): string | undefined {
     return this.cookies.get(key);
   }
+}
+
+function hasCookieControlChar(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function parseNetscapeCookieLine(line: string): Cookie {
@@ -992,9 +1026,85 @@ function macAbsoluteTimeToPosix(timestamp: number): number {
   return Math.trunc(Date.UTC(2001, 0, 1) / 1000 + timestamp);
 }
 
+export function getLinuxDesktopEnvironment(env: Record<string, string | number | undefined>, logger: CookieLogger = new YDLLogger()): LinuxDesktopEnvironment {
+  const xdgCurrentDesktop = env.XDG_CURRENT_DESKTOP;
+  const desktopSession = String(env.DESKTOP_SESSION ?? "");
+  if (xdgCurrentDesktop !== undefined) {
+    for (const part of String(xdgCurrentDesktop).split(":").map((item) => item.trim())) {
+      if (part === "Unity") {
+        return desktopSession.includes("gnome-fallback") ? LinuxDesktopEnvironment.GNOME : LinuxDesktopEnvironment.UNITY;
+      }
+      if (part === "Deepin") {
+        return LinuxDesktopEnvironment.DEEPIN;
+      }
+      if (part === "GNOME") {
+        return LinuxDesktopEnvironment.GNOME;
+      }
+      if (part === "X-Cinnamon") {
+        return LinuxDesktopEnvironment.CINNAMON;
+      }
+      if (part === "KDE") {
+        const kdeVersion = env.KDE_SESSION_VERSION;
+        if (kdeVersion === "5") {
+          return LinuxDesktopEnvironment.KDE5;
+        }
+        if (kdeVersion === "6") {
+          return LinuxDesktopEnvironment.KDE6;
+        }
+        if (kdeVersion === "4") {
+          return LinuxDesktopEnvironment.KDE4;
+        }
+        logger.info(`unknown KDE version: "${kdeVersion}". Assuming KDE4`);
+        return LinuxDesktopEnvironment.KDE4;
+      }
+      if (part === "Pantheon") {
+        return LinuxDesktopEnvironment.PANTHEON;
+      }
+      if (part === "XFCE") {
+        return LinuxDesktopEnvironment.XFCE;
+      }
+      if (part === "UKUI") {
+        return LinuxDesktopEnvironment.UKUI;
+      }
+      if (part === "LXQt") {
+        return LinuxDesktopEnvironment.LXQT;
+      }
+    }
+    logger.debug(`XDG_CURRENT_DESKTOP is set to an unknown value: "${xdgCurrentDesktop}"`);
+  }
+
+  if (desktopSession === "deepin") {
+    return LinuxDesktopEnvironment.DEEPIN;
+  }
+  if (desktopSession === "mate" || desktopSession === "gnome") {
+    return LinuxDesktopEnvironment.GNOME;
+  }
+  if (desktopSession === "kde4" || desktopSession === "kde-plasma") {
+    return LinuxDesktopEnvironment.KDE4;
+  }
+  if (desktopSession === "kde") {
+    return "KDE_SESSION_VERSION" in env ? LinuxDesktopEnvironment.KDE4 : LinuxDesktopEnvironment.KDE3;
+  }
+  if (desktopSession.includes("xfce") || desktopSession === "xubuntu") {
+    return LinuxDesktopEnvironment.XFCE;
+  }
+  if (desktopSession === "ukui") {
+    return LinuxDesktopEnvironment.UKUI;
+  }
+  logger.debug(`DESKTOP_SESSION is set to an unknown value: "${desktopSession}"`);
+
+  if ("GNOME_DESKTOP_SESSION_ID" in env) {
+    return LinuxDesktopEnvironment.GNOME;
+  }
+  if ("KDE_FULL_SESSION" in env) {
+    return "KDE_SESSION_VERSION" in env ? LinuxDesktopEnvironment.KDE4 : LinuxDesktopEnvironment.KDE3;
+  }
+  return LinuxDesktopEnvironment.OTHER;
+}
+
 function getLinuxKeyringPassword(_browserKeyringName: string, keyring: string | null, logger: CookieLogger): Buffer | null {
   if (keyring === LinuxKeyring.BASICTEXT) {
-    return null;
+    return Buffer.alloc(0);
   }
   // Logic change: Python shells out to DBus/keyring tools or imports secretstorage. The Bun layer
   // avoids those Python dependencies and currently supports only Chromium's basic-text path.

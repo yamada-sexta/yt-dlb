@@ -1,5 +1,7 @@
 # Changelog
 
+YTDLB migration work is tracked in [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md). The historical entries below are retained as upstream yt-dlp parent-project release history for source provenance.
+
 <!--
 # To create a release, dispatch the https://github.com/yt-dlp/yt-dlp/actions/workflows/release.yml workflow on master
 -->

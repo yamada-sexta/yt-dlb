@@ -13,7 +13,7 @@ export class AluraIE extends InfoExtractor {
   static override readonly _VALID_URL = String.raw`https?://(?:cursos\.)?alura\.com\.br/course/(?<course_name>[^/]+)/task/(?<id>\d+)`;
   static readonly _LOGIN_URL = "https://cursos.alura.com.br/loginForm?urlAfterLogin=/loginForm";
   static readonly _VIDEO_URL = "https://cursos.alura.com.br/course/%s/task/%s/video";
-  static readonly _NETRC_MACHINE = "alura";
+  static override readonly _NETRC_MACHINE: string = "alura";
 
   static override get IE_NAME(): string {
     return "alura";
@@ -30,7 +30,7 @@ export class AluraIE extends InfoExtractor {
   protected async performLogin(username: string, password: string): Promise<void> {
     const loginPage = await this.downloadWebpage(
       AluraIE._LOGIN_URL,
-      null,
+      "alura",
       { note: "Downloading login popup" }
     );
     if (loginPage === false) {
@@ -71,12 +71,12 @@ export class AluraIE extends InfoExtractor {
     ) as string;
 
     if (!postUrl.startsWith("http")) {
-      postUrl = urljoin(AluraIE._LOGIN_URL, postUrl);
+      postUrl = urljoin(AluraIE._LOGIN_URL, postUrl) ?? postUrl;
     }
 
     const response = await this.downloadWebpage(
       postUrl,
-      null,
+      "alura",
       {
         note: "Logging in",
         data: urlencodePostdata(loginForm),
@@ -113,7 +113,7 @@ export class AluraIE extends InfoExtractor {
       { note: "Searching for videos" }
     );
 
-    if (!videoDict || videoDict === false) {
+    if (videoDict === false || !videoDict.length) {
       throw new ExtractorError("No video found for this task", { expected: true });
     }
 
@@ -138,9 +138,9 @@ export class AluraIE extends InfoExtractor {
       }
       const videoFormat = this.extractM3u8Formats(
         videoUrlM3u8,
-        null,
+        videoId,
         "mp4",
-        { entryProtocol: "m3u8_native", m3u8Id: "hls", fatal: false }
+        { entryProtocol: "m3u8_native", m3u8Id: "hls" }
       ) as any[];
 
       for (const f of videoFormat) {
@@ -208,6 +208,9 @@ export class AluraCourseIE extends AluraIE {
 
     for (const path of sectionPaths) {
       const pageUrl = urljoin(url, path);
+      if (!pageUrl) {
+        continue;
+      }
       const sectionPathHtml = await this.downloadWebpage(pageUrl, coursePath);
       if (sectionPathHtml === false) {
         continue;
@@ -215,34 +218,26 @@ export class AluraCourseIE extends AluraIE {
 
       let chapterTitle = "";
       let chapterNumberText = "";
-      let insideChapterTitle = false;
-      let insideChapterNumber = false;
 
       const videoPaths: Array<{ href: string; chapter: string; chapterNumber: number | null }> = [];
 
       new HTMLRewriter()
-        .on("h3", {
+        .on("h3.task-menu-section-title-text", {
           element(el) {
-            const className = el.getAttribute("class") ?? "";
-            if (/\btask-menu-section-title-text\b/.test(className)) {
-              insideChapterTitle = true;
-              chapterTitle = "";
-              el.onEndTag(() => {
-                insideChapterTitle = false;
-              });
-            }
+            void el;
+            chapterTitle = "";
+          },
+          text(text) {
+            chapterTitle += text.text;
           }
         })
-        .on("span", {
+        .on("span.task-menu-section-title-number", {
           element(el) {
-            const className = el.getAttribute("class") ?? "";
-            if (/\btask-menu-section-title-number\b/.test(className)) {
-              insideChapterNumber = true;
-              chapterNumberText = "";
-              el.onEndTag(() => {
-                insideChapterNumber = false;
-              });
-            }
+            void el;
+            chapterNumberText = "";
+          },
+          text(text) {
+            chapterNumberText += text.text;
           }
         })
         .on("a", {
@@ -260,20 +255,13 @@ export class AluraCourseIE extends AluraIE {
             }
           }
         })
-        .onText({
-          text(text) {
-            if (insideChapterTitle) {
-              chapterTitle += text.text;
-            }
-            if (insideChapterNumber) {
-              chapterNumberText += text.text;
-            }
-          }
-        })
         .transform(sectionPathHtml);
 
       for (const vp of videoPaths) {
         const videoUrl = urljoin(url, vp.href);
+        if (!videoUrl) {
+          continue;
+        }
         const entryId = this.matchId(videoUrl);
         entries.push({
           _type: "url_transparent",

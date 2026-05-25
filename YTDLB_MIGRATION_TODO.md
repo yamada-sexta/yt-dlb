@@ -23,6 +23,25 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, approximate compatibility results, or silent placeholders.
 - Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
 
+## Current Test Status
+
+Latest local validation:
+
+- `bun check`: passes; typecheck, Biome lint, source-header linting, and extractor smoke import all complete.
+- `bun run typecheck`: passes.
+- `bun run test:bun`: 356 pass, 38 todo, 0 fail, 723 `expect()` calls, 394 tests across 25 files.
+
+Recently ported Python test coverage:
+
+- `test/test_postprocessors.py` -> `test/test_postprocessors.test.ts`: metadata parsing, exec command argument handling, ffmpeg thumbnail conversion, chapter modification cases, concat option selection, and shell-quote behavior.
+- `test/test_cookies.py` -> `test/test_cookies.test.ts`: Netscape/browser cookie helper coverage, Safari binary cookie parsing, Linux Chrome v10/v11/meta24 cases, key derivation helpers, desktop environment detection, and lenient cookie parsing cases.
+- `test/test_InfoExtractor.py` -> `test/test_InfoExtractor.test.ts`: m3u8 format/subtitle extraction and invalid-manifest warning behavior.
+- `test/test_downloader_external.py` -> `test/test_downloader_external.test.ts`: FFmpeg external downloader command assembly.
+- `test/test_aes.py` -> `test/test_aes.test.ts`: AES encrypt/decrypt compatibility wrappers and CTR text decryption.
+- `test/test_networking_utils.py` -> `test/test_networking_utils.test.ts`: SOCKS proxy option parsing and unknown-proxy rejection.
+
+Remaining TypeScript test TODOs should stay local to the matching test file and should only be replaced when the YTDLB feature exists. Current known gaps include Python SSL context construction equivalents, optional networking backend parity, Windows/macOS keychain cookie decryption, full `LenientSimpleCookie` morsel attributes, config file loading, update-spec/query injection behavior, full extractor registry `ie_key` parity, AES `key_expansion`, verbose private option redaction, netrc login hooks, module execution/lazy extractor generation, compat PyCrypto AES behavior, and networked age-restriction/download cases.
+
 ## Started Files
 
 - [x] `index.ts`
@@ -62,7 +81,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/downloader/fragment.ts`
 - [x] `yt_dlp/downloader/dash.ts`
 - [x] `yt_dlp/downloader/hls.ts`
-- [x] `yt_dlp/downloader/external.ts`
+- [x] `yt_dlp/downloader/external.ts` Bun Shell external downloader layer with FFmpeg command assembly covered by ported tests.
 - [x] `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.ts`
 - [x] `yt_dlp/downloader/ism.ts`
@@ -74,7 +93,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/downloader/websocket.ts`
 - [x] `yt_dlp/downloader/youtube-live-chat.ts`
 - [x] `yt_dlp/downloader/bunnycdn.ts`
-- [x] `yt_dlp/aes.ts`
+- [x] `yt_dlp/aes.ts` native crypto AES helpers and Python test compatibility wrappers are present; Python `key_expansion` schedule parity is intentionally left as test TODO.
 - [x] `yt_dlp/cache.ts`
 - [x] `yt_dlp/utils/jsruntime.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/provider.ts`
@@ -95,8 +114,11 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/index.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
-- [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
-- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization for ported real-world cases, Next.js data/v13 flight extraction, and Nuxt rich JSON payload extraction for migrated extractors; full extractor helper surface still pending.
+- [ ] `yt_dlp/extractor/youtube/base.ts` shared YouTube client/context/API helpers are partially ported; cookie-auth checks, ytcfg loading retries, and full response validation remain pending.
+- [x] `yt_dlp/extractor/youtube/search.ts` YouTube search, search URL, and YouTube Music search URL extraction are ported through Innertube search pagination and shared tab renderer dispatch.
+- [ ] `yt_dlp/extractor/youtube/tab.ts` renderer helper coverage now includes video/channel/grid items, playlist videos, music responsive rows, shelves, rich grid items, lockup view models, shorts lockups, community post attachments, report-history URLs, continuations, and entry dispatch; initial webpage extraction and basic Innertube continuation pagination work, while channel redirect/extra-tab flows and unavailable-video reloads remain pending.
+- [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; JSC director and PO-token dependency hooks are wired; full multi-client player extraction, metadata, subtitles, comments, live handling, manifests, and complete format processing remain pending.
+- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization for ported real-world cases, Next.js data/v13 flight extraction, Nuxt rich JSON payload extraction, and m3u8 format/subtitle parsing for migrated extractors; full extractor helper surface still pending.
 
 ## Complete Runtime Inventory
 
@@ -105,7 +127,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/YoutubeDL.py` -> `yt_dlp/YoutubeDL.ts` (Bun CLI/download shell is present; full `YoutubeDL.py` orchestration remains pending)
 - [ ] `yt_dlp/__init__.py` -> `yt_dlp/index.ts` (staged CLI entry is present; full option validation/postprocessor/extractor wiring remains pending)
 - [x] `yt_dlp/__main__.py` -> `yt_dlp/main.ts`
-- [x] `yt_dlp/aes.py` -> `yt_dlp/aes.ts`
+- [x] `yt_dlp/aes.py` -> `yt_dlp/aes.ts` (native crypto AES helpers and compatibility wrappers are present; Python `key_expansion` schedule parity remains a test TODO)
 - [x] `yt_dlp/cache.py` -> `yt_dlp/cache.ts`
 - [x] `yt_dlp/compat/__init__.py` -> `yt_dlp/compat/index.ts`
 - [x] `yt_dlp/compat/_deprecated.py` -> `yt_dlp/compat/deprecated.ts`
@@ -115,14 +137,14 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/compat/shutil.py` -> `yt_dlp/compat/shutil.ts`
 - [x] `yt_dlp/compat/urllib/__init__.py` -> `yt_dlp/compat/urllib/index.ts`
 - [x] `yt_dlp/compat/urllib/request.py` -> `yt_dlp/compat/urllib/request.ts`
-- [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts` (browser cookies now prefer `@steipete/sweet-cookie` lazily per request URL; file cookies remain eager)
+- [x] `yt_dlp/cookies.py` -> `yt_dlp/cookies.ts` (browser cookies now prefer `@steipete/sweet-cookie` lazily per request URL; file cookies remain eager; Safari fixture, Linux Chrome v10/v11/meta24, key derivation, desktop detection, and lenient parsing cases are covered)
 - [ ] `yt_dlp/dependencies/Cryptodome.py` -> `yt_dlp/dependencies/Cryptodome.ts` (AES replacement is present; non-AES compatibility exports still throw)
 - [x] `yt_dlp/dependencies/__init__.py` -> `yt_dlp/dependencies/index.ts`
 - [ ] `yt_dlp/downloader/__init__.py` -> `yt_dlp/downloader/index.ts` (protocol selection is present; merged multi-protocol selection remains pending)
 - [x] `yt_dlp/downloader/bunnycdn.py` -> `yt_dlp/downloader/bunnycdn.ts`
 - [x] `yt_dlp/downloader/common.py` -> `yt_dlp/downloader/common.ts`
 - [x] `yt_dlp/downloader/dash.py` -> `yt_dlp/downloader/dash.ts`
-- [x] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts`
+- [x] `yt_dlp/downloader/external.py` -> `yt_dlp/downloader/external.ts` (Bun Shell command assembly is present and covered for FFmpeg)
 - [x] `yt_dlp/downloader/f4m.py` -> `yt_dlp/downloader/f4m.ts`
 - [x] `yt_dlp/downloader/fc2.py` -> `yt_dlp/downloader/fc2.ts`
 - [x] `yt_dlp/downloader/fragment.py` -> `yt_dlp/downloader/fragment.ts`
@@ -165,11 +187,11 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/alphaporno.py` -> `yt_dlp/extractor/alphaporno.ts`
 - [x] `yt_dlp/extractor/alsace20tv.py` -> `yt_dlp/extractor/alsace20tv.ts`
 - [ ] `yt_dlp/extractor/altcensored.py` -> `yt_dlp/extractor/altcensored.ts`
-- [ ] `yt_dlp/extractor/alura.py` -> `yt_dlp/extractor/alura.ts`
+- [ ] `yt_dlp/extractor/alura.py` -> `yt_dlp/extractor/alura.ts` (typechecks; full extractor parity remains unaudited)
 - [x] `yt_dlp/extractor/amadeustv.py` -> `yt_dlp/extractor/amadeustv.ts`
 - [ ] `yt_dlp/extractor/amara.py` -> `yt_dlp/extractor/amara.ts`
 - [ ] `yt_dlp/extractor/amazon.py` -> `yt_dlp/extractor/amazon.ts`
-- [ ] `yt_dlp/extractor/amazonminitv.py` -> `yt_dlp/extractor/amazonminitv.ts`
+- [ ] `yt_dlp/extractor/amazonminitv.py` -> `yt_dlp/extractor/amazonminitv.ts` (typechecks; full extractor parity remains unaudited)
 - [ ] `yt_dlp/extractor/amcnetworks.py` -> `yt_dlp/extractor/amcnetworks.ts`
 - [ ] `yt_dlp/extractor/americastestkitchen.py` -> `yt_dlp/extractor/americastestkitchen.ts`
 - [x] `yt_dlp/extractor/amp.py` -> `yt_dlp/extractor/amp.ts`
@@ -299,7 +321,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/cnbc.py` -> `yt_dlp/extractor/cnbc.ts`
 - [ ] `yt_dlp/extractor/cnn.py` -> `yt_dlp/extractor/cnn.ts`
 - [ ] `yt_dlp/extractor/comedycentral.py` -> `yt_dlp/extractor/comedycentral.ts`
-- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present; HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization, Next.js v13 flight extraction, and Nuxt rich JSON extraction added)
+- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present; HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization, Next.js v13 flight extraction, Nuxt rich JSON extraction, and m3u8 parsing/warning behavior added)
 - [x] `yt_dlp/extractor/commonmistakes.py` -> `yt_dlp/extractor/commonmistakes.ts`
 - [x] `yt_dlp/extractor/commonprotocols.py` -> `yt_dlp/extractor/commonprotocols.ts`
 - [ ] `yt_dlp/extractor/condenast.py` -> `yt_dlp/extractor/condenast.ts`
@@ -1147,14 +1169,14 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/younow.py` -> `yt_dlp/extractor/younow.ts`
 - [ ] `yt_dlp/extractor/youporn.py` -> `yt_dlp/extractor/youporn.ts`
 - [ ] `yt_dlp/extractor/youtube/__init__.py` -> `yt_dlp/extractor/youtube/index.ts`
-- [ ] `yt_dlp/extractor/youtube/_base.py` -> `yt_dlp/extractor/youtube/base.ts`
+- [ ] `yt_dlp/extractor/youtube/_base.py` -> `yt_dlp/extractor/youtube/base.ts` (shared Innertube client table, context/API headers, ytcfg/session/visitor helpers, continuations, alerts, badges, text/count, relative-time, and thumbnails are partially ported; full initialization/auth/retry response flow remains pending)
 - [ ] `yt_dlp/extractor/youtube/_clip.py` -> `yt_dlp/extractor/youtube/clip.ts`
 - [x] `yt_dlp/extractor/youtube/_mistakes.py` -> `yt_dlp/extractor/youtube/mistakes.ts`
 - [ ] `yt_dlp/extractor/youtube/_notifications.py` -> `yt_dlp/extractor/youtube/notifications.ts`
 - [x] `yt_dlp/extractor/youtube/_redirect.py` -> `yt_dlp/extractor/youtube/redirect.ts`
-- [ ] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
-- [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts`
-- [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts` (focused watch URL/progressive extractor and `YoutubeIE` wrapper present; full YouTube extractor still pending)
+- [x] `yt_dlp/extractor/youtube/_search.py` -> `yt_dlp/extractor/youtube/search.ts`
+- [ ] `yt_dlp/extractor/youtube/_tab.py` -> `yt_dlp/extractor/youtube/tab.ts` (renderer helper subset now covers playlists, music rows, shelves, rich grid/lockup/shorts entries, community post attachments, report-history URLs, continuations, and entry dispatch; initial webpage extraction and basic Innertube continuation pagination work, while channel redirect/extra-tab flows and unavailable-video reloads remain pending)
+- [ ] `yt_dlp/extractor/youtube/_video.py` -> `yt_dlp/extractor/youtube/video.ts` (focused watch URL/progressive extractor, `YoutubeIE` wrapper, JSC director challenge solving, player context/signature timestamp helpers, and PO-token config/fetch hooks present; full YouTube extractor still pending)
 - [x] `yt_dlp/extractor/youtube/jsc/__init__.py` -> `yt_dlp/extractor/youtube/jsc/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/__init__.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/index.ts`
 - [x] `yt_dlp/extractor/youtube/jsc/_builtin/bun.py` -> `yt_dlp/extractor/youtube/jsc/_builtin/bun.ts`
@@ -1194,7 +1216,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`
 - [x] `yt_dlp/networking/__init__.py` -> `yt_dlp/networking/index.ts`
 - [ ] `yt_dlp/networking/_curlcffi.py` -> `yt_dlp/networking/curlcffi.ts` (explicit unsupported backend facade; not a port)
-- [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts` (redirect/header helpers are present; Python SSL/SOCKS helpers still throw)
+- [ ] `yt_dlp/networking/_helper.py` -> `yt_dlp/networking/helper.ts` (redirect/header helpers and SOCKS proxy option parsing are present; Python SSL context construction still throws)
 - [ ] `yt_dlp/networking/_requests.py` -> `yt_dlp/networking/requests.ts` (explicit unsupported backend facade; Bun fetch is in `urllib.ts`)
 - [x] `yt_dlp/networking/_urllib.py` -> `yt_dlp/networking/urllib.ts`
 - [ ] `yt_dlp/networking/_websockets.py` -> `yt_dlp/networking/websockets.ts` (reexports incomplete WebSocket bridge)

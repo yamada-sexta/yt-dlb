@@ -100,6 +100,10 @@ class TestInfoExtractor extends InfoExtractor {
     return this.htmlExtractTitle(...args);
   }
 
+  extractM3u8FormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["extractM3u8FormatsAndSubtitles"]>): ReturnType<InfoExtractor["extractM3u8FormatsAndSubtitles"]> {
+    return this.extractM3u8FormatsAndSubtitles(...args);
+  }
+
   rtaSearchPublic(...args: Parameters<InfoExtractor["rtaSearch"]>): ReturnType<InfoExtractor["rtaSearch"]> {
     return this.rtaSearch(...args);
   }
@@ -153,7 +157,7 @@ class TestInfoExtractor extends InfoExtractor {
   }
 }
 
-function fakeDownloader(params: Record<string, unknown>) {
+function fakeDownloader(params: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
   return {
     params,
     async urlopen(url: string | URL | Request) {
@@ -162,6 +166,7 @@ function fakeDownloader(params: Record<string, unknown>) {
     toScreen() {},
     reportWarning() {},
     writeDebug() {},
+    ...overrides,
   };
 }
 
@@ -955,7 +960,22 @@ describe("InfoExtractor HTML5 media entries", () => {
   });
 });
 
-describe("Python test_InfoExtractor.py parity TODOs", () => {
-  test.todo("test_extract_m3u8_formats", () => undefined);
-  test.todo("test_extract_m3u8_formats_warning", () => undefined);
+describe("InfoExtractor manifest downloads", () => {
+  test("test_extract_m3u8_formats", async () => {
+    const manifest = await Bun.file("test/testdata/m3u8/bipbop_16x9.m3u8").text();
+    const ie = new TestInfoExtractor(new Response(manifest));
+    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic("http://127.0.0.1/bipbop.m3u8", "", "mp4", { fatal: false });
+    expect(formats.length).toBeGreaterThan(0);
+    expect(Object.keys(subtitles).length).toBeGreaterThan(0);
+  });
+
+  test("test_extract_m3u8_formats_warning", async () => {
+    const warnings: string[] = [];
+    const ie = new TestInfoExtractor(new Response(Buffer.alloc(1024)));
+    ie.setDownloader(fakeDownloader({}, { reportWarning: (message: string) => warnings.push(message) }));
+    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic("http://127.0.0.1/fake.m3u8", "", "mp4", { fatal: false });
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(formats).toEqual([]);
+    expect(subtitles).toEqual({});
+  });
 });

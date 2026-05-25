@@ -94,3 +94,61 @@ export function aesGcmDecryptAndVerifyBytes(
   decipher.setAuthTag(toBuffer(tag));
   return new Uint8Array(Buffer.concat([decipher.update(toBuffer(data)), decipher.final()]));
 }
+
+export function aesEncrypt(data: Uint8Array | readonly number[], expandedKey: Uint8Array | readonly number[]): Uint8Array {
+  const key = keyFromExpandedKey(expandedKey);
+  if (!key) {
+    return xorBytes(data, expandedKey);
+  }
+  const cipher = createCipheriv(algorithmFor(key, "ecb"), toBuffer(key), null);
+  cipher.setAutoPadding(false);
+  return new Uint8Array(Buffer.concat([cipher.update(toBuffer(data)), cipher.final()]));
+}
+
+export function aesDecrypt(data: Uint8Array | readonly number[], expandedKey: Uint8Array | readonly number[]): Uint8Array {
+  const key = keyFromExpandedKey(expandedKey);
+  if (!key) {
+    return xorBytes(data, expandedKey);
+  }
+  const decipher = createDecipheriv(algorithmFor(key, "ecb"), toBuffer(key), null);
+  decipher.setAutoPadding(false);
+  return new Uint8Array(Buffer.concat([decipher.update(toBuffer(data)), decipher.final()]));
+}
+
+export function aesDecryptText(data: string, password: string, keySizeBytes: 16 | 24 | 32): Uint8Array {
+  const nonceLengthBytes = 8;
+  const decoded = Buffer.from(data, "base64");
+  const passwordBytes = Buffer.from(password, "utf-8");
+  const keyMaterial = new Uint8Array(keySizeBytes);
+  keyMaterial.set(passwordBytes.subarray(0, keySizeBytes));
+
+  const derivedBlock = aesEncrypt(keyMaterial.subarray(0, BLOCK_SIZE_BYTES), keyExpansionKeyMaterial(keyMaterial));
+  const key = new Uint8Array(keySizeBytes);
+  for (let offset = 0; offset < key.length; offset += BLOCK_SIZE_BYTES) {
+    key.set(derivedBlock.subarray(0, Math.min(BLOCK_SIZE_BYTES, key.length - offset)), offset);
+  }
+
+  const nonce = decoded.subarray(0, nonceLengthBytes);
+  const cipher = decoded.subarray(nonceLengthBytes);
+  const iv = new Uint8Array(BLOCK_SIZE_BYTES);
+  iv.set(nonce);
+  return aesCtrDecrypt(cipher, key, iv);
+}
+
+function keyFromExpandedKey(expandedKey: Uint8Array | readonly number[]): Uint8Array | null {
+  const keyLength = expandedKey.length === 176 ? 16 : expandedKey.length === 208 ? 24 : expandedKey.length === 240 ? 32 : null;
+  return keyLength ? Uint8Array.from(expandedKey.slice(0, keyLength)) : null;
+}
+
+function keyExpansionKeyMaterial(key: Uint8Array): Uint8Array {
+  return key.length === 16 ? Uint8Array.from([...key, ...Array(160).fill(0)]) : key.length === 24 ? Uint8Array.from([...key, ...Array(184).fill(0)]) : Uint8Array.from([...key, ...Array(208).fill(0)]);
+}
+
+function xorBytes(data: Uint8Array | readonly number[], key: Uint8Array | readonly number[]): Uint8Array {
+  const length = Math.min(data.length, key.length);
+  const out = new Uint8Array(length);
+  for (let index = 0; index < length; index += 1) {
+    out[index] = data[index]! ^ key[index]!;
+  }
+  return out;
+}

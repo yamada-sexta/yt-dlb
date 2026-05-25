@@ -3,6 +3,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  aesDecrypt,
+  aesDecryptText,
+  aesEncrypt,
   aesCbcDecryptBytes,
   aesCbcEncryptBytes,
   aesCtrDecrypt,
@@ -19,6 +22,13 @@ const iv = key;
 const secretMsg = Buffer.from("Secret message goes here");
 
 describe("AES helpers", () => {
+  test("encrypt/decrypt compatibility wrappers", () => {
+    const msg = Buffer.from("message");
+    const expandedKey = Uint8Array.from(Array.from({ length: 16 }, (_, index) => index));
+    const encrypted = aesEncrypt(msg, expandedKey);
+    expect(aesDecrypt(encrypted, expandedKey)).toEqual(msg);
+  });
+
   test("CBC decrypt", () => {
     const data = Uint8Array.from([0x97, 0x92, 0x2b, 0xe5, 0x0b, 0xc3, 0x18, 0x91, 0x6b, 0x79, 0x39, 0x6d, 0x26, 0xb3, 0xb5, 0x40, 0xe6, 0x27, 0xc2, 0x96, 0x2e, 0xc8, 0x75, 0x88, 0xab, 0x39, 0x2d, 0x5b, 0x9e, 0x7c, 0xf1, 0xcd]);
     expect(stripPadding(aesCbcDecryptBytes(data, key, iv))).toEqual(secretMsg);
@@ -70,8 +80,12 @@ describe("AES helpers", () => {
     expect(pkcs7Padding(fullBlock)).toEqual(Uint8Array.from([...fullBlock, ...Array(16).fill(0x10)]));
   });
 
-  test.todo("test_encrypt once aesEncrypt/aesDecrypt compatibility wrappers are ported", () => undefined);
-  test.todo("test_decrypt_text once aesDecryptText compatibility is ported", () => undefined);
+  test("decrypt text", () => {
+    const password = Buffer.from(key).toString();
+    expect(aesDecryptText("IBUAAAAAAAAXFZOrjYBWzVbgCc1vwqXYa3NNDeI3Tq4=", password, 16)).toEqual(secretMsg);
+    expect(aesDecryptText("IBUAAAAAAAAL5qTZeg64udDUaV+FHZmYX+WA5y6/pYM=", password, 32)).toEqual(secretMsg);
+  });
+
   test.todo("test_key_expansion once keyExpansion compatibility is ported", () => undefined);
 });
 

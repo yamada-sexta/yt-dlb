@@ -376,30 +376,15 @@ export class FFmpegFD extends FileDownloader {
       throw new Error("ffmpeg is not available");
     }
     const tmpfilename = this.tempName(filename);
-    const selectedFormats = selectedFfmpegFormats(info);
-    const cookieGetter = (this.ydl as CookieHost).cookies?.getCookiesForUrl?.bind((this.ydl as CookieHost).cookies);
-    const args = [
-      "-hide_banner",
-      "-nostdin",
-      "-y",
-      ...inputArgs(selectedFormats, info, this.params, cookieGetter),
-      "-c",
-      "copy",
-      ...mapArgs(selectedFormats, info),
-      ...testArgs(this.params),
-      "-f",
-      outputFormatForInfo(filename, info),
-      ...stringListFromPath(info, "downloader_options", "ffmpeg_args_out"),
-      FFmpegPostProcessor.ffmpegFilenameArgument(tmpfilename),
-    ];
-    this.writeDebug(`ffmpeg command: ${[exe, ...args].join(" ")}`);
+    const cmd = this.makeCmd(exe, tmpfilename, info, filename);
+    this.writeDebug(`ffmpeg command: ${cmd.join(" ")}`);
     const proxy = typeof this.params.proxy === "string" ? this.params.proxy : null;
     if (proxy?.startsWith("socks")) {
       this.ydl.reportWarning?.("ffmpeg does not support SOCKS proxies. Downloading is likely to fail.");
     }
     const env = proxy ? ffmpegProxyEnv(proxy) : undefined;
     const started = performance.now() / 1000;
-    const { stdout, stderr, exitCode } = await runShellCommand([exe, ...args], env);
+    const { stdout, stderr, exitCode } = await runShellCommand(cmd, env);
     if (exitCode !== 0) {
       throw new Error(`ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
     }
@@ -413,6 +398,26 @@ export class FFmpegFD extends FileDownloader {
       elapsed: performance.now() / 1000 - started,
     }, info);
     return true;
+  }
+
+  protected makeCmd(exe: string, tmpfilename: string, info: DownloadInfo, outputFilename = tmpfilename): string[] {
+    const selectedFormats = selectedFfmpegFormats(info);
+    const cookieGetter = (this.ydl as CookieHost).cookies?.getCookiesForUrl?.bind((this.ydl as CookieHost).cookies);
+    return [
+      exe,
+      "-hide_banner",
+      "-nostdin",
+      "-y",
+      ...inputArgs(selectedFormats, info, this.params, cookieGetter),
+      "-c",
+      "copy",
+      ...mapArgs(selectedFormats, info),
+      ...testArgs(this.params),
+      "-f",
+      outputFormatForInfo(outputFilename, info),
+      ...stringListFromPath(info, "downloader_options", "ffmpeg_args_out"),
+      FFmpegPostProcessor.ffmpegFilenameArgument(tmpfilename),
+    ];
   }
 }
 
@@ -480,6 +485,9 @@ export function outputFormatForInfo(filename: string, info: DownloadInfo): strin
   }
   if (protocol === "rtmp") {
     return "flv";
+  }
+  if (!basename(filename).includes(".") && typeof info.ext === "string") {
+    return outputFormat(`file.${info.ext}`);
   }
   return outputFormat(filename);
 }

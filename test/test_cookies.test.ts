@@ -7,9 +7,12 @@ import { join } from "node:path";
 import {
   Cookie,
   LenientSimpleCookie,
+  LinuxDesktopEnvironment,
   LinuxChromeCookieDecryptor,
   LinuxKeyring,
+  MacChromeCookieDecryptor,
   YoutubeDLCookieJar,
+  getLinuxDesktopEnvironment,
   parseSafariCookies,
   pbkdf2Sha1,
 } from "../yt_dlp/cookies.ts";
@@ -67,10 +70,69 @@ describe("cookie helpers", () => {
     ]));
   });
 
+  test.each([
+    [{}, LinuxDesktopEnvironment.OTHER],
+    [{ DESKTOP_SESSION: "my_custom_de" }, LinuxDesktopEnvironment.OTHER],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de" }, LinuxDesktopEnvironment.OTHER],
+    [{ DESKTOP_SESSION: "gnome" }, LinuxDesktopEnvironment.GNOME],
+    [{ DESKTOP_SESSION: "mate" }, LinuxDesktopEnvironment.GNOME],
+    [{ DESKTOP_SESSION: "kde4" }, LinuxDesktopEnvironment.KDE4],
+    [{ DESKTOP_SESSION: "kde" }, LinuxDesktopEnvironment.KDE3],
+    [{ DESKTOP_SESSION: "xfce" }, LinuxDesktopEnvironment.XFCE],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "gnome" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "mate" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "kde4" }, LinuxDesktopEnvironment.KDE4],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "kde" }, LinuxDesktopEnvironment.KDE3],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "xfce" }, LinuxDesktopEnvironment.XFCE],
+    [{ XDG_CURRENT_DESKTOP: "my_custom_de", DESKTOP_SESSION: "my_custom_de", GNOME_DESKTOP_SESSION_ID: 1 }, LinuxDesktopEnvironment.GNOME],
+    [{ GNOME_DESKTOP_SESSION_ID: 1 }, LinuxDesktopEnvironment.GNOME],
+    [{ KDE_FULL_SESSION: 1 }, LinuxDesktopEnvironment.KDE3],
+    [{ KDE_FULL_SESSION: 1, DESKTOP_SESSION: "kde4" }, LinuxDesktopEnvironment.KDE4],
+    [{ XDG_CURRENT_DESKTOP: "X-Cinnamon" }, LinuxDesktopEnvironment.CINNAMON],
+    [{ XDG_CURRENT_DESKTOP: "Deepin" }, LinuxDesktopEnvironment.DEEPIN],
+    [{ XDG_CURRENT_DESKTOP: "GNOME" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "GNOME:GNOME-Classic" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "GNOME : GNOME-Classic" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "ubuntu:GNOME" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "Unity", DESKTOP_SESSION: "gnome-fallback" }, LinuxDesktopEnvironment.GNOME],
+    [{ XDG_CURRENT_DESKTOP: "KDE", KDE_SESSION_VERSION: "5" }, LinuxDesktopEnvironment.KDE5],
+    [{ XDG_CURRENT_DESKTOP: "KDE", KDE_SESSION_VERSION: "6" }, LinuxDesktopEnvironment.KDE6],
+    [{ XDG_CURRENT_DESKTOP: "KDE" }, LinuxDesktopEnvironment.KDE4],
+    [{ XDG_CURRENT_DESKTOP: "Pantheon" }, LinuxDesktopEnvironment.PANTHEON],
+    [{ XDG_CURRENT_DESKTOP: "UKUI" }, LinuxDesktopEnvironment.UKUI],
+    [{ XDG_CURRENT_DESKTOP: "Unity" }, LinuxDesktopEnvironment.UNITY],
+    [{ XDG_CURRENT_DESKTOP: "Unity:Unity7" }, LinuxDesktopEnvironment.UNITY],
+    [{ XDG_CURRENT_DESKTOP: "Unity:Unity8" }, LinuxDesktopEnvironment.UNITY],
+  ] as const)("getLinuxDesktopEnvironment %s", (env, expected) => {
+    expect(getLinuxDesktopEnvironment(env, logger)).toBe(expected);
+  });
+
+  test("LinuxChromeCookieDecryptor derives keys like Python", () => {
+    expect(LinuxChromeCookieDecryptor.deriveKey(Buffer.from("abc"))).toEqual(Buffer.from([
+      0x37, 0xa1, 0xec, 0xd4, 0x6d, 0xfc, 0x41, 0xc7, 0xb1, 0x39, 0x5a, 0xd0, 0x19, 0xdc, 0x4d, 0x17,
+    ]));
+  });
+
+  test("MacChromeCookieDecryptor derives keys like Python", () => {
+    expect(MacChromeCookieDecryptor.deriveKey(Buffer.from("abc"))).toEqual(Buffer.from([
+      0x59, 0xe2, 0xc0, 0xd0, 0x50, 0xf6, 0xf4, 0xe1, 0x6c, 0xc1, 0x8c, 0x51, 0xcb, 0x7c, 0xcd, 0x59,
+    ]));
+  });
+
   test("LinuxChromeCookieDecryptor decrypts v10 basic-text fixture", () => {
     const encrypted = Uint8Array.from([0x76, 0x31, 0x30, 0xcc, 0x57, 0x25, 0xcd, 0xe6, 0xe6, 0x9f, 0x4d, 0x22, 0x20, 0xa7, 0xb0, 0xca, 0xe4, 0x07, 0xd6]);
     const decryptor = new LinuxChromeCookieDecryptor("Chrome", logger, LinuxKeyring.BASICTEXT, 0);
     expect(decryptor.decrypt(encrypted)).toBe("USD");
+  });
+
+  test("LinuxChromeCookieDecryptor decrypts v11 basic-text fixture", () => {
+    const encrypted = Uint8Array.from([
+      0x76, 0x31, 0x31, 0x23, 0x81, 0x10, 0x3e, 0x60, 0x77, 0x8f, 0x29, 0xc0, 0xb2, 0xc1, 0x0d, 0xf4,
+      0x1a, 0x6c, 0xdd, 0x93, 0xfd, 0xf8, 0xf8, 0x4e, 0xf2, 0xa9, 0x83, 0xf1, 0xe9, 0x6f, 0x0e, 0x6c,
+      0x56, 0x51, 0x64,
+    ]);
+    const decryptor = new LinuxChromeCookieDecryptor("Chrome", logger, LinuxKeyring.BASICTEXT, 0);
+    expect(decryptor.decrypt(encrypted)).toBe("tz=Europe.London");
   });
 
   test("LinuxChromeCookieDecryptor decrypts v10 meta24 fixture", () => {
@@ -144,10 +206,6 @@ describe("cookie helpers", () => {
     expect(cookie.get("foo")).toBe("bar");
   });
 
-  test.todo("test_get_desktop_environment once Linux desktop environment detection is exported", () => undefined);
-  test.todo("test_chrome_cookie_decryptor_linux_derive_key once derive key compatibility is exported", () => undefined);
-  test.todo("test_chrome_cookie_decryptor_mac_derive_key once macOS keychain compatibility is ported", () => undefined);
-  test.todo("test_chrome_cookie_decryptor_linux_v11 once Linux keyring decrypt support is ported", () => undefined);
   test.todo("test_chrome_cookie_decryptor_windows_v10 once Windows DPAPI is ported", () => undefined);
   test.todo("test_chrome_cookie_decryptor_windows_v10_meta24 once Windows DPAPI is ported", () => undefined);
   test.todo("test_chrome_cookie_decryptor_mac_v10 once macOS keychain compatibility is ported", () => undefined);

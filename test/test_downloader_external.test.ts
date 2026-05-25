@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DownloadInfo, DownloaderHost } from "../yt_dlp/downloader/common.ts";
-import { Aria2cFD, AxelFD, CurlFD, HttpieFD, WgetFD, outputFormat, outputFormatForInfo } from "../yt_dlp/downloader/external.ts";
+import { Aria2cFD, AxelFD, CurlFD, FFmpegFD, HttpieFD, WgetFD, outputFormat, outputFormatForInfo } from "../yt_dlp/downloader/external.ts";
 
 const TEST_INFO = { url: "http://www.example.com/" } satisfies DownloadInfo;
 const TEST_COOKIE = "test=ytdlp";
@@ -15,8 +15,10 @@ function fakeYdl(cookieHeader?: string): DownloaderHost & { cookies?: unknown } 
     cookies: cookieHeader ? {
       filename: TEST_COOKIE_FILE,
       getCookieHeader: () => cookieHeader,
+      getCookiesForUrl: () => [{ name: "test", value: "ytdlp", path: "/", domain: ".example.com" }],
     } : {
       getCookieHeader: () => undefined,
+      getCookiesForUrl: () => [],
     },
     async urlopen(url: string | URL | Request) {
       return await fetch(url);
@@ -78,6 +80,12 @@ class TestAria2cFD extends Aria2cFD {
   }
 }
 
+class TestFFmpegFD extends FFmpegFD {
+  makeCmdPublic(filename: string, info: DownloadInfo): string[] {
+    return this.makeCmd("ffmpeg", filename, info);
+  }
+}
+
 describe("external downloader command builders", () => {
   test("HttpieFD command and Cookie header", async () => {
     expect(await new TestHttpieFD(fakeYdl()).makeCmdPublic("test", TEST_INFO)).toEqual([
@@ -123,5 +131,18 @@ describe("external downloader command builders", () => {
     expect(outputFormatForInfo("test.mp4", { url: TEST_INFO.url, protocol: "rtmp" })).toBe("flv");
   });
 
-  test.todo("FFmpegFD full command assembly once command execution can be intercepted", () => undefined);
+  test("FFmpegFD full command assembly", () => {
+    expect(new TestFFmpegFD(fakeYdl()).makeCmdPublic("test", { ...TEST_INFO, ext: "mp4" })).toEqual([
+      "ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", "http://www.example.com/", "-c", "copy", "-f", "mp4", "file:test",
+    ]);
+
+    expect(new TestFFmpegFD(fakeYdl(TEST_COOKIE)).makeCmdPublic("test", { ...TEST_INFO, ext: "mp4" })).toEqual([
+      "ffmpeg", "-hide_banner", "-nostdin", "-y", "-cookies", "test=ytdlp; path=/; domain=.example.com;\r\n",
+      "-i", "http://www.example.com/", "-c", "copy", "-f", "mp4", "file:test",
+    ]);
+
+    expect(new TestFFmpegFD(fakeYdl()).makeCmdPublic("test", { url: "x", ext: "mp4" })).toEqual([
+      "ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", "x", "-c", "copy", "-f", "mp4", "file:test",
+    ]);
+  });
 });

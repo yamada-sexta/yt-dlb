@@ -7,6 +7,7 @@ import { BadgeType, getInnertubeClient, INNERTUBE_CLIENTS, shortClientName, Yout
 import { YoutubeClipIE } from "../yt_dlp/extractor/youtube/clip.ts";
 import { YoutubeTruncatedIDIE, YoutubeTruncatedURLIE } from "../yt_dlp/extractor/youtube/mistakes.ts";
 import { YoutubeNotificationsIE } from "../yt_dlp/extractor/youtube/notifications.ts";
+import { PoTokenContext } from "../yt_dlp/extractor/youtube/pot/index.ts";
 import {
   YoutubeConsentRedirectIE,
   YoutubeFavouritesIE,
@@ -18,7 +19,8 @@ import {
   YoutubeYtBeIE,
   YoutubeYtUserIE,
 } from "../yt_dlp/extractor/youtube/redirect.ts";
-import { YoutubeTabBaseInfoExtractor, YoutubeTabIE } from "../yt_dlp/extractor/youtube/tab.ts";
+import { YoutubeMusicSearchURLIE, YoutubeSearchIE, YoutubeSearchURLIE } from "../yt_dlp/extractor/youtube/search.ts";
+import { YoutubePlaylistIE, YoutubeTabBaseInfoExtractor, YoutubeTabIE } from "../yt_dlp/extractor/youtube/tab.ts";
 import { isYoutubeWatchUrl, YoutubeIE } from "../yt_dlp/extractor/youtube/video.ts";
 
 class TestYoutubeBaseIE extends YoutubeBaseInfoExtractor {
@@ -73,6 +75,41 @@ class TestYoutubeTabIE extends YoutubeTabBaseInfoExtractor {
   gridEntriesForTest(renderer: unknown) {
     return [...this._grid_entries(renderer)];
   }
+
+  musicEntryForTest(renderer: Record<string, unknown>) {
+    return this._music_reponsive_list_entry(renderer);
+  }
+
+  playlistEntriesForTest(renderer: Record<string, unknown>) {
+    return [...this._playlist_entries(renderer)];
+  }
+
+  richEntriesForTest(renderer: Record<string, unknown>) {
+    return [...this._rich_entries(renderer)];
+  }
+
+  shelfEntriesForTest(renderer: Record<string, unknown>, skipChannels = false) {
+    return [...this._shelf_entries(renderer, skipChannels)];
+  }
+
+  postThreadEntriesForTest(renderer: Record<string, unknown>) {
+    return [...this._post_thread_entries(renderer)];
+  }
+
+  extractEntriesForTest(renderer: Record<string, unknown>) {
+    const continuation: Array<Record<string, unknown> | null> = [null];
+    return { entries: [...this._extract_entries(renderer, continuation)], continuation: continuation[0] };
+  }
+}
+
+class TestYoutubeIE extends YoutubeIE {
+  extractSignatureTimestampForTest(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false) {
+    return this._extract_signature_timestamp(videoId, playerUrl, ytcfg, fatal);
+  }
+
+  getConfigPoTokenForTest(client: string, context: PoTokenContext) {
+    return this._get_config_po_token(client, context);
+  }
 }
 
 describe("YouTube URL helpers", () => {
@@ -89,6 +126,42 @@ describe("YouTube URL helpers", () => {
   test("rejects non-watch URLs", () => {
     expect(isYoutubeWatchUrl("https://www.youtube.com/playlist?list=LL")).toBe(false);
     expect(isYoutubeWatchUrl("BaW_jenozKc")).toBe(false);
+  });
+});
+
+describe("YouTube video dependency helpers", () => {
+  test("generates player context like yt-dlp", () => {
+    expect(YoutubeIE._get_checkok_params()).toEqual({ contentCheckOk: true, racyCheckOk: true });
+    expect(YoutubeIE._generate_player_context(12345, true, "encrypted")).toEqual({
+      playbackContext: {
+        contentPlaybackContext: {
+          html5Preference: "HTML5_PREF_WANTS",
+          signatureTimestamp: 12345,
+          encryptedHostFlags: "encrypted",
+        },
+        adPlaybackContext: { pyv: true },
+      },
+      contentCheckOk: true,
+      racyCheckOk: true,
+    });
+  });
+
+  test("extracts signature timestamp from ytcfg", async () => {
+    await expect(new TestYoutubeIE().extractSignatureTimestampForTest("BaW_jenozKc", null, { STS: "12345" })).resolves.toBe(12345);
+  });
+
+  test("reads configured PO tokens", () => {
+    const ie = new TestYoutubeIE({
+      params: { extractor_args: { youtube: ["po_token=web.gvs+YWJj"] } },
+      async urlopen() {
+        throw new Error("not used");
+      },
+      toScreen() {},
+      reportWarning() {},
+      reportError() {},
+    });
+    expect(ie.getConfigPoTokenForTest("web", PoTokenContext.GVS)).toBe("YWJj");
+    expect(ie.getConfigPoTokenForTest("web", PoTokenContext.PLAYER)).toBeNull();
   });
 });
 
@@ -269,6 +342,254 @@ describe("YouTube tab renderer helpers", () => {
       "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA",
     ]);
   });
+
+  test("playlist entries handle playlist video renderers", () => {
+    const entries = ie.playlistEntriesForTest({
+      contents: [
+        { playlistVideoRenderer: { videoId: "BaW_jenozKc", title: { simpleText: "Video" }, lengthSeconds: "10" } },
+        { playlistPanelVideoRenderer: { videoId: "yeWKywCrFtk", title: { simpleText: "Panel" } } },
+      ],
+    });
+    expect(entries.map((entry) => entry.url)).toEqual([
+      "https://www.youtube.com/watch?v=BaW_jenozKc",
+      "https://www.youtube.com/watch?v=yeWKywCrFtk",
+    ]);
+  });
+
+  test("music responsive entries dispatch video playlist and browse URLs", () => {
+    expect(ie.musicEntryForTest({
+      playlistItemData: { videoId: "BaW_jenozKc" },
+      flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: "Song" }] } } }],
+    })).toMatchObject({ url: "https://music.youtube.com/watch?v=BaW_jenozKc", title: "Song", ie_key: YoutubeIE.ieKey() });
+    expect(ie.musicEntryForTest({
+      navigationEndpoint: { watchEndpoint: { videoId: "BaW_jenozKc", playlistId: "PL63F0C78739B09958" } },
+    })).toMatchObject({ url: "https://music.youtube.com/watch?v=BaW_jenozKc&list=PL63F0C78739B09958", ie_key: YoutubeTabIE.ieKey() });
+    expect(ie.musicEntryForTest({
+      navigationEndpoint: { browseEndpoint: { browseId: "MPLYt" } },
+    })).toMatchObject({ url: "https://music.youtube.com/browse/MPLYt", ie_key: YoutubeTabIE.ieKey() });
+  });
+
+  test("rich entries handle lockup, playlist, and shorts renderers", () => {
+    expect(ie.richEntriesForTest({
+      content: {
+        lockupViewModel: {
+          contentId: "BaW_jenozKc",
+          contentType: "LOCKUP_CONTENT_TYPE_VIDEO",
+          metadata: { lockupMetadataViewModel: { title: { content: "Lockup" } } },
+        },
+      },
+    })[0]).toMatchObject({ url: "https://www.youtube.com/watch?v=BaW_jenozKc", title: "Lockup", ie_key: YoutubeIE.ieKey() });
+    expect(ie.richEntriesForTest({
+      content: { playlistRenderer: { playlistId: "PL63F0C78739B09958", title: { simpleText: "Playlist" } } },
+    })[0]).toMatchObject({ url: "https://www.youtube.com/playlist?list=PL63F0C78739B09958", ie_key: YoutubeTabIE.ieKey() });
+    expect(ie.richEntriesForTest({
+      content: {
+        shortsLockupViewModel: {
+          entityId: "shorts-shelf-item",
+          onTap: { innertubeCommand: { reelWatchEndpoint: { videoId: "BaW_jenozKc" } } },
+          overlayMetadata: { primaryText: { content: "Short" }, secondaryText: { content: "12K views" } },
+        },
+      },
+    })[0]).toMatchObject({ url: "https://www.youtube.com/shorts/BaW_jenozKc", title: "Short", view_count: 12_000 });
+  });
+
+  test("shelf and post thread entries extract nested URLs", () => {
+    expect(ie.shelfEntriesForTest({
+      content: {
+        gridRenderer: {
+          items: [{ gridVideoRenderer: { videoId: "BaW_jenozKc", title: { simpleText: "Video" } } }],
+        },
+      },
+    }).map((entry) => entry.url)).toEqual(["https://www.youtube.com/watch?v=BaW_jenozKc"]);
+    expect(ie.postThreadEntriesForTest({
+      post: {
+        backstagePostRenderer: {
+          backstageAttachment: { playlistRenderer: { playlistId: "PL63F0C78739B09958" } },
+          contentText: {
+            runs: [{ navigationEndpoint: { urlEndpoint: { url: "https://www.youtube.com/watch?v=BaW_jenozKc" } } }],
+          },
+        },
+      },
+    }).map((entry) => entry.url)).toEqual([
+      "https://www.youtube.com/playlist?list=PL63F0C78739B09958",
+      "https://www.youtube.com/watch?v=BaW_jenozKc",
+    ]);
+  });
+
+  test("extractEntries dispatches item section renderers and continuations", () => {
+    const { entries, continuation } = ie.extractEntriesForTest({
+      contents: [{
+        itemSectionRenderer: {
+          contents: [{
+            videoRenderer: { videoId: "BaW_jenozKc", title: { simpleText: "Video" } },
+          }],
+          continuations: [{ nextContinuationData: { continuation: "next", clickTrackingParams: "ctp" } }],
+        },
+      }],
+    });
+    expect(entries.map((entry) => entry.url)).toEqual(["https://www.youtube.com/watch?v=BaW_jenozKc"]);
+    expect(continuation).toEqual({ continuation: "next", clickTracking: { clickTrackingParams: "ctp" } });
+  });
+
+  test("YoutubeTabIE extracts initial webpage tab entries", async () => {
+    const data = {
+      metadata: {
+        channelMetadataRenderer: {
+          title: "yt-dlp",
+          externalId: "UC2_KI6RB__jGdlnK6dvFEZA",
+          vanityChannelUrl: "https://www.youtube.com/@ytdlp",
+          description: "Downloads",
+        },
+      },
+      contents: {
+        twoColumnBrowseResultsRenderer: {
+          tabs: [{
+            tabRenderer: {
+              selected: true,
+              title: "Videos",
+              content: {
+                sectionListRenderer: {
+                  contents: [{
+                    itemSectionRenderer: {
+                      contents: [{
+                        videoRenderer: {
+                          videoId: "BaW_jenozKc",
+                          title: { simpleText: "Video" },
+                        },
+                      }],
+                      continuations: [{ nextContinuationData: { continuation: "next", clickTrackingParams: "ctp" } }],
+                    },
+                  }],
+                },
+              },
+            },
+          }],
+        },
+      },
+    };
+    const extractor = new YoutubeTabIE({
+      params: {},
+      async urlopen(request: string | URL | Request) {
+        const requestUrl = request instanceof Request ? request.url : request.toString();
+        if (requestUrl.includes("/youtubei/v1/browse")) {
+          return new Response(JSON.stringify({
+            onResponseReceivedActions: [{
+              appendContinuationItemsAction: {
+                continuationItems: [{
+                  videoRenderer: {
+                    videoId: "yeWKywCrFtk",
+                    title: { simpleText: "Continuation video" },
+                  },
+                }],
+              },
+            }],
+          }));
+        }
+        return new Response(`<script>ytcfg.set({"VISITOR_DATA":"visitor"});</script><script>var ytInitialData = ${JSON.stringify(data)};</script>`);
+      },
+      toScreen() {},
+      reportWarning() {},
+      reportError() {},
+      writeDebug() {},
+    });
+    const result = await extractor.extract("https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA/videos");
+    expect(result).toMatchObject({
+      _type: "playlist",
+      id: "UC2_KI6RB__jGdlnK6dvFEZA",
+      title: "yt-dlp - Videos",
+      channel: "yt-dlp",
+      uploader_id: "@ytdlp",
+      webpage_url: "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA/videos",
+    });
+    expect([...(result?.entries as Iterable<unknown>)]).toMatchObject([
+      { url: "https://www.youtube.com/watch?v=BaW_jenozKc", title: "Video" },
+      { url: "https://www.youtube.com/watch?v=yeWKywCrFtk", title: "Continuation video" },
+    ]);
+  });
+
+  test("YoutubePlaylistIE redirects playlist IDs to tab extractor", async () => {
+    const result = await new YoutubePlaylistIE().extract("PL63F0C78739B09958");
+    expect(result).toMatchObject({
+      _type: "url",
+      url: "https://www.youtube.com/playlist?list=PL63F0C78739B09958",
+      id: "PL63F0C78739B09958",
+      ie_key: YoutubeTabIE.ieKey(),
+    });
+  });
+});
+
+describe("YouTube search extractors", () => {
+  test("ytsearch collects Innertube search result pages", async () => {
+    const extractor = new YoutubeSearchIE(makeSearchDownloader([
+      {
+        contents: {
+          twoColumnSearchResultsRenderer: {
+            primaryContents: {
+              sectionListRenderer: {
+                contents: [{
+                  itemSectionRenderer: {
+                    contents: [{ videoRenderer: { videoId: "BaW_jenozKc", title: { simpleText: "First" } } }],
+                    continuations: [{ nextContinuationData: { continuation: "next", clickTrackingParams: "ctp" } }],
+                  },
+                }],
+              },
+            },
+          },
+        },
+      },
+      {
+        onResponseReceivedCommands: [{
+          appendContinuationItemsAction: {
+            continuationItems: [{ videoRenderer: { videoId: "yeWKywCrFtk", title: { simpleText: "Second" } } }],
+          },
+        }],
+      },
+    ]));
+    const result = await extractor.extract("ytsearch2:youtube-dl test video");
+    expect(result).toMatchObject({ _type: "playlist", id: "youtube-dl test video", title: "youtube-dl test video" });
+    expect([...(result?.entries as Iterable<unknown>)]).toMatchObject([
+      { url: "https://www.youtube.com/watch?v=BaW_jenozKc", title: "First" },
+      { url: "https://www.youtube.com/watch?v=yeWKywCrFtk", title: "Second" },
+    ]);
+  });
+
+  test("search URL extractors preserve query titles and music sections", async () => {
+    const searchResult = await new YoutubeSearchURLIE(makeSearchDownloader([{
+      contents: {
+        twoColumnSearchResultsRenderer: {
+          primaryContents: {
+            sectionListRenderer: {
+              contents: [{ itemSectionRenderer: { contents: [{ channelRenderer: { channelId: "UC2_KI6RB__jGdlnK6dvFEZA", title: { simpleText: "yt-dlp" } } }] } }],
+            },
+          },
+        },
+      },
+    }])).extract("https://www.youtube.com/results?search_query=yt-dlp&sp=EgIQAg%253D%253D");
+    expect(searchResult).toMatchObject({ id: "yt-dlp", title: "yt-dlp" });
+    expect([...(searchResult?.entries as Iterable<unknown>)]).toMatchObject([
+      { url: "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA", ie_key: YoutubeTabIE.ieKey() },
+    ]);
+
+    const musicResult = await new YoutubeMusicSearchURLIE(makeSearchDownloader([{
+      contents: {
+        tabbedSearchResultsRenderer: {
+          tabs: [{
+            tabRenderer: {
+              content: {
+                sectionListRenderer: {
+                  contents: [{ itemSectionRenderer: { contents: [{ musicResponsiveListItemRenderer: { playlistItemData: { videoId: "BaW_jenozKc" } } }] } }],
+                },
+              },
+            },
+          }],
+        },
+      },
+    }])).extract("https://music.youtube.com/search?q=royalty+free+music#songs");
+    expect(musicResult).toMatchObject({ id: "royalty free music - songs", title: "royalty free music - songs" });
+    expect([...(musicResult?.entries as Iterable<unknown>)]).toMatchObject([
+      { url: "https://music.youtube.com/watch?v=BaW_jenozKc", ie_key: YoutubeIE.ieKey() },
+    ]);
+  });
 });
 
 describe("YouTube redirect extractors", () => {
@@ -330,6 +651,21 @@ describe("YouTube redirect extractors", () => {
     });
   });
 });
+
+function makeSearchDownloader(responses: unknown[]) {
+  let responseIndex = 0;
+  return {
+    params: {},
+    async urlopen(request: string | URL | Request) {
+      const url = request instanceof Request ? request.url : request.toString();
+      expect(url).toContain("/youtubei/v1/search");
+      return new Response(JSON.stringify(responses[Math.min(responseIndex++, responses.length - 1)]));
+    },
+    toScreen() {},
+    reportWarning() {},
+    reportError() {},
+  };
+}
 
 describe("YouTube clip and notifications extractors", () => {
   test("clip URL matching", () => {

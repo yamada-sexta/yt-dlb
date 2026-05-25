@@ -2,8 +2,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { addAcceptEncodingHeader, getRedirectMethod } from "../yt_dlp/networking/helper.ts";
+import { addAcceptEncodingHeader, getRedirectMethod, makeSocksProxyOpts } from "../yt_dlp/networking/helper.ts";
 import { HTTPError, IncompleteRead } from "../yt_dlp/networking/exceptions.ts";
+import { ProxyType } from "../yt_dlp/socks.ts";
 import { HTTPHeaderDict, cleanHeaders, cleanProxies, normalizeUrl, removeDotSegments, selectProxy } from "../yt_dlp/utils/networking.ts";
 
 describe("networking utility helpers", () => {
@@ -61,8 +62,20 @@ describe("networking utility helpers", () => {
     expect(normalizeUrl("https://example.com/a/b/./../c?q=a b")).toBe("https://example.com/a/c?q=a%20b");
   });
 
+  test.each([
+    ["socks5h://example.com", { proxytype: ProxyType.SOCKS5, addr: "example.com", port: 1080, rdns: true, username: null, password: null }],
+    ["socks5://user:@example.com:5555", { proxytype: ProxyType.SOCKS5, addr: "example.com", port: 5555, rdns: false, username: "user", password: "" }],
+    ["socks4://u%40ser:pa%20ss@127.0.0.1:1080", { proxytype: ProxyType.SOCKS4, addr: "127.0.0.1", port: 1080, rdns: false, username: "u@ser", password: "pa ss" }],
+    ["socks4a://:pa%20ss@127.0.0.1", { proxytype: ProxyType.SOCKS4A, addr: "127.0.0.1", port: 1080, rdns: true, username: "", password: "pa ss" }],
+  ] as const)("makeSocksProxyOpts %s", (proxy, expected) => {
+    expect(makeSocksProxyOpts(proxy)).toEqual(expected);
+  });
+
+  test("makeSocksProxyOpts unknown version", () => {
+    expect(() => makeSocksProxyOpts("socks://127.0.0.1")).toThrow("Unknown SOCKS proxy version: socks");
+  });
+
   test.todo("makeSslContext once TLS context construction is ported", () => undefined);
-  test.todo("makeSocksProxyOpts once SOCKS proxy option parsing is ported", () => undefined);
 });
 
 describe("networking exceptions", () => {

@@ -14,7 +14,7 @@ export abstract class AmazonMiniTVBaseIE extends InfoExtractor {
   protected override async realInitialize(): Promise<void> {
     await this.downloadWebpage(
       "https://www.amazon.in/minitv",
-      null,
+      "amazonminitv",
       { note: "Fetching guest session cookies" }
     );
     AmazonMiniTVBaseIE.sessionId = this.getCookies("https://www.amazon.in").get("session-id");
@@ -239,7 +239,7 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
   }
 }`;
 
-  protected async *entries(asin: string): AsyncGenerator<ExtractorInfo> {
+  protected async entries(asin: string): Promise<ExtractorInfo[]> {
     const seasonInfo = await this.callApi(asin, {
       note: "Downloading season info",
       data: {
@@ -250,15 +250,17 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
     });
 
     const episodes = seasonInfo?.episodes ?? [];
+    const entries: ExtractorInfo[] = [];
     for (const episode of episodes) {
       if (episode?.contentId) {
-        yield this.urlResult(
+        entries.push(this.urlResult(
           `amazonminitv:${episode.contentId}`,
           "AmazonMiniTV",
           episode.contentId
-        );
+        ));
       }
     }
+    return entries;
   }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
@@ -268,7 +270,7 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
       throw new ExtractorError("Invalid Amazon MiniTV Season URL", { expected: true });
     }
     const asin = `amzn1.dv.gti.${seasonId}`;
-    return this.playlistResult(this.entries(asin), asin);
+    return this.playlistResult(await this.entries(asin), asin);
   }
 }
 
@@ -291,7 +293,7 @@ query getSeasons($sessionIdToken: String!, $deviceLocale: String, $episodeOrSeas
   }
 }`;
 
-  protected async *entries(asin: string): AsyncGenerator<ExtractorInfo> {
+  protected async entries(asin: string): Promise<ExtractorInfo[]> {
     const seasonInfo = await this.callApi(asin, {
       note: "Downloading series info",
       data: {
@@ -302,15 +304,17 @@ query getSeasons($sessionIdToken: String!, $deviceLocale: String, $episodeOrSeas
     });
 
     const seasons = seasonInfo?.seasons ?? [];
+    const entries: ExtractorInfo[] = [];
     for (const season of seasons) {
       if (season?.seasonId) {
-        yield this.urlResult(
+        entries.push(this.urlResult(
           `amazonminitv:season:${season.seasonId}`,
           "AmazonMiniTVSeason",
           season.seasonId
-        );
+        ));
       }
     }
+    return entries;
   }
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
@@ -320,6 +324,6 @@ query getSeasons($sessionIdToken: String!, $deviceLocale: String, $episodeOrSeas
       throw new ExtractorError("Invalid Amazon MiniTV Series URL", { expected: true });
     }
     const asin = `amzn1.dv.gti.${seriesId}`;
-    return this.playlistResult(this.entries(asin), asin);
+    return this.playlistResult(await this.entries(asin), asin);
   }
 }
