@@ -1,14 +1,24 @@
 # Maintainers
 
-This file lists the maintainers of yt-dlp and their major contributions. See the [Changelog](Changelog.md) for more details.
+This file lists the maintainers of YTDLB and the upstream project, yt-dlp.
 
-You can also find lists of all [contributors of yt-dlp](CONTRIBUTORS) and [authors of youtube-dl](https://github.com/ytdl-org/youtube-dl/blob/master/AUTHORS)
+## YTDLB Maintainer
 
-## Core Maintainers
+### [yamada-sexta](https://github.com/yamada-sexta)
+
+* Creator and sole maintainer of the YTDLB Bun/TypeScript migration.
+
+---
+
+## Upstream yt-dlp Maintainers
+
+This project is a fork of yt-dlp. Below are the maintainers of the original upstream project and their major contributions. See the [Changelog](Changelog.md) for more details.
+
+You can also find lists of all [contributors of yt-dlp](CONTRIBUTORS) and [authors of youtube-dl](https://github.com/ytdl-org/youtube-dl/blob/master/AUTHORS).
+
+### Core Maintainers
 
 Core Maintainers are responsible for reviewing and merging contributions, publishing releases, and steering the overall direction of the project.
-
-**You can contact the core maintainers via `maintainers@yt-dlp.org`.** This email address is **NOT** a support channel. [Open an issue](https://github.com/yt-dlp/yt-dlp/issues/new/choose) if you need help or want to report a bug.
 
 ### [coletdjnz](https://github.com/coletdjnz)
 

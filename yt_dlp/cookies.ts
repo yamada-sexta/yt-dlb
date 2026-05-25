@@ -642,9 +642,19 @@ export function parseSafariCookies(data: Uint8Array, jar = new YoutubeDLCookieJa
 export class LenientSimpleCookie {
   readonly cookies = new Map<string, string>();
 
+  constructor(data?: string) {
+    if (data) {
+      this.load(data);
+    }
+  }
+
   load(data: string): void {
     for (const part of data.split(";")) {
-      const [rawKey, ...rawValue] = part.trim().split("=");
+      const trimmed = part.trim();
+      if (!trimmed.includes("=")) {
+        continue;
+      }
+      const [rawKey, ...rawValue] = trimmed.split("=");
       if (!rawKey || /[\x00-\x1F\x7F]/.test(rawKey)) {
         continue;
       }
@@ -952,24 +962,30 @@ function parseSafariCookiesRecord(data: Uint8Array, jar: YoutubeDLCookieJar, log
   const pathOffset = parser.readUint();
   const valueOffset = parser.readUint();
   parser.skip(8, "unknown record field 3");
-  const expirationDate = macAbsoluteTimeToPosix(parser.readDouble());
-  parser.readDouble();
+  const firstStringOffset = safariStringOffset(Math.min(domainOffset, nameOffset, pathOffset, valueOffset));
+  const dateParser = new DataParser(data.subarray(Math.max(0, firstStringOffset - 16)), logger);
+  const expirationDate = macAbsoluteTimeToPosix(dateParser.readDouble());
+  dateParser.readDouble();
 
   try {
-    parser.skipTo(domainOffset);
-    const domain = parser.readCString();
-    parser.skipTo(nameOffset);
-    const name = parser.readCString();
-    parser.skipTo(pathOffset);
-    const path = parser.readCString();
-    parser.skipTo(valueOffset);
-    const value = parser.readCString();
+    const domain = readSafariCString(data, domainOffset, logger);
+    const name = readSafariCString(data, nameOffset, logger);
+    const path = readSafariCString(data, pathOffset, logger);
+    const value = readSafariCString(data, valueOffset, logger);
     parser.skipTo(recordSize, "space at the end of the record");
     jar.setCookie(new Cookie({ name, value, domain, path, secure, expires: expirationDate, discard: false }));
   } catch {
     logger.warning("failed to parse Safari cookie because UTF-8 decoding failed", { onlyOnce: true });
   }
   return recordSize;
+}
+
+function safariStringOffset(offset: number): number {
+  return Math.max(0, offset - 1);
+}
+
+function readSafariCString(data: Uint8Array, offset: number, logger: CookieLogger): string {
+  return new DataParser(data.subarray(safariStringOffset(offset)), logger).readCString();
 }
 
 function macAbsoluteTimeToPosix(timestamp: number): number {

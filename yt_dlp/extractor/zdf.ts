@@ -61,15 +61,19 @@ abstract class ZDFBaseIE extends InfoExtractor {
   }
 
   protected async callApi<T>(url: string, videoId: string, item: string, apiToken: string | null = null): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (apiToken) {
+      headers["Api-Auth"] = apiToken;
+    }
     const data = await this.downloadJson<T>(url, videoId, {
       note: `Downloading ${item}`,
       errnote: `Failed to download ${item}`,
-      headers: filterDict({ "Api-Auth": apiToken }),
+      headers,
     });
     if (data === false) {
       throw new ExtractorError(`Unable to download ${item}`, { videoId });
     }
-    return data;
+    return data as T;
   }
 
   protected parseAspectRatio(aspectRatio: unknown): number | null {
@@ -189,6 +193,13 @@ abstract class ZDFBaseIE extends InfoExtractor {
   }
 
   protected async downloadGraphql<T>(itemId: string, dataDesc: string, options: { query?: Record<string, string>; body?: Record<string, unknown> }): Promise<T> {
+    const headers: Record<string, string> = {
+      "Api-Auth": await this.getApiToken(),
+      "Apollo-Require-Preflight": "true",
+    };
+    if (options.body) {
+      headers["Content-Type"] = "application/json";
+    }
     const data = await this.downloadJson<T>(
       "https://api.zdf.de/graphql",
       itemId,
@@ -197,17 +208,13 @@ abstract class ZDFBaseIE extends InfoExtractor {
         errnote: `Failed to download ${dataDesc}`,
         query: options.query,
         data: options.body ? JSON.stringify(options.body) : null,
-        headers: filterDict({
-          "Api-Auth": await this.getApiToken(),
-          "Apollo-Require-Preflight": "true",
-          "Content-Type": options.body ? "application/json" : null,
-        }),
+        headers,
       },
     );
     if (data === false) {
       throw new ExtractorError(`Unable to download ${dataDesc}`, { videoId: itemId });
     }
-    return data;
+    return data as T;
   }
 
   static extractThumbnails(source: unknown): Array<Record<string, unknown>> {

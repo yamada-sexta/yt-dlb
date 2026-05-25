@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ExtractorError } from "../yt_dlp/utils/index.ts";
-import { BadgeType, YoutubeBaseInfoExtractor } from "../yt_dlp/extractor/youtube/base.ts";
+import { BadgeType, getInnertubeClient, INNERTUBE_CLIENTS, shortClientName, YoutubeBaseInfoExtractor } from "../yt_dlp/extractor/youtube/base.ts";
 import { YoutubeClipIE } from "../yt_dlp/extractor/youtube/clip.ts";
 import { YoutubeTruncatedIDIE, YoutubeTruncatedURLIE } from "../yt_dlp/extractor/youtube/mistakes.ts";
 import { YoutubeNotificationsIE } from "../yt_dlp/extractor/youtube/notifications.ts";
@@ -18,8 +18,8 @@ import {
   YoutubeYtBeIE,
   YoutubeYtUserIE,
 } from "../yt_dlp/extractor/youtube/redirect.ts";
-import { YoutubeTabIE } from "../yt_dlp/extractor/youtube/tab.ts";
-import { isYoutubeWatchUrl } from "../yt_dlp/extractor/youtube/video.ts";
+import { YoutubeTabBaseInfoExtractor, YoutubeTabIE } from "../yt_dlp/extractor/youtube/tab.ts";
+import { isYoutubeWatchUrl, YoutubeIE } from "../yt_dlp/extractor/youtube/video.ts";
 
 class TestYoutubeBaseIE extends YoutubeBaseInfoExtractor {
   getTextForTest(data: unknown, ...paths: Parameters<YoutubeBaseInfoExtractor["_get_text"]> extends [unknown, ...infer Rest] ? Rest : never): string | null {
@@ -36,6 +36,42 @@ class TestYoutubeBaseIE extends YoutubeBaseInfoExtractor {
 
   extractBadgesForTest(data: unknown) {
     return this._extract_badges(data);
+  }
+
+  extractContextForTest(ytcfg?: unknown, defaultClient?: string) {
+    return this._extract_context(ytcfg, defaultClient);
+  }
+
+  generateApiHeadersForTest(options: Parameters<YoutubeBaseInfoExtractor["generate_api_headers"]>[0]) {
+    return this.generate_api_headers(options);
+  }
+
+  extractYtcfgForTest(videoId: string, webpage: string) {
+    return this.extract_ytcfg(videoId, webpage);
+  }
+
+  extractDataSyncIdForTest(...args: unknown[]) {
+    return this._extract_data_sync_id(...args);
+  }
+}
+
+class TestYoutubeNotificationsIE extends YoutubeNotificationsIE {
+  extractNotificationRendererForTest(notification: unknown) {
+    return this._extract_notification_renderer(notification);
+  }
+}
+
+class TestYoutubeTabIE extends YoutubeTabBaseInfoExtractor {
+  extractVideoForTest(renderer: Record<string, unknown>) {
+    return this._extract_video(renderer);
+  }
+
+  extractChannelForTest(renderer: Record<string, unknown>) {
+    return this._extract_channel_renderer(renderer);
+  }
+
+  gridEntriesForTest(renderer: unknown) {
+    return [...this._grid_entries(renderer)];
   }
 }
 
@@ -58,6 +94,80 @@ describe("YouTube URL helpers", () => {
 
 describe("YouTube base renderer helpers", () => {
   const ie = new TestYoutubeBaseIE();
+
+  test("Innertube client table matches core Python clients", () => {
+    expect(Object.keys(INNERTUBE_CLIENTS).sort()).toEqual([
+      "android",
+      "android_vr",
+      "ios",
+      "mweb",
+      "tv",
+      "tv_downgraded",
+      "tv_simply",
+      "web",
+      "web_creator",
+      "web_embedded",
+      "web_music",
+      "web_safari",
+    ]);
+    expect(getInnertubeClient("web").INNERTUBE_HOST).toBe("www.youtube.com");
+    expect(getInnertubeClient("web_music").INNERTUBE_HOST).toBe("music.youtube.com");
+    expect(getInnertubeClient("android").GVS_PO_TOKEN_POLICY?.https?.not_required_with_player_token).toBe(true);
+    expect(shortClientName("web_safari")).toBe("WEBS");
+    expect(shortClientName("tv_downgraded")).toBe("TVD");
+  });
+
+  test("builds API context and headers from ytcfg/default client", () => {
+    expect(ie.extractContextForTest({ INNERTUBE_CONTEXT: { client: { clientName: "WEB", clientVersion: "1" } } })).toMatchObject({
+      client: {
+        clientName: "WEB",
+        clientVersion: "1",
+        hl: "en",
+        timeZone: "UTC",
+        utcOffsetMinutes: 0,
+      },
+    });
+    expect(ie.generateApiHeadersForTest({
+      ytcfg: {
+        INNERTUBE_CONTEXT_CLIENT_NAME: 67,
+        INNERTUBE_CONTEXT: { client: { clientVersion: "1.2.3", userAgent: "UA" } },
+        VISITOR_DATA: "visitor",
+      },
+      default_client: "web_music",
+    })).toMatchObject({
+      "X-YouTube-Client-Name": "67",
+      "X-YouTube-Client-Version": "1.2.3",
+      "X-Goog-Visitor-Id": "visitor",
+      "User-Agent": "UA",
+      Origin: "https://music.youtube.com",
+    });
+  });
+
+  test("extracts ytcfg and session identifiers", () => {
+    expect(ie.extractYtcfgForTest("id", '<script>ytcfg.set({"SESSION_INDEX":"2","DATASYNC_ID":"delegated||user"});</script>')).toEqual({
+      SESSION_INDEX: "2",
+      DATASYNC_ID: "delegated||user",
+    });
+    expect(TestYoutubeBaseIE._parse_data_sync_id("delegated||user")).toEqual(["delegated", "user"]);
+    expect(TestYoutubeBaseIE._parse_data_sync_id("primary||")).toEqual([null, "primary"]);
+    expect(ie.extractDataSyncIdForTest({ responseContext: { mainAppWebResponseContext: { datasyncId: "a||b" } } })).toBe("a||b");
+  });
+
+  test("extracts continuation queries and alerts", () => {
+    expect(TestYoutubeBaseIE._extract_next_continuation_data({
+      continuations: [{ nextContinuationData: { continuation: "token", clickTrackingParams: "ctp" } }],
+    })).toEqual({ continuation: "token", clickTracking: { clickTrackingParams: "ctp" } });
+    expect(TestYoutubeBaseIE._extract_continuation({
+      contents: [{
+        continuationItemRenderer: {
+          continuationEndpoint: { continuationCommand: { token: "next" } },
+        },
+      }],
+    })).toEqual({ continuation: "next" });
+    expect(TestYoutubeBaseIE._extract_alerts({
+      alerts: [{ alertRenderer: { type: "ERROR", text: { simpleText: "Nope" } } }],
+    })).toEqual([["ERROR", "Nope"]]);
+  });
 
   test("extracts text from simpleText and runs", () => {
     expect(ie.getTextForTest({ simpleText: "Plain" })).toBe("Plain");
@@ -89,6 +199,74 @@ describe("YouTube base renderer helpers", () => {
       { type: BadgeType.VERIFIED },
       { type: BadgeType.LIVE_NOW },
       { type: BadgeType.AVAILABILITY_SUBSCRIPTION },
+    ]);
+  });
+});
+
+describe("YouTube tab renderer helpers", () => {
+  const ie = new TestYoutubeTabIE();
+
+  test("extracts video renderer entries", () => {
+    const result = ie.extractVideoForTest({
+      videoId: "BaW_jenozKc",
+      title: { runs: [{ text: "Test video" }] },
+      lengthSeconds: "10",
+      ownerText: { runs: [{ text: "yt-dlp" }] },
+      shortBylineText: {
+        runs: [{
+          text: "yt-dlp",
+          navigationEndpoint: { browseEndpoint: { browseId: "UC2_KI6RB__jGdlnK6dvFEZA", canonicalBaseUrl: "/@ytdlp" } },
+        }],
+      },
+      viewCountText: { simpleText: "1,234 views" },
+      thumbnail: { thumbnails: [{ url: "https://i.ytimg.com/vi/BaW_jenozKc/default.jpg" }] },
+      ownerBadges: [{ metadataBadgeRenderer: { icon: { iconType: "CHECK" } } }],
+    });
+    expect(result).toMatchObject({
+      _type: "url",
+      url: "https://www.youtube.com/watch?v=BaW_jenozKc",
+      ie_key: YoutubeIE.ieKey(),
+      id: "BaW_jenozKc",
+      title: "Test video",
+      duration: 10,
+      channel_id: "UC2_KI6RB__jGdlnK6dvFEZA",
+      channel: "yt-dlp",
+      uploader_id: "@ytdlp",
+      view_count: 1234,
+      channel_is_verified: true,
+    });
+  });
+
+  test("extracts channel renderer entries", () => {
+    const result = ie.extractChannelForTest({
+      channelId: "UC2_KI6RB__jGdlnK6dvFEZA",
+      title: { simpleText: "yt-dlp" },
+      subscriberCountText: { simpleText: "50K subscribers" },
+      navigationEndpoint: { browseEndpoint: { canonicalBaseUrl: "/@ytdlp" } },
+    });
+    expect(result).toMatchObject({
+      _type: "url",
+      url: "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA",
+      ie_key: YoutubeTabIE.ieKey(),
+      id: "UC2_KI6RB__jGdlnK6dvFEZA",
+      title: "yt-dlp",
+      channel_follower_count: 50_000,
+      uploader_id: "@ytdlp",
+    });
+  });
+
+  test("grid entries dispatch playlists, videos, and channels", () => {
+    const entries = ie.gridEntriesForTest({
+      items: [
+        { gridPlaylistRenderer: { playlistId: "PL63F0C78739B09958", title: { simpleText: "Playlist" } } },
+        { gridVideoRenderer: { videoId: "BaW_jenozKc", title: { simpleText: "Video" } } },
+        { gridChannelRenderer: { channelId: "UC2_KI6RB__jGdlnK6dvFEZA", title: { simpleText: "Channel" } } },
+      ],
+    });
+    expect(entries.map((entry) => entry.url)).toEqual([
+      "https://www.youtube.com/playlist?list=PL63F0C78739B09958",
+      "https://www.youtube.com/watch?v=BaW_jenozKc",
+      "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA",
     ]);
   });
 });
@@ -160,6 +338,39 @@ describe("YouTube clip and notifications extractors", () => {
 
   test.each([":ytnotif", ":ytnotifications"])("notifications keyword matching %s", (url) => {
     expect(YoutubeNotificationsIE.suitable(url)).toBe(true);
+  });
+
+  test("notification renderer extracts video entry", () => {
+    const result = new TestYoutubeNotificationsIE().extractNotificationRendererForTest({
+      navigationEndpoint: { watchEndpoint: { videoId: "BaW_jenozKc" } },
+      contextualMenu: { menuRenderer: { items: [null, { menuServiceItemRenderer: { text: { runs: [{ text: "unused" }, { text: "yt-dlp" }] } } }] } },
+      shortMessage: { simpleText: "yt-dlp uploaded: Test video" },
+      videoThumbnail: { thumbnails: [{ url: "https://i.ytimg.com/vi/BaW_jenozKc/default.jpg", width: 120, height: 90 }] },
+    });
+    expect(result).toMatchObject({
+      _type: "url",
+      url: "https://www.youtube.com/watch?v=BaW_jenozKc",
+      ie_key: YoutubeIE.ieKey(),
+      video_id: "BaW_jenozKc",
+      title: "Test video",
+      channel: "yt-dlp",
+      thumbnails: [{ url: "https://i.ytimg.com/vi/BaW_jenozKc/default.jpg", width: 120, height: 90 }],
+    });
+  });
+
+  test("notification renderer extracts community post entry", () => {
+    const result = new TestYoutubeNotificationsIE().extractNotificationRendererForTest({
+      navigationEndpoint: { browseEndpoint: { browseId: "UC2_KI6RB__jGdlnK6dvFEZA", canonicalBaseUrl: "/post/Ugkx123" } },
+      contextualMenu: { menuRenderer: { items: [null, { menuServiceItemRenderer: { text: { runs: [{ text: "unused" }, { text: "Channel" }] } } }] } },
+      shortMessage: { simpleText: "Channel posted: Community update" },
+    });
+    expect(result).toMatchObject({
+      _type: "url",
+      url: "https://www.youtube.com/channel/UC2_KI6RB__jGdlnK6dvFEZA/community?lb=Ugkx123",
+      ie_key: YoutubeTabIE.ieKey(),
+      channel_id: "UC2_KI6RB__jGdlnK6dvFEZA",
+      channel: "Channel",
+    });
   });
 });
 

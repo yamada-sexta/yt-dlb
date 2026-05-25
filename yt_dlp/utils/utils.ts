@@ -76,6 +76,12 @@ export class UnsupportedError extends ExtractorError {
   }
 }
 
+export function bugReportsMessage(before = "Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q=  , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"): string {
+  return `; ${before}`;
+}
+
+export const bug_reports_message = bugReportsMessage;
+
 export function encodeArgument(value: string | Uint8Array): string {
   return typeof value === "string" ? value : String.fromCharCode(...value);
 }
@@ -135,15 +141,55 @@ export function urlOrNone(value: unknown): string | null {
 
 export const url_or_none = urlOrNone;
 
-export function updateUrlQuery(url: string, query: URLSearchParams | Record<string, string | readonly string[]>): string {
-  const parsed = new URL(url);
-  const params = query instanceof URLSearchParams ? paramsToRecord(query) : query;
-  for (const [key, value] of Object.entries(params)) {
-    parsed.searchParams.delete(key);
-    for (const item of Array.isArray(value) ? value : [value]) {
-      parsed.searchParams.append(key, item);
-    }
+export function updateUrl(
+  url: string,
+  options: {
+    query_update?: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined> | null;
+    scheme?: string;
+    protocol?: string;
+    hostname?: string;
+    host?: string;
+    pathname?: string;
+    path?: string;
+    search?: string;
+    query?: string;
+    hash?: string;
+    fragment?: string;
+  } = {},
+): string {
+  if (!Object.keys(options).length) {
+    return url;
   }
+  const parsed = new URL(url);
+  if (options.scheme || options.protocol) {
+    parsed.protocol = `${(options.scheme ?? options.protocol)!.replace(/:$/, "")}:`;
+  }
+  if (options.hostname) {
+    parsed.hostname = options.hostname;
+  }
+  if (options.host) {
+    parsed.host = options.host;
+  }
+  if (options.pathname || options.path) {
+    parsed.pathname = options.pathname ?? options.path!;
+  }
+  if (options.search !== undefined || options.query !== undefined) {
+    parsed.search = options.search ?? options.query ?? "";
+  }
+  if (options.query_update) {
+    applyQueryUpdate(parsed, options.query_update);
+  }
+  if (options.hash !== undefined || options.fragment !== undefined) {
+    parsed.hash = options.hash ?? options.fragment ?? "";
+  }
+  return parsed.toString();
+}
+
+export const update_url = updateUrl;
+
+export function updateUrlQuery(url: string, query: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined>): string {
+  const parsed = new URL(url);
+  applyQueryUpdate(parsed, query);
   return parsed.toString();
 }
 
@@ -259,6 +305,40 @@ export function tryGet<T>(source: unknown, getter: ((value: unknown) => T) | Arr
 }
 
 export const try_get = tryGet;
+
+export function tryCall<T>(...funcsAndOptions: Array<(() => T) | { expected_type?: (value: unknown) => value is T; args?: unknown[]; kwargs?: Record<string, unknown> }>): T | null {
+  const maybeOptions = funcsAndOptions.at(-1);
+  const options = typeof maybeOptions === "object" && maybeOptions !== null && !("call" in maybeOptions)
+    ? funcsAndOptions.pop() as { expected_type?: (value: unknown) => value is T; args?: unknown[]; kwargs?: Record<string, unknown> }
+    : {};
+  for (const func of funcsAndOptions as Array<() => T>) {
+    try {
+      const value = func();
+      if (!options.expected_type || options.expected_type(value)) {
+        return value;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export const try_call = tryCall;
+
+export function getFirst<T>(obj: unknown, keys: readonly unknown[], expectedType?: (value: unknown) => value is T): T | null {
+  for (const key of keys) {
+    const value = Array.isArray(obj)
+      ? obj[Number(key)]
+      : obj && typeof obj === "object" ? (obj as Record<string, unknown>)[String(key)] : undefined;
+    if (value !== null && value !== undefined && (!expectedType || expectedType(value))) {
+      return value as T;
+    }
+  }
+  return null;
+}
+
+export const get_first = getFirst;
 
 export function filterDict<T>(record: Record<string, T>, predicate: (key: string, value: T) => boolean = (_key, value) => value !== null && value !== undefined): Record<string, T> {
   return Object.fromEntries(Object.entries(record).filter(([key, value]) => predicate(key, value)));
@@ -552,6 +632,65 @@ export function unifiedTimestamp(dateStr: unknown, _dayFirst = true, tzOffset = 
 
 export const unified_timestamp = unifiedTimestamp;
 
+export function datetimeFromStr(dateStr: string, precision: "auto" | "microsecond" | "second" | "minute" | "hour" | "day" = "auto"): Date | null {
+  const now = new Date();
+  let date: Date;
+  if (dateStr === "now" || dateStr === "today") {
+    date = now;
+  } else if (dateStr === "yesterday") {
+    date = new Date(now.getTime() - 86_400_000);
+  } else {
+    const relative = /^(?<start>.+)(?<sign>[+-])(?<time>\d+)(?<unit>microsecond|second|minute|hour|day|week|month|year)s?$/.exec(dateStr);
+    if (relative?.groups?.start && relative.groups.time && relative.groups.unit) {
+      const start = datetimeFromStr(relative.groups.start, precision);
+      if (!start) {
+        return null;
+      }
+      const sign = relative.groups.sign === "-" ? -1 : 1;
+      const amount = Number(relative.groups.time) * sign;
+      date = addDateUnit(start, relative.groups.unit, amount);
+    } else {
+      const compact = /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})$/.exec(dateStr);
+      const timestamp = compact?.groups
+        ? Date.UTC(Number(compact.groups.year), Number(compact.groups.month) - 1, Number(compact.groups.day))
+        : Date.parse(dateStr);
+      if (!Number.isFinite(timestamp)) {
+        return null;
+      }
+      date = new Date(timestamp);
+    }
+  }
+  const resolvedPrecision = precision === "auto" ? "microsecond" : precision;
+  return roundDate(date, resolvedPrecision);
+}
+
+export const datetime_from_str = datetimeFromStr;
+
+export function strftimeOrNone(timestamp: number | string | Date | null | undefined, dateFormat = "%Y%m%d", defaultValue: string | null = null): string | null {
+  if (timestamp === null || timestamp === undefined) {
+    return defaultValue;
+  }
+  const date = timestamp instanceof Date
+    ? timestamp
+    : typeof timestamp === "number" ? new Date(timestamp * 1000)
+      : datetimeFromStr(timestamp);
+  if (!date || Number.isNaN(date.getTime())) {
+    return defaultValue;
+  }
+  const replacements: Record<string, string> = {
+    "%Y": String(date.getUTCFullYear()),
+    "%m": String(date.getUTCMonth() + 1).padStart(2, "0"),
+    "%d": String(date.getUTCDate()).padStart(2, "0"),
+    "%H": String(date.getUTCHours()).padStart(2, "0"),
+    "%M": String(date.getUTCMinutes()).padStart(2, "0"),
+    "%S": String(date.getUTCSeconds()).padStart(2, "0"),
+    "%s": String(Math.trunc(date.getTime() / 1000)),
+  };
+  return Object.entries(replacements).reduce((out, [key, value]) => out.replaceAll(key, value), dateFormat);
+}
+
+export const strftime_or_none = strftimeOrNone;
+
 export function unifiedStrdate(dateStr: string | null | undefined): string | null {
   if (!dateStr) {
     return null;
@@ -584,6 +723,38 @@ export function strToInt(value: string | null | undefined): number | null {
 }
 
 export const str_to_int = strToInt;
+
+export function parseCount(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = value.replace(/^[^\d]+\s/, "").trim();
+  if (/^[\d,.]+$/.test(text)) {
+    return strToInt(text);
+  }
+  const unitMatch = /^(?<number>[\d,.]+)\s*(?<unit>kk|KK|[kKmMbB])(?:\b|$)/.exec(text);
+  if (unitMatch?.groups?.number && unitMatch.groups.unit) {
+    const number = Number(unitMatch.groups.number.replaceAll(",", ""));
+    if (!Number.isFinite(number)) {
+      return null;
+    }
+    const multipliers: Record<string, number> = {
+      k: 1_000,
+      K: 1_000,
+      m: 1_000_000,
+      M: 1_000_000,
+      kk: 1_000_000,
+      KK: 1_000_000,
+      b: 1_000_000_000,
+      B: 1_000_000_000,
+    };
+    return Math.trunc(number * multipliers[unitMatch.groups.unit]!);
+  }
+  const leading = /^([\d,.]+)(?:$|\s)/.exec(text);
+  return leading ? strToInt(leading[1]) : null;
+}
+
+export const parse_count = parseCount;
 
 export function parseDuration(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") {
@@ -819,6 +990,69 @@ export function orderedSet<T>(items: Iterable<T>): T[] {
 
 export const orderedSet_ = orderedSet;
 
+export class LazyList<T> implements Iterable<T> {
+  readonly #cache: T[] = [];
+  #done = false;
+  #iterator: Iterator<T>;
+
+  constructor(iterable: Iterable<T>) {
+    this.#iterator = iterable[Symbol.iterator]();
+  }
+
+  get length(): number {
+    this.exhaust();
+    return this.#cache.length;
+  }
+
+  at(index: number): T | undefined {
+    if (index < 0) {
+      this.exhaust();
+      return this.#cache.at(index);
+    }
+    while (!this.#done && this.#cache.length <= index) {
+      this.nextItem();
+    }
+    return this.#cache[index];
+  }
+
+  slice(start?: number, end?: number): T[] {
+    this.exhaust();
+    return this.#cache.slice(start, end);
+  }
+
+  exhaust(): T[] {
+    while (!this.#done) {
+      this.nextItem();
+    }
+    return [...this.#cache];
+  }
+
+  [Symbol.iterator](): Iterator<T> {
+    let index = 0;
+    return {
+      next: (): IteratorResult<T> => {
+        const value = this.at(index);
+        if (value === undefined && index >= this.#cache.length && this.#done) {
+          return { done: true, value: undefined };
+        }
+        index += 1;
+        return { done: false, value: value as T };
+      },
+    };
+  }
+
+  private nextItem(): void {
+    const next = this.#iterator.next();
+    if (next.done) {
+      this.#done = true;
+    } else {
+      this.#cache.push(next.value);
+    }
+  }
+}
+
+export const LazyList_ = LazyList;
+
 export function mimetype2ext(mimeType: string | null | undefined, defaultValue = "unknown_video"): string {
   return mimeType?.split(";")[0]?.split("/").pop() ?? defaultValue;
 }
@@ -837,6 +1071,12 @@ export function parseCodecs(codecs: string | null | undefined): { acodec?: strin
 }
 
 export const parse_codecs = parseCodecs;
+
+export function filesizeFromTbr(tbr: number | null | undefined, duration: number | null | undefined): number | null {
+  return tbr == null || duration == null ? null : Math.trunc(duration * tbr * (1000 / 8));
+}
+
+export const filesize_from_tbr = filesizeFromTbr;
 
 export function parseDfxpTimeExpr(timeExpr: string | null | undefined): number | null {
   if (!timeExpr) {
@@ -988,6 +1228,62 @@ export function unsmuggleUrl(url: string, defaultValue: Record<string, unknown> 
 }
 
 export const unsmuggle_url = unsmuggleUrl;
+
+function applyQueryUpdate(
+  parsed: URL,
+  query: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined>,
+): void {
+  const entries = query instanceof URLSearchParams ? [...query.entries()] : Object.entries(query);
+  for (const [key, value] of entries) {
+    parsed.searchParams.delete(key);
+    if (value === null || value === undefined) {
+      continue;
+    }
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      parsed.searchParams.append(key, String(item));
+    }
+  }
+}
+
+function addDateUnit(date: Date, unit: string, amount: number): Date {
+  const out = new Date(date.getTime());
+  if (unit.startsWith("microsecond")) {
+    out.setTime(out.getTime() + Math.trunc(amount / 1000));
+  } else if (unit.startsWith("second")) {
+    out.setUTCSeconds(out.getUTCSeconds() + amount);
+  } else if (unit.startsWith("minute")) {
+    out.setUTCMinutes(out.getUTCMinutes() + amount);
+  } else if (unit.startsWith("hour")) {
+    out.setUTCHours(out.getUTCHours() + amount);
+  } else if (unit.startsWith("day")) {
+    out.setUTCDate(out.getUTCDate() + amount);
+  } else if (unit.startsWith("week")) {
+    out.setUTCDate(out.getUTCDate() + amount * 7);
+  } else if (unit.startsWith("month")) {
+    out.setUTCMonth(out.getUTCMonth() + amount);
+  } else if (unit.startsWith("year")) {
+    out.setUTCFullYear(out.getUTCFullYear() + amount);
+  }
+  return out;
+}
+
+function roundDate(date: Date, precision: "microsecond" | "second" | "minute" | "hour" | "day"): Date {
+  const out = new Date(date.getTime());
+  if (precision === "day") {
+    out.setUTCHours(0);
+  }
+  if (precision === "day" || precision === "hour") {
+    out.setUTCMinutes(0);
+  }
+  if (precision === "day" || precision === "hour" || precision === "minute") {
+    out.setUTCSeconds(0);
+  }
+  if (precision !== "microsecond") {
+    out.setUTCMilliseconds(0);
+  }
+  return out;
+}
 
 function objectToParams(query: Record<string, string | readonly string[]>): URLSearchParams {
   const params = new URLSearchParams();
@@ -1302,4 +1598,3 @@ export class ISO639Utils {
     return undefined;
   }
 }
-

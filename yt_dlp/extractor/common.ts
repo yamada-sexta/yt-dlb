@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { compatEtreeFromstring, type XmlElement } from "../compat/index.ts";
 import type { DownloaderHost } from "../downloader/common.ts";
 import { NotImplementedError } from "../errors.ts";
+import { LenientSimpleCookie } from "../cookies.ts";
 import { Request as YtdlRequest } from "../networking/common.ts";
 import {
   cleanHtml,
@@ -297,6 +298,16 @@ export abstract class InfoExtractor {
   protected raiseGeoRestricted(message = "This video is not available from your location", options: { countries?: readonly string[]; metadataAvailable?: boolean } = {}): never {
     void options;
     throw new GeoRestrictedError(message, options.countries ?? (this.constructor as typeof InfoExtractor)._GEO_COUNTRIES);
+  }
+
+  protected getCookies(url: string): LenientSimpleCookie {
+    const jar = this.downloader?.cookies;
+    let header: string | undefined;
+    if (jar && typeof jar === "object" && "getCookieHeader" in jar && typeof jar.getCookieHeader === "function") {
+      const getCookieHeader = jar.getCookieHeader as (url: string) => string | undefined;
+      header = getCookieHeader.call(jar, url);
+    }
+    return new LenientSimpleCookie(header);
   }
 
   protected formHiddenInputs(formId: string, webpage: string): Record<string, string> {

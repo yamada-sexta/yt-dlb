@@ -41,21 +41,21 @@ export class MetadataParserPP extends PostProcessor {
   }
 
   static formatToRegex(format: string): string {
-    if (/^\w+$/.test(format)) {
+    if (/^[\p{L}\p{N}_]+$/u.test(format)) {
       return `(?<${format}>.+)`;
     }
-    if (!/%\(\w+\)s/.test(format)) {
+    if (!/%\(([\p{L}\p{N}_]+)\)s/u.test(format)) {
       return format;
     }
     let lastPosition = 0;
     let regex = "";
-    for (const match of format.matchAll(/%\((\w+)\)s/g)) {
-      regex += RegExp.escape(format.slice(lastPosition, match.index));
+    for (const match of format.matchAll(/%\(([\p{L}\p{N}_]+)\)s/gu)) {
+      regex += pythonRegexEscape(format.slice(lastPosition, match.index));
       regex += `(?<${match[1]}>.+)`;
       lastPosition = match.index + match[0].length;
     }
     if (lastPosition < format.length) {
-      regex += RegExp.escape(format.slice(lastPosition));
+      regex += pythonRegexEscape(format.slice(lastPosition));
     }
     return regex;
   }
@@ -166,6 +166,10 @@ function pythonRegexReplacementToJs(replacement: string): string {
   return replacement
     .replaceAll(/\\g<([^>]+)>/g, (_match, name: string) => `$<${name}>`)
     .replaceAll(/\\([1-9]\d*)/g, (_match, index: string) => `$${index}`);
+}
+
+function pythonRegexEscape(value: string): string {
+  return value.replaceAll(/[^\p{L}\p{N}_]/gu, (char) => `\\${char}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

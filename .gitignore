@@ -136,3 +136,4 @@ yt_dlp_ejs/
 
 node_modules
 *.bin
+/.antigravitycli

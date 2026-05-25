@@ -295,7 +295,8 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
             continue;
           }
         }
-        currentChapter.cut_idx ??= appendCut(chapter);
+        const cutIndex = appendCut(chapter);
+        currentChapter.cut_idx ??= cutIndex;
       } else if (currentChapter._categories && !chapter._categories) {
         if (currentChapter.end_time < chapter.end_time) {
           chapter.start_time = currentChapter.end_time;

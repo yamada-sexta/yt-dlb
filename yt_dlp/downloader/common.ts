@@ -33,6 +33,7 @@ export interface DownloaderHost {
   writeDebug?(message: string): void;
   reportWarning?(message: string): void;
   reportError?(message: string): void;
+  cookies?: unknown;
 }
 
 export type ProgressHook = (state: ProgressState, info: DownloadInfo) => void | Promise<void>;

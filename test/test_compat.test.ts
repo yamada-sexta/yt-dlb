@@ -7,13 +7,17 @@ import {
   compatEtreeFromstring,
   compatExpanduser,
 } from "../yt_dlp/compat/index.ts";
+import { compat_basestring } from "../yt_dlp/compat/legacy.ts";
 import { getproxies } from "../yt_dlp/compat/urllib/request.ts";
 import { getproxies as namespacedGetproxies } from "../yt_dlp/compat/urllib/index.ts";
 
 describe("compat helpers", () => {
-  test("urllib request proxy export is re-exported through namespace", () => {
+  test("compat passthrough exports match Python fixture behavior", () => {
+    expect(compat_basestring).toBe(String);
     expect(namespacedGetproxies).toBe(getproxies);
   });
+
+  test.todo("test_compat_passthrough compat_pycrypto_AES once PyCrypto compatibility is ported", () => undefined);
 
   test("compatExpanduser uses HOME", () => {
     const oldHome = process.env.HOME;
@@ -62,7 +66,12 @@ describe("compat helpers", () => {
     [-1.25, "1969-12-31T23:59:58.750Z"],
     [-1577923200, "1920-01-01T00:00:00.000Z"],
     [4102444800, "2100-01-01T00:00:00.000Z"],
+    [173568960000, "7470-03-08T00:00:00.000Z"],
   ] as const)("compatDatetimeFromTimestamp %s", (timestamp, expected) => {
     expect(compatDatetimeFromTimestamp(timestamp).toISOString()).toBe(expected);
+  });
+
+  test("struct unpack unsigned byte equivalent", () => {
+    expect(Buffer.from([0x00]).readUInt8(0)).toBe(0);
   });
 });

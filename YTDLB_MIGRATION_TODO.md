@@ -1177,18 +1177,18 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/extractor/youtube/pot/cache.py` -> `yt_dlp/extractor/youtube/pot/cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/provider.py` -> `yt_dlp/extractor/youtube/pot/provider.ts`
 - [x] `yt_dlp/extractor/youtube/pot/utils.py` -> `yt_dlp/extractor/youtube/pot/utils.ts`
-- [ ] `yt_dlp/extractor/zaiko.py` -> `yt_dlp/extractor/zaiko.ts`
-- [ ] `yt_dlp/extractor/zapiks.py` -> `yt_dlp/extractor/zapiks.ts`
-- [ ] `yt_dlp/extractor/zattoo.py` -> `yt_dlp/extractor/zattoo.ts`
-- [ ] `yt_dlp/extractor/zdf.py` -> `yt_dlp/extractor/zdf.ts`
-- [ ] `yt_dlp/extractor/zee5.py` -> `yt_dlp/extractor/zee5.ts`
-- [ ] `yt_dlp/extractor/zeenews.py` -> `yt_dlp/extractor/zeenews.ts`
-- [ ] `yt_dlp/extractor/zenporn.py` -> `yt_dlp/extractor/zenporn.ts`
-- [ ] `yt_dlp/extractor/zetland.py` -> `yt_dlp/extractor/zetland.ts`
-- [ ] `yt_dlp/extractor/zhihu.py` -> `yt_dlp/extractor/zhihu.ts`
-- [ ] `yt_dlp/extractor/zingmp3.py` -> `yt_dlp/extractor/zingmp3.ts`
-- [ ] `yt_dlp/extractor/zoom.py` -> `yt_dlp/extractor/zoom.ts`
-- [ ] `yt_dlp/extractor/zype.py` -> `yt_dlp/extractor/zype.ts`
+- [x] `yt_dlp/extractor/zaiko.py` -> `yt_dlp/extractor/zaiko.ts`
+- [x] `yt_dlp/extractor/zapiks.py` -> `yt_dlp/extractor/zapiks.ts`
+- [x] `yt_dlp/extractor/zattoo.py` -> `yt_dlp/extractor/zattoo.ts`
+- [x] `yt_dlp/extractor/zdf.py` -> `yt_dlp/extractor/zdf.ts`
+- [x] `yt_dlp/extractor/zee5.py` -> `yt_dlp/extractor/zee5.ts`
+- [x] `yt_dlp/extractor/zeenews.py` -> `yt_dlp/extractor/zeenews.ts`
+- [x] `yt_dlp/extractor/zenporn.py` -> `yt_dlp/extractor/zenporn.ts`
+- [x] `yt_dlp/extractor/zetland.py` -> `yt_dlp/extractor/zetland.ts`
+- [x] `yt_dlp/extractor/zhihu.py` -> `yt_dlp/extractor/zhihu.ts`
+- [x] `yt_dlp/extractor/zingmp3.py` -> `yt_dlp/extractor/zingmp3.ts`
+- [x] `yt_dlp/extractor/zoom.py` -> `yt_dlp/extractor/zoom.ts`
+- [x] `yt_dlp/extractor/zype.py` -> `yt_dlp/extractor/zype.ts`
 - [x] `yt_dlp/globals.py` -> `yt_dlp/globals.ts`
 - [x] `yt_dlp/jsinterp.py` -> `yt_dlp/jsinterp.ts`
 - [x] `yt_dlp/minicurses.py` -> `yt_dlp/minicurses.ts`

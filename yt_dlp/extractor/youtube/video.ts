@@ -2,10 +2,10 @@
 // Port note: this is a focused Bun extractor for YouTube watch URLs. It covers webpage player
 // responses and progressive HTTP formats; DASH/HLS merging remains a later downloader-layer port.
 
-import { JSInterpreter } from "../../jsinterp.ts";
 import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
 import { InfoExtractor, type ExtractorInfo } from "../common.ts";
 import { z } from "zod";
+import { initializeJscDirector, JsChallengeType, type JsChallengeRequest, type NChallengeOutput, type SigChallengeOutput } from "./jsc/index.ts";
 
 export class YoutubeIE extends InfoExtractor {
   static override readonly _VALID_URL = [
@@ -102,28 +102,6 @@ const YoutubePlayerResponseSchema = z.object({
     adaptiveFormats: z.array(YoutubeFormatSchema).optional(),
   }).passthrough().optional(),
 }).passthrough();
-
-type EjsSolverInput = {
-  type: "player";
-  player: string;
-  output_preprocessed: false;
-  requests: Array<{ type: "n" | "sig"; challenges: string[] }>;
-};
-
-type EjsSolverOutput =
-  | {
-      type: "result";
-      responses: Array<
-        | { type: "result"; data: Record<string, string> }
-        | { type: "error"; error: string }
-      >;
-    }
-  | {
-      type: "error";
-      error: string;
-    };
-
-type EjsSolver = (input: EjsSolverInput) => EjsSolverOutput;
 
 function isYoutubeDL(value: unknown): value is YoutubeDL {
   const candidate = value as Partial<YoutubeDL> | null;
@@ -260,23 +238,35 @@ async function resolveFormat(
   return { ...format, url: parsed.toString() };
 }
 
-const signatureCache = new Map<string, (signature: string) => string>();
+const signatureCache = new Map<string, string>();
 const nCache = new Map<string, string>();
 const playerCache = new Map<string, string>();
+const jscDirectorCache = new WeakMap<YoutubeDL, ReturnType<typeof initializeJscDirector>>();
 
 async function decipherSignature(
   signature: string,
   playerUrl: string,
   ydl: YoutubeDL,
 ): Promise<string> {
-  let decipher = signatureCache.get(playerUrl);
-  if (!decipher) {
-    const response = await ydl.urlopen(playerUrl);
-    const playerJs = await response.text();
-    decipher = extractSignatureDecipher(playerJs);
-    signatureCache.set(playerUrl, decipher);
+  const cacheKey = `${playerUrl}\n${signature}`;
+  const cached = signatureCache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
-  return decipher(signature);
+  const request = {
+    type: JsChallengeType.SIG,
+    input: { playerUrl, challenges: [signature] },
+  } satisfies JsChallengeRequest;
+  const response = (await getJscDirector(ydl).bulkSolve([request]))[0]?.[1];
+  if (!response || response.type !== JsChallengeType.SIG) {
+    throw new DownloadError("YouTube signature challenge solver did not return a result");
+  }
+  const solved = (response.output as SigChallengeOutput).results[signature];
+  if (!solved) {
+    throw new DownloadError("YouTube signature challenge solver did not return a signature");
+  }
+  signatureCache.set(cacheKey, solved);
+  return solved;
 }
 
 async function solveNChallenge(
@@ -289,31 +279,15 @@ async function solveNChallenge(
   if (cached) {
     return cached;
   }
-  const player = await loadPlayer(playerUrl, ydl);
-  const ejsSolve = await loadEjsSolver();
-  const output = ejsSolve({
-    type: "player",
-    player,
-    output_preprocessed: false,
-    requests: [
-      {
-        type: "n",
-        challenges: [challenge],
-      },
-    ],
-  });
-  if (output.type === "error") {
-    throw new DownloadError(
-      `YouTube n challenge solving failed: ${output.error}`,
-    );
+  const request = {
+    type: JsChallengeType.N,
+    input: { playerUrl, challenges: [challenge] },
+  } satisfies JsChallengeRequest;
+  const response = (await getJscDirector(ydl).bulkSolve([request]))[0]?.[1];
+  if (!response || response.type !== JsChallengeType.N) {
+    throw new DownloadError("YouTube n challenge solver did not return a result");
   }
-  const [response] = output.responses;
-  if (response?.type === "error") {
-    throw new DownloadError(
-      `YouTube n challenge solving failed: ${response.error}`,
-    );
-  }
-  const solved = response?.data[challenge];
+  const solved = (response.output as NChallengeOutput).results[challenge];
   if (!solved) {
     throw new DownloadError(
       "YouTube n challenge solver did not return a result",
@@ -322,25 +296,6 @@ async function solveNChallenge(
   ydl.writeDebug(`Solved YouTube n challenge ${challenge} -> ${solved}`);
   nCache.set(cacheKey, solved);
   return solved;
-}
-
-let ejsSolverPromise: Promise<EjsSolver> | undefined;
-
-async function loadEjsSolver(): Promise<EjsSolver> {
-  ejsSolverPromise ??= (async () => {
-    // Logic change: Bun can import yt-dlp/ejs directly. The specifier is kept dynamic so this
-    // repo's strict TypeScript settings do not typecheck the package's internal TS sources.
-    const specifier = ["ejs", "src", "yt", "solver", "main.ts"].join("/");
-    const importModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
-    const module = await importModule(specifier) as { default?: unknown };
-    if (typeof module.default !== "function") {
-      throw new DownloadError(
-        "Installed yt-dlp/ejs package does not export a solver function",
-      );
-    }
-    return module.default as EjsSolver;
-  })();
-  return await ejsSolverPromise;
 }
 
 async function loadPlayer(playerUrl: string, ydl: YoutubeDL): Promise<string> {
@@ -353,76 +308,21 @@ async function loadPlayer(playerUrl: string, ydl: YoutubeDL): Promise<string> {
   return player;
 }
 
-function extractSignatureDecipher(
-  playerJs: string,
-): (signature: string) => string {
-  const functionName = extractSignatureFunctionName(playerJs);
-  const interpreter = new JSInterpreter(playerJs);
-  const [args, body] = interpreter.extractFunctionCode(functionName);
-  const helperName = extractHelperObjectName(body);
-  const helpers = helperName
-    ? { [helperName]: buildHelperObject(playerJs, helperName) }
-    : {};
-  const fn = interpreter.extractFunctionFromCode(args, body, helpers);
-  return (signature) => {
-    const result = fn([signature]);
-    if (typeof result !== "string") {
-      throw new DownloadError(
-        "YouTube signature decipher returned a non-string value",
-      );
-    }
-    return result;
-  };
-}
-
-function extractSignatureFunctionName(playerJs: string): string {
-  const patterns = [
-    /\b(?:c|decodeURIComponent)\(\s*(?<name>[a-zA-Z_$][\w$]*)\(/,
-    /\.sig\|\|(?<name>[a-zA-Z_$][\w$]*)\(/,
-    /["']signature["']\s*,\s*(?<name>[a-zA-Z_$][\w$]*)\(/,
-    /\b(?<name>[a-zA-Z_$][\w$]*)=function\(\w\)\{\w=\w\.split\([""]\)/,
-    /function\s+(?<name>[a-zA-Z_$][\w$]*)\(\w\)\{\w=\w\.split\([""]\)/,
-  ];
-  for (const pattern of patterns) {
-    const match = pattern.exec(playerJs);
-    const name = match?.groups?.name;
-    if (name) {
-      return name;
-    }
+function getJscDirector(ydl: YoutubeDL): ReturnType<typeof initializeJscDirector> {
+  const cached = jscDirectorCache.get(ydl);
+  if (cached) {
+    return cached;
   }
-  throw new DownloadError("Could not find YouTube signature decipher function");
-}
-
-function extractHelperObjectName(functionBody: string): string | null {
-  const match = /(?<name>[a-zA-Z_$][\w$]*)\.[a-zA-Z_$][\w$]*\(/.exec(
-    functionBody,
-  );
-  return match?.groups?.name ?? null;
-}
-
-function buildHelperObject(
-  playerJs: string,
-  objectName: string,
-): Record<string, (...args: unknown[]) => unknown> {
-  const escaped = RegExp.escape(objectName);
-  const objectStart =
-    new RegExp(`(?:var|let|const)\\s+${escaped}\\s*=\\s*\\{`).exec(playerJs) ??
-    new RegExp(`${escaped}\\s*=\\s*\\{`).exec(playerJs);
-  if (!objectStart) {
-    throw new DownloadError(
-      `Could not find YouTube signature helper object ${objectName}`,
-    );
-  }
-  const bodyStart = objectStart.index + objectStart[0].length - 1;
-  const objectLiteral = readBalanced(playerJs, bodyStart);
-  const objectCode = `return (${objectLiteral});`;
-  const value = new Function(objectCode)();
-  if (!value || typeof value !== "object") {
-    throw new DownloadError(
-      `YouTube signature helper object ${objectName} is invalid`,
-    );
-  }
-  return value as Record<string, (...args: unknown[]) => unknown>;
+  const director = initializeJscDirector({
+    cache: ydl.cache,
+    remoteComponents: ydl.params.remote_components,
+    loadPlayer: async (_videoId, playerUrl) => await loadPlayer(playerUrl, ydl),
+    downloadText: async (url) => await (await ydl.urlopen(url)).text(),
+    reportWarning: (message) => ydl.reportWarning(message),
+    writeDebug: (message) => ydl.writeDebug(message),
+  });
+  jscDirectorCache.set(ydl, director);
+  return director;
 }
 
 function selectFormat(

@@ -12,6 +12,8 @@ Unimplemented migrated features must fail loudly with `NotImplementedError` or a
 
 Every new TS file must start with a short source header naming the Python source, or explaining that the file is new. Prefer Bun-native APIs (`Bun.file`, `Bun.write`, `fetch`, `bun:sqlite`, Web streams, Bun Shell, Bun-compatible crypto) and avoid Python dependencies.
 
+Tests are part of the migration surface. Port Python tests into matching `test/*.test.ts` files, keeping the same expected result whenever the TypeScript feature exists. If a Python test case targets behavior that is not migrated yet, add a local `test.todo` in that feature's TypeScript test file with the Python test name and the missing feature; do not add or keep catch-all parity inventory tests that read Python files or aggregate unrelated TODOs. Prefer `bun test test/...` for focused checks and `bun check` for the project check script.
+
 For HTML parsing and extraction, use Bun's native `HTMLRewriter`. Do not introduce Cheerio, DOMParser polyfills, or regex-based HTML parsing for newly migrated code when `HTMLRewriter` can express the extraction. XML helpers may continue to use XML-specific parsers where `HTMLRewriter` is not a semantic fit.
 
 For browser cookies, prefer `@steipete/sweet-cookie` for `--cookies-from-browser`. It requires a target URL, so ytdlb loads browser cookies lazily per request origin in `YoutubeDL.urlopen`; keep file-cookie loading eager and browser-cookie loading URL-scoped.

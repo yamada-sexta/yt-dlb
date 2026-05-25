@@ -27,18 +27,17 @@ Fixes #
 -->
 
 ### Before submitting a *pull request* make sure you have:
-- [ ] At least skimmed through [contributing guidelines](https://github.com/yt-dlp/yt-dlp/blob/master/CONTRIBUTING.md#developer-instructions) including [yt-dlp coding conventions](https://github.com/yt-dlp/yt-dlp/blob/master/CONTRIBUTING.md#yt-dlp-coding-conventions)
-- [ ] [Searched](https://github.com/yt-dlp/yt-dlp/search?q=is%3Apr&type=Issues) the bugtracker for similar pull requests
+- [ ] At least skimmed through the [contributing guidelines](CONTRIBUTING.md) and [migration rules](CONTRIBUTING.md#migration-rules)
+- [ ] [Searched](https://github.com/yamada-sexta/yt-dlb/issues) the bugtracker for similar pull requests
 
-### In order to be accepted and merged into yt-dlp each piece of code must be in public domain or released under [Unlicense](http://unlicense.org/). Check those that apply and remove the others:
+### In order to be accepted and merged into ytdlb each piece of code must be in public domain or released under [Unlicense](http://unlicense.org/). Check those that apply and remove the others:
 - [ ] I am the original author of the code in this PR, and I am willing to release it under [Unlicense](http://unlicense.org/)
 - [ ] I am not the original author of the code in this PR, but it is in the public domain or released under [Unlicense](http://unlicense.org/) (provide reliable evidence)
-- [ ] I have read the [policy against AI/LLM contributions](https://github.com/yt-dlp/yt-dlp/blob/master/CONTRIBUTING.md#automated-contributions-ai--llm-policy) and understand I may be blocked from the repository if it is violated
 
 ### What is the purpose of your *pull request*? Check those that apply and remove the others:
 - [ ] Fix or improvement to an extractor (Make sure to add/update tests)
-- [ ] New extractor ([Piracy websites will not be accepted](https://github.com/yt-dlp/yt-dlp/blob/master/CONTRIBUTING.md#is-the-website-primarily-used-for-piracy))
+- [ ] New extractor (Piracy websites will not be accepted)
 - [ ] Core bug fix/improvement
-- [ ] New feature (It is strongly [recommended to open an issue first](https://github.com/yt-dlp/yt-dlp/blob/master/CONTRIBUTING.md#adding-new-feature-or-making-overarching-changes))
+- [ ] New feature (It is strongly recommended to open an issue first)
 
 </details>
