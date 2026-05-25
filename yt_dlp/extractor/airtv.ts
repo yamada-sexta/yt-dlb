@@ -1,6 +1,11 @@
 // Source: yt_dlp/extractor/airtv.py
 
-import { determineExt, intOrNone, mimetype2ext, parseIso8601 } from "../utils/index.ts";
+import {
+  determineExt,
+  intOrNone,
+  mimetype2ext,
+  parseIso8601,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 import { YoutubeIE } from "./youtube/video.ts";
 
@@ -34,7 +39,8 @@ interface AirTvNextData {
 }
 
 export class AirTVIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://www\.air\.tv/watch\?v=(?<id>\w+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://www\.air\.tv/watch\?v=(?<id>\w+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const displayId = this.matchId(url);
@@ -48,18 +54,29 @@ export class AirTVIE extends InfoExtractor {
       throw new Error("Unable to extract AirTV Next.js video data");
     }
     if (nextjsJson.youtube_id) {
-      return this.urlResult(`https://www.youtube.com/watch?v=${nextjsJson.youtube_id}`, YoutubeIE);
+      return this.urlResult(
+        `https://www.youtube.com/watch?v=${nextjsJson.youtube_id}`,
+        YoutubeIE,
+      );
     }
 
-    const [formats, subtitles] = await this.getFormatsAndSubtitles(nextjsJson, displayId);
+    const [formats, subtitles] = await this.getFormatsAndSubtitles(
+      nextjsJson,
+      displayId,
+    );
     return {
       id: displayId,
-      title: nextjsJson.title ?? this.htmlSearchMeta("og:title", webpage) ?? undefined,
+      title:
+        nextjsJson.title ??
+        this.htmlSearchMeta("og:title", webpage) ??
+        undefined,
       formats,
       subtitles,
       description: nextjsJson.description || undefined,
       duration: intOrNone(nextjsJson.duration) ?? undefined,
-      thumbnails: (nextjsJson.default_thumbnails ?? []).map((thumbnail) => ({ url: thumbnail })),
+      thumbnails: (nextjsJson.default_thumbnails ?? []).map((thumbnail) => ({
+        url: thumbnail,
+      })),
       channel_id: nextjsJson.channel?.channel_slug,
       timestamp: parseIso8601(nextjsJson.created) ?? undefined,
       release_timestamp: parseIso8601(nextjsJson.published) ?? undefined,
@@ -67,16 +84,23 @@ export class AirTVIE extends InfoExtractor {
     };
   }
 
-  private async getFormatsAndSubtitles(jsonData: AirTvVideo, videoId: string): Promise<[Array<Record<string, unknown>>, Record<string, unknown[]>]> {
+  private async getFormatsAndSubtitles(
+    jsonData: AirTvVideo,
+    videoId: string,
+  ): Promise<[Array<Record<string, unknown>>, Record<string, unknown[]>]> {
     const formats: Array<Record<string, unknown>> = [];
     let subtitles: Record<string, unknown[]> = {};
-    for (const source of [...(jsonData.sources ?? []), ...(jsonData.sources_desktop ?? [])]) {
+    for (const source of [
+      ...(jsonData.sources ?? []),
+      ...(jsonData.sources_desktop ?? []),
+    ]) {
       if (!source.src) {
         continue;
       }
       const ext = determineExt(source.src, mimetype2ext(source.type));
       if (ext === "m3u8") {
-        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(source.src, videoId);
+        const [m3u8Formats, m3u8Subtitles] =
+          await this.extractM3u8FormatsAndSubtitles(source.src, videoId);
         formats.push(...m3u8Formats);
         subtitles = { ...subtitles, ...m3u8Subtitles };
       } else {

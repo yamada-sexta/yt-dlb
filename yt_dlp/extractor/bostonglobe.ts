@@ -4,7 +4,8 @@ import { extractAttributes } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class BostonGlobeIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`(?i)https?://(?:www\.)?bostonglobe\.com/.*/(?<id>[^/]+)/\w+(?:\.html)?`;
+  static override readonly _VALID_URL =
+    String.raw`(?i)https?://(?:www\.)?bostonglobe\.com/.*/(?<id>[^/]+)/\w+(?:\.html)?`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const pageId = this.matchId(url);
@@ -21,7 +22,9 @@ export class BostonGlobeIE extends InfoExtractor {
       const playerId = attrs["data-player"];
       const embed = attrs["data-embed"];
       if (videoId && accountId && playerId && embed) {
-        entries.push(`http://players.brightcove.net/${accountId}/${playerId}_${embed}/index.html?videoId=${videoId}`);
+        entries.push(
+          `http://players.brightcove.net/${accountId}/${playerId}_${embed}/index.html?videoId=${videoId}`,
+        );
       }
     }
 

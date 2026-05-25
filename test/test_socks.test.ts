@@ -45,12 +45,16 @@ describe("SOCKS errors and socket setup", () => {
     expect(new ProxyError().message).toBe("unknown error");
     expect(new Socks4Error(91).message).toBe("request rejected or failed");
     expect(new Socks5Error(0x05).message).toBe("Connection refused");
-    expect(new InvalidVersionError(5, 4).message).toContain("Expected 05 got 04");
+    expect(new InvalidVersionError(5, 4).message).toContain(
+      "Expected 05 got 04",
+    );
   });
 
   test("setProxy validates proxy type", () => {
     const socket = new SocksSocket();
-    expect(() => socket.setProxy(999 as ProxyType, "localhost", 1080)).toThrow(/Invalid proxy type/);
+    expect(() => socket.setProxy(999 as ProxyType, "localhost", 1080)).toThrow(
+      /Invalid proxy type/,
+    );
     socket.socket.destroy();
   });
 });

@@ -5,30 +5,50 @@ import { NotImplementedError } from "../errors.ts";
 import { aesCbcDecryptBytes, unpadPkcs7 } from "../aes.ts";
 import { HTTPHeaderDict } from "../utils/networking.ts";
 import { parseM3u8Attributes, updateUrlQuery } from "../utils/utils.ts";
-import { CueBlock, type CueJson, HeaderBlock, Magic, parseFragment } from "../webvtt.ts";
+import {
+  CueBlock,
+  type CueJson,
+  HeaderBlock,
+  Magic,
+  parseFragment,
+} from "../webvtt.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import { getExternalFragmentDownloader } from "./external.ts";
 import type { DownloadInfo } from "./common.ts";
 
 export class HlsFD extends FragmentFD {
   static hasDrm(manifest: string): boolean {
-    return /#EXT-X-(?:SESSION-)?KEY:.*?(?:URI="skd:\/\/|KEYFORMAT="com\.(?:apple\.streamingkeydelivery|microsoft\.playready)")|#EXT-X-FAXS-CM:/i.test(manifest);
+    return /#EXT-X-(?:SESSION-)?KEY:.*?(?:URI="skd:\/\/|KEYFORMAT="com\.(?:apple\.streamingkeydelivery|microsoft\.playready)")|#EXT-X-FAXS-CM:/i.test(
+      manifest,
+    );
   }
 
-  static canDownload(manifest: string, allowUnplayableFormats = false): boolean {
+  static canDownload(
+    manifest: string,
+    allowUnplayableFormats = false,
+  ): boolean {
     if (!allowUnplayableFormats && HlsFD.hasDrm(manifest)) {
       return false;
     }
     return !/#EXT-X-KEY:METHOD=(?!(?:NONE|AES-128)\b)/.test(manifest);
   }
 
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const manifestUrl = info.url;
-    const manifest = typeof info.hls_media_playlist_data === "string"
-      ? info.hls_media_playlist_data
-      : await (await this.ydl.urlopen(manifestUrl)).text();
+    const manifest =
+      typeof info.hls_media_playlist_data === "string"
+        ? info.hls_media_playlist_data
+        : await (await this.ydl.urlopen(manifestUrl)).text();
 
-    if (!HlsFD.canDownload(manifest, Boolean(this.params.allow_unplayable_formats))) {
+    if (
+      !HlsFD.canDownload(
+        manifest,
+        Boolean(this.params.allow_unplayable_formats),
+      )
+    ) {
       if (HlsFD.hasDrm(manifest)) {
         throw new NotImplementedError("DRM protected HLS");
       }
@@ -39,7 +59,9 @@ export class HlsFD extends FragmentFD {
     }
 
     const isWebvtt = info.ext === "vtt";
-    const webvttPacker = isWebvtt ? makeWebvttPacker((message) => this.ydl.reportWarning?.(message)) : {};
+    const webvttPacker = isWebvtt
+      ? makeWebvttPacker((message) => this.ydl.reportWarning?.(message))
+      : {};
     const parsed = await this.parseManifest(manifest, manifestUrl, info);
     if (!parsed.fragments.length) {
       throw new Error("HLS manifest has no media fragments");
@@ -47,26 +69,49 @@ export class HlsFD extends FragmentFD {
     if (!parsed.endList) {
       // Logic change: Python delegates live HLS to ffmpeg; ytdlb can refresh playlists with Bun async iteration.
       this.toScreen("[hlsnative] Total fragments: unknown (live)");
-      return await this.downloadFragments(filename, { ...info, is_live: true }, this.liveFragments(manifestUrl, info, parsed), webvttPacker);
+      return await this.downloadFragments(
+        filename,
+        { ...info, is_live: true },
+        this.liveFragments(manifestUrl, info, parsed),
+        webvttPacker,
+      );
     }
     this.toScreen("[hlsnative] Total fragments: " + parsed.fragments.length);
-    const external = isWebvtt ? null : getExternalFragmentDownloader(this.params, "m3u8", {
-      ...info,
-      protocol: "m3u8_frag_urls",
-      fragments: parsed.fragments,
-    }, manifest);
+    const external = isWebvtt
+      ? null
+      : getExternalFragmentDownloader(
+          this.params,
+          "m3u8",
+          {
+            ...info,
+            protocol: "m3u8_frag_urls",
+            fragments: parsed.fragments,
+          },
+          manifest,
+        );
     if (external) {
-      this.toScreen(`[hlsnative] Fragment downloads will be delegated to ${external.name.replace(/FD$/, "").toLowerCase()}`);
+      this.toScreen(
+        `[hlsnative] Fragment downloads will be delegated to ${external.name.replace(/FD$/, "").toLowerCase()}`,
+      );
       return await new external(this.ydl, this.params).download(filename, {
         ...info,
         protocol: "m3u8_frag_urls",
         fragments: parsed.fragments,
       });
     }
-    return await this.downloadFragments(filename, info, parsed.fragments, webvttPacker);
+    return await this.downloadFragments(
+      filename,
+      info,
+      parsed.fragments,
+      webvttPacker,
+    );
   }
 
-  private async parseManifest(manifest: string, manifestUrl: string, info: DownloadInfo): Promise<ParsedHlsManifest> {
+  private async parseManifest(
+    manifest: string,
+    manifestUrl: string,
+    info: DownloadInfo,
+  ): Promise<ParsedHlsManifest> {
     const fragments: FragmentInfo[] = [];
     let adFragment = false;
     let decryptInfo: HlsDecryptInfo = { method: "NONE" };
@@ -75,13 +120,16 @@ export class HlsFD extends FragmentFD {
     let byteRange: { length: number; offset: number } | null = null;
     let nextByteRangeOffset = 0;
     let discontinuityCount = 0;
-    const formatIndex = typeof info.format_index === "number" ? info.format_index : null;
-    const extraSegmentQuery = typeof info.extra_param_to_segment_url === "string"
-      ? new URLSearchParams(info.extra_param_to_segment_url)
-      : null;
-    const extraKeyQuery = typeof info.extra_param_to_key_url === "string"
-      ? new URLSearchParams(info.extra_param_to_key_url)
-      : extraSegmentQuery;
+    const formatIndex =
+      typeof info.format_index === "number" ? info.format_index : null;
+    const extraSegmentQuery =
+      typeof info.extra_param_to_segment_url === "string"
+        ? new URLSearchParams(info.extra_param_to_segment_url)
+        : null;
+    const extraKeyQuery =
+      typeof info.extra_param_to_key_url === "string"
+        ? new URLSearchParams(info.extra_param_to_key_url)
+        : extraSegmentQuery;
     const externalAes = parseExternalAes(info.hls_aes);
     for (const rawLine of manifest.split(/\r?\n/)) {
       const line = rawLine.trim();
@@ -94,7 +142,9 @@ export class HlsFD extends FragmentFD {
             continue;
           }
           if (fragments.length > 0) {
-            throw new Error("Initialization fragment found after media fragments, unable to download");
+            throw new Error(
+              "Initialization fragment found after media fragments, unable to download",
+            );
           }
           const mapInfo = parseM3u8Attributes(line.slice("#EXT-X-MAP:".length));
           const uri = mapInfo.URI;
@@ -104,28 +154,52 @@ export class HlsFD extends FragmentFD {
           fragments.push({
             frag_index: fragments.length + 1,
             url: buildUrl(uri, manifestUrl, extraSegmentQuery),
-            http_headers: mapInfo.BYTERANGE ? rangeHeaders(info.http_headers, parseByteRange(mapInfo.BYTERANGE, 0)) : undefined,
+            http_headers: mapInfo.BYTERANGE
+              ? rangeHeaders(
+                  info.http_headers,
+                  parseByteRange(mapInfo.BYTERANGE, 0),
+                )
+              : undefined,
             media_sequence: mediaSequence,
           });
           mediaSequence += 1;
         }
         if (line.startsWith("#EXT-X-TARGETDURATION:")) {
-          targetDuration = Number(line.slice("#EXT-X-TARGETDURATION:".length)) || targetDuration;
+          targetDuration =
+            Number(line.slice("#EXT-X-TARGETDURATION:".length)) ||
+            targetDuration;
         }
         if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
-          mediaSequence = Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length)) || 0;
+          mediaSequence =
+            Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length)) || 0;
         }
         if (line.startsWith("#EXT-X-BYTERANGE:")) {
-          const parsed = parseByteRange(line.slice("#EXT-X-BYTERANGE:".length), nextByteRangeOffset);
+          const parsed = parseByteRange(
+            line.slice("#EXT-X-BYTERANGE:".length),
+            nextByteRangeOffset,
+          );
           byteRange = parsed;
           nextByteRangeOffset = parsed.offset + parsed.length;
         }
         if (line.startsWith("#EXT-X-KEY:")) {
-          decryptInfo = await this.parseDecryptInfo(line.slice("#EXT-X-KEY:".length), manifestUrl, extraKeyQuery, externalAes);
+          decryptInfo = await this.parseDecryptInfo(
+            line.slice("#EXT-X-KEY:".length),
+            manifestUrl,
+            extraKeyQuery,
+            externalAes,
+          );
         }
-        if ((line.startsWith("#ANVATO-SEGMENT-INFO") && line.includes("type=ad")) || (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",ad"))) {
+        if (
+          (line.startsWith("#ANVATO-SEGMENT-INFO") &&
+            line.includes("type=ad")) ||
+          (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",ad"))
+        ) {
           adFragment = true;
-        } else if ((line.startsWith("#ANVATO-SEGMENT-INFO") && line.includes("type=master")) || (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",segment"))) {
+        } else if (
+          (line.startsWith("#ANVATO-SEGMENT-INFO") &&
+            line.includes("type=master")) ||
+          (line.startsWith("#UPLYNK-SEGMENT") && line.endsWith(",segment"))
+        ) {
           adFragment = false;
         }
         if (line.startsWith("#EXT-X-DISCONTINUITY")) {
@@ -133,15 +207,24 @@ export class HlsFD extends FragmentFD {
         }
         continue;
       }
-      if (!adFragment && (formatIndex === null || discontinuityCount === formatIndex)) {
+      if (
+        !adFragment &&
+        (formatIndex === null || discontinuityCount === formatIndex)
+      ) {
         const sequence = mediaSequence;
-        const transformData = decryptInfo.method === "AES-128"
-          ? aes128Transform(decryptInfo.key, decryptInfo.iv ?? sequenceIv(sequence))
-          : undefined;
+        const transformData =
+          decryptInfo.method === "AES-128"
+            ? aes128Transform(
+                decryptInfo.key,
+                decryptInfo.iv ?? sequenceIv(sequence),
+              )
+            : undefined;
         fragments.push({
           frag_index: fragments.length + 1,
           url: buildUrl(line, manifestUrl, extraSegmentQuery),
-          http_headers: byteRange ? rangeHeaders(info.http_headers, byteRange) : undefined,
+          http_headers: byteRange
+            ? rangeHeaders(info.http_headers, byteRange)
+            : undefined,
           media_sequence: sequence,
           transformData,
         });
@@ -156,7 +239,11 @@ export class HlsFD extends FragmentFD {
     };
   }
 
-  private async *liveFragments(manifestUrl: string, info: DownloadInfo, initial: ParsedHlsManifest): AsyncIterable<FragmentInfo> {
+  private async *liveFragments(
+    manifestUrl: string,
+    info: DownloadInfo,
+    initial: ParsedHlsManifest,
+  ): AsyncIterable<FragmentInfo> {
     const seen = new Set<string>();
     let parsed = initial;
     while (true) {
@@ -182,7 +269,12 @@ export class HlsFD extends FragmentFD {
     }
   }
 
-  private async parseDecryptInfo(rawAttributes: string, manifestUrl: string, extraKeyQuery: URLSearchParams | null, externalAes: ExternalAesInfo): Promise<HlsDecryptInfo> {
+  private async parseDecryptInfo(
+    rawAttributes: string,
+    manifestUrl: string,
+    extraKeyQuery: URLSearchParams | null,
+    externalAes: ExternalAesInfo,
+  ): Promise<HlsDecryptInfo> {
     const attributes = parseM3u8Attributes(rawAttributes);
     const method = attributes.METHOD ?? "NONE";
     if (method === "NONE") {
@@ -192,7 +284,15 @@ export class HlsFD extends FragmentFD {
       throw new NotImplementedError(`HLS encryption method ${method}`);
     }
     const uri = attributes.URI;
-    const key = externalAes.key ?? (uri ? new Uint8Array(await (await this.ydl.urlopen(buildUrl(uri, manifestUrl, extraKeyQuery))).arrayBuffer()) : null);
+    const key =
+      externalAes.key ??
+      (uri
+        ? new Uint8Array(
+            await (
+              await this.ydl.urlopen(buildUrl(uri, manifestUrl, extraKeyQuery))
+            ).arrayBuffer(),
+          )
+        : null);
     if (!key) {
       throw new Error("HLS AES-128 key is missing URI");
     }
@@ -202,7 +302,11 @@ export class HlsFD extends FragmentFD {
     return {
       method,
       key,
-      iv: externalAes.iv ?? (attributes.IV ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0")) : undefined),
+      iv:
+        externalAes.iv ??
+        (attributes.IV
+          ? hexToBytes(attributes.IV.replace(/^0x/i, "").padStart(32, "0"))
+          : undefined),
     };
   }
 }
@@ -218,13 +322,22 @@ interface ParsedHlsManifest {
   targetDuration: number;
 }
 
-function rangeHeaders(headers: Record<string, string> | undefined, byteRange: { length: number; offset: number }): Record<string, string> {
+function rangeHeaders(
+  headers: Record<string, string> | undefined,
+  byteRange: { length: number; offset: number },
+): Record<string, string> {
   const out = new HTTPHeaderDict(headers);
-  out.set("Range", `bytes=${byteRange.offset}-${byteRange.offset + byteRange.length - 1}`);
+  out.set(
+    "Range",
+    `bytes=${byteRange.offset}-${byteRange.offset + byteRange.length - 1}`,
+  );
   return out.sensitive();
 }
 
-function parseByteRange(value: string, nextOffset: number): { length: number; offset: number } {
+function parseByteRange(
+  value: string,
+  nextOffset: number,
+): { length: number; offset: number } {
   const match = /^(?<length>\d+)(?:@(?<offset>\d+))?$/.exec(value.trim());
   if (!match?.groups) {
     throw new Error(`Invalid HLS byte range: ${value}`);
@@ -239,13 +352,15 @@ function parseByteRange(value: string, nextOffset: number): { length: number; of
 
 export const can_download = HlsFD.canDownload;
 
-type HlsDecryptInfo = {
-  method: "NONE";
-} | {
-  method: "AES-128";
-  key: Uint8Array;
-  iv?: Uint8Array;
-};
+type HlsDecryptInfo =
+  | {
+      method: "NONE";
+    }
+  | {
+      method: "AES-128";
+      key: Uint8Array;
+      iv?: Uint8Array;
+    };
 
 function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2) {
@@ -258,7 +373,11 @@ function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
-function buildUrl(path: string, base: string, extraQuery: URLSearchParams | null): string {
+function buildUrl(
+  path: string,
+  base: string,
+  extraQuery: URLSearchParams | null,
+): string {
   const url = new URL(path, base).toString();
   return extraQuery ? updateUrlQuery(url, queryToRecord(extraQuery)) : url;
 }
@@ -282,8 +401,14 @@ function parseExternalAes(value: unknown): ExternalAesInfo {
   }
   const record = value as Record<string, unknown>;
   return {
-    key: typeof record.key === "string" ? hexToBytes(record.key.replace(/^0x/i, "")) : undefined,
-    iv: typeof record.iv === "string" ? hexToBytes(record.iv.replace(/^0x/i, "").padStart(32, "0")) : undefined,
+    key:
+      typeof record.key === "string"
+        ? hexToBytes(record.key.replace(/^0x/i, ""))
+        : undefined,
+    iv:
+      typeof record.iv === "string"
+        ? hexToBytes(record.iv.replace(/^0x/i, "").padStart(32, "0"))
+        : undefined,
   };
 }
 
@@ -293,7 +418,10 @@ function sequenceIv(sequence: number): Uint8Array {
   return out;
 }
 
-function aes128Transform(key: Uint8Array, iv: Uint8Array): (data: Uint8Array) => Uint8Array {
+function aes128Transform(
+  key: Uint8Array,
+  iv: Uint8Array,
+): (data: Uint8Array) => Uint8Array {
   return (data) => unpadPkcs7(aesCbcDecryptBytes(data, key, iv));
 }
 
@@ -316,7 +444,9 @@ function makeWebvttPacker(reportWarning: (message: string) => void): {
   const encoder = new TextEncoder();
   return {
     packFunc(content, index) {
-      return encoder.encode(packWebvttFragment(content, index, state, reportWarning));
+      return encoder.encode(
+        packWebvttFragment(content, index, state, reportWarning),
+      );
     },
     finishFunc() {
       return encoder.encode(flushWebvttDedupWindow(state));
@@ -341,10 +471,16 @@ function packWebvttFragment(
         state.mpegtsAdjust += 1;
         overflow = false;
       }
-      const cue = new CueBlock(block.id, block.start + adjust, block.end + adjust, block.settings, block.text);
+      const cue = new CueBlock(
+        block.id,
+        block.start + adjust,
+        block.end + adjust,
+        block.settings,
+        block.text,
+      );
       const ready: CueBlock[] = [];
       let isNew = true;
-      for (let index = 0; index < state.dedupWindow.length;) {
+      for (let index = 0; index < state.dedupWindow.length; ) {
         const windowEntry = state.dedupWindow[index];
         if (!windowEntry) {
           index += 1;
@@ -378,7 +514,7 @@ function packWebvttFragment(
       continue;
     }
     if (block instanceof Magic) {
-      let mpegts = (block.mpegts ?? 0) + (state.mpegtsAdjust * 2 ** 33);
+      let mpegts = (block.mpegts ?? 0) + state.mpegtsAdjust * 2 ** 33;
       if (mpegts < (state.mpegtsLast ?? 0)) {
         overflow = true;
         mpegts += 2 ** 33;
@@ -388,13 +524,16 @@ function packWebvttFragment(
         state.mpegts = mpegts;
         state.local = block.local ?? 0;
       } else if (block.mpegts !== undefined && block.local !== undefined) {
-        adjust = (mpegts - (state.mpegts ?? 0)) - (block.local - (state.local ?? 0));
+        adjust =
+          mpegts - (state.mpegts ?? 0) - (block.local - (state.local ?? 0));
       }
       if (fragmentIndex !== 1) {
         continue;
       }
     } else if (block instanceof HeaderBlock && fragmentIndex !== 1) {
-      reportWarning(`Discarding a ${block.constructor.name} block found in the middle of the stream; subtitles may display incorrectly`);
+      reportWarning(
+        `Discarding a ${block.constructor.name} block found in the middle of the stream; subtitles may display incorrectly`,
+      );
       continue;
     }
     block.writeInto(output);

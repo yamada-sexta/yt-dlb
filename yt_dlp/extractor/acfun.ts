@@ -14,14 +14,25 @@ import {
 } from "../utils/index.ts";
 
 export abstract class AcFunVideoBaseIE extends InfoExtractor {
-  protected async extractMetadata(videoId: string, videoInfo: any): Promise<any> {
+  protected async extractMetadata(
+    videoId: string,
+    videoInfo: any,
+  ): Promise<any> {
     const playjson = this.parseJson(videoInfo.ksPlayJson, videoId) as any;
 
     const formats: any[] = [];
     const subtitles: Record<string, any[]> = {};
 
-    const representations = traverseObj(playjson, ["adaptationSet", 0, "representation"]) as any[];
-    const reps = Array.isArray(representations) ? representations : representations ? [representations] : [];
+    const representations = traverseObj(playjson, [
+      "adaptationSet",
+      0,
+      "representation",
+    ]) as any[];
+    const reps = Array.isArray(representations)
+      ? representations
+      : representations
+        ? [representations]
+        : [];
 
     for (const video of reps) {
       if (!video?.url) {
@@ -31,7 +42,7 @@ export abstract class AcFunVideoBaseIE extends InfoExtractor {
         video.url,
         videoId,
         "mp4",
-        { fatal: false }
+        { fatal: false },
       );
       formats.push(...fmts);
       this.mergeSubtitles(subs, subtitles);
@@ -58,7 +69,8 @@ export abstract class AcFunVideoBaseIE extends InfoExtractor {
 }
 
 export class AcFunVideoIE extends AcFunVideoBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://www\.acfun\.cn/v/ac(?<id>[_\d]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://www\.acfun\.cn/v/ac(?<id>[_\d]+)`;
 
   static override get IE_NAME(): string {
     return "AcFunVideo";
@@ -75,7 +87,7 @@ export class AcFunVideoIE extends AcFunVideoBaseIE {
       String.raw`window\.videoInfo\s*=`,
       webpage,
       "videoInfo",
-      videoId
+      videoId,
     );
     if (!jsonAll) {
       throw new ExtractorError("Unable to extract video info json");
@@ -85,7 +97,9 @@ export class AcFunVideoIE extends AcFunVideoBaseIE {
     const videoList = (jsonAll.videoList || []) as any[];
     const videoInternalId = traverseObj(jsonAll, ["currentVideoInfo", "id"]);
     if (videoInternalId && videoList.length > 1) {
-      const entry = videoList.map((v, idx) => ({ v, idx })).find((item) => item.v.id === videoInternalId);
+      const entry = videoList
+        .map((v, idx) => ({ v, idx }))
+        .find((item) => item.v.id === videoInternalId);
       if (entry) {
         const partIdx = entry.idx + 1;
         const partVideoInfo = entry.v;
@@ -94,16 +108,24 @@ export class AcFunVideoIE extends AcFunVideoBaseIE {
       }
     }
 
-    const metadata = await this.extractMetadata(videoId, jsonAll.currentVideoInfo);
+    const metadata = await this.extractMetadata(
+      videoId,
+      jsonAll.currentVideoInfo,
+    );
 
     return {
       ...metadata,
       title,
       thumbnail: jsonAll.coverUrl || undefined,
       description: jsonAll.description || undefined,
-      uploader: traverseObj(jsonAll, ["user", "name"]) as string | null ?? undefined,
-      uploader_id: traverseObj(jsonAll, ["user", "href"]) as string | null ?? undefined,
-      tags: traverseObj(jsonAll, ["tagList", Ellipsis, "name"]) as string[] | null ?? undefined,
+      uploader:
+        (traverseObj(jsonAll, ["user", "name"]) as string | null) ?? undefined,
+      uploader_id:
+        (traverseObj(jsonAll, ["user", "href"]) as string | null) ?? undefined,
+      tags:
+        (traverseObj(jsonAll, ["tagList", Ellipsis, "name"]) as
+          | string[]
+          | null) ?? undefined,
       view_count: intOrNone(jsonAll.viewCount),
       like_count: intOrNone(jsonAll.likeCountShow),
       comment_count: intOrNone(jsonAll.commentCountShow),
@@ -112,7 +134,8 @@ export class AcFunVideoIE extends AcFunVideoBaseIE {
 }
 
 export class AcFunBangumiIE extends AcFunVideoBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://www\.acfun\.cn/bangumi/(?<id>aa[_\d]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://www\.acfun\.cn/bangumi/(?<id>aa[_\d]+)`;
 
   static override get IE_NAME(): string {
     return "AcFunBangumi";
@@ -133,7 +156,7 @@ export class AcFunBangumiIE extends AcFunVideoBaseIE {
       String.raw`window\.bangumiData\s*=`,
       webpage,
       "bangumiData",
-      fullVideoId
+      fullVideoId,
     );
     if (!jsonBangumiData) {
       throw new ExtractorError("Unable to extract bangumi data json");
@@ -150,7 +173,7 @@ export class AcFunBangumiIE extends AcFunVideoBaseIE {
 
     const videoInfo = jsonBangumiData.currentVideoInfo;
     const seasonId = jsonBangumiData.bangumiId;
-    let seasonNumber: number | undefined ;
+    let seasonNumber: number | undefined;
 
     if (seasonId) {
       const relatedBangumis = (jsonBangumiData.relatedBangumis || []) as any[];
@@ -158,19 +181,24 @@ export class AcFunBangumiIE extends AcFunVideoBaseIE {
       seasonNumber = idx !== -1 ? idx + 1 : 1;
     }
 
-    const jsonBangumiList = this.searchJson<any>(
-      String.raw`window\.bangumiList\s*=`,
-      webpage,
-      "bangumiList",
-      fullVideoId,
-      { fatal: false }
-    ) || {};
+    const jsonBangumiList =
+      this.searchJson<any>(
+        String.raw`window\.bangumiList\s*=`,
+        webpage,
+        "bangumiList",
+        fullVideoId,
+        { fatal: false },
+      ) || {};
 
-    const videoInternalId = intOrNone(traverseObj(jsonBangumiData, ["currentVideoInfo", "id"]));
-    let episodeNumber: number | undefined ;
+    const videoInternalId = intOrNone(
+      traverseObj(jsonBangumiData, ["currentVideoInfo", "id"]),
+    );
+    let episodeNumber: number | undefined;
     if (videoInternalId) {
       const items = (jsonBangumiList.items || []) as any[];
-      const idx = items.findIndex((v) => intOrNone(v?.videoId) === videoInternalId);
+      const idx = items.findIndex(
+        (v) => intOrNone(v?.videoId) === videoInternalId,
+      );
       episodeNumber = idx !== -1 ? idx + 1 : undefined;
     }
 

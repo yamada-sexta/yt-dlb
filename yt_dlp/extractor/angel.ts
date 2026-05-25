@@ -5,7 +5,8 @@ import { ExtractorError } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class AngelIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?angel\.com/watch/(?<series>[^/?#]+)/episode/(?<id>[\w-]+)/season-(?<season_number>\d+)/episode-(?<episode_number>\d+)/(?<title>[^/?#]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?angel\.com/watch/(?<series>[^/?#]+)/episode/(?<id>[\w-]+)/season-(?<season_number>\d+)/episode-(?<episode_number>\d+)/(?<title>[^/?#]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -34,13 +35,20 @@ export class AngelIE extends InfoExtractor {
       subtitles,
     };
 
-    const rawThumbnail = urlOrNone(this.ogSearchThumbnail(webpage))
-      ?? (typeof jsonLd.thumbnail === "string" ? jsonLd.thumbnail : null)
-      ?? (Array.isArray(jsonLd.thumbnail) && typeof jsonLd.thumbnail[0] === "string" ? jsonLd.thumbnail[0] : null)
-      ?? (typeof jsonLd.thumbnails === "string" ? jsonLd.thumbnails : null);
+    const rawThumbnail =
+      urlOrNone(this.ogSearchThumbnail(webpage)) ??
+      (typeof jsonLd.thumbnail === "string" ? jsonLd.thumbnail : null) ??
+      (Array.isArray(jsonLd.thumbnail) &&
+      typeof jsonLd.thumbnail[0] === "string"
+        ? jsonLd.thumbnail[0]
+        : null) ??
+      (typeof jsonLd.thumbnails === "string" ? jsonLd.thumbnails : null);
     if (rawThumbnail) {
       // Angel uses Cloudinary transformations; strip them to match yt-dlp's source-image behavior.
-      info.thumbnail = rawThumbnail.replace(/(\/upload)\/.+(\/angel-app\/.+)$/u, "$1$2");
+      info.thumbnail = rawThumbnail.replace(
+        /(\/upload)\/.+(\/angel-app\/.+)$/u,
+        "$1$2",
+      );
     }
 
     return mergeDicts(info, jsonLd) as ExtractorInfo;

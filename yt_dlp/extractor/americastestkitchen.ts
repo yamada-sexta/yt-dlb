@@ -11,7 +11,8 @@ import {
 } from "../utils/index.ts";
 
 export class AmericasTestKitchenIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?(?:americastestkitchen|cooks(?:country|illustrated))\.com/(?:cooks(?:country|illustrated)/)?(?<resource_type>episode|videos)/(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?(?:americastestkitchen|cooks(?:country|illustrated))\.com/(?:cooks(?:country|illustrated)/)?(?<resource_type>episode|videos)/(?<id>\d+)`;
 
   static override get IE_NAME(): string {
     return "americastestkitchen";
@@ -22,7 +23,9 @@ export class AmericasTestKitchenIE extends InfoExtractor {
     const resourceTypeRaw = match?.groups?.resource_type;
     const videoId = match?.groups?.id;
     if (!resourceTypeRaw || !videoId) {
-      throw new ExtractorError("Invalid America's Test Kitchen URL", { expected: true });
+      throw new ExtractorError("Invalid America's Test Kitchen URL", {
+        expected: true,
+      });
     }
 
     const isEpisode = resourceTypeRaw === "episode";
@@ -30,7 +33,7 @@ export class AmericasTestKitchenIE extends InfoExtractor {
 
     const resource = await this.downloadJson<any>(
       `https://www.americastestkitchen.com/api/v6/${resourceType}/${videoId}`,
-      videoId
+      videoId,
     );
     if (!resource || resource === false) {
       throw new ExtractorError("Failed to download metadata");
@@ -59,7 +62,8 @@ export class AmericasTestKitchenIE extends InfoExtractor {
 }
 
 export class AmericasTestKitchenSeasonIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?(?<show>americastestkitchen|(?<cooks>cooks(?:country|illustrated)))\.com(?:(?:/(?<show2>cooks(?:country|illustrated)))?(?:/?$|(?<!ated)(?<!ated\.com)/episodes/browse/season_(?<season>\d+)))`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?(?<show>americastestkitchen|(?<cooks>cooks(?:country|illustrated)))\.com(?:(?:/(?<show2>cooks(?:country|illustrated)))?(?:/?$|(?<!ated)(?<!ated\.com)/episodes/browse/season_(?<season>\d+)))`;
 
   static override get IE_NAME(): string {
     return "americastestkitchen:season";
@@ -74,7 +78,9 @@ export class AmericasTestKitchenSeasonIE extends InfoExtractor {
     const showPath = show2 ? `/${show2}` : "";
     const show = show2 || show1;
     if (!show) {
-      throw new ExtractorError("Could not determine show name from URL", { expected: true });
+      throw new ExtractorError("Could not determine show name from URL", {
+        expected: true,
+      });
     }
 
     const seasonNumber = intOrNone(seasonRaw);
@@ -123,33 +129,37 @@ export class AmericasTestKitchenSeasonIE extends InfoExtractor {
           attributesToHighlight: "",
           hitsPerPage: 1000,
         },
-      }
+      },
     );
 
     if (!seasonSearch || seasonSearch === false) {
       throw new ExtractorError("Failed to fetch Algolia search index");
     }
 
-    const entries = (seasonSearch.hits ?? []).map((episode: any) => {
-      const searchUrl = episode?.search_url;
-      if (!searchUrl) {
-        return null;
-      }
-      const rawObjectId = episode?.objectID;
-      const objectId = rawObjectId ? rawObjectId.split("_").pop() : null;
+    const entries = (seasonSearch.hits ?? [])
+      .map((episode: any) => {
+        const searchUrl = episode?.search_url;
+        if (!searchUrl) {
+          return null;
+        }
+        const rawObjectId = episode?.objectID;
+        const objectId = rawObjectId ? rawObjectId.split("_").pop() : null;
 
-      return {
-        _type: "url" as const,
-        url: `https://www.americastestkitchen.com${showPath}${searchUrl}`,
-        id: objectId ?? undefined,
-        title: episode?.title ?? undefined,
-        description: episode?.description ?? undefined,
-        timestamp: unifiedTimestamp(episode?.search_document_date) ?? undefined,
-        season_number: seasonNumber ?? undefined,
-        episode_number: intOrNone(episode?.[`search_${slug}_episode_number`]) ?? undefined,
-        ie_key: "AmericasTestKitchen",
-      };
-    }).filter((x: any): x is ExtractorInfo => x !== null);
+        return {
+          _type: "url" as const,
+          url: `https://www.americastestkitchen.com${showPath}${searchUrl}`,
+          id: objectId ?? undefined,
+          title: episode?.title ?? undefined,
+          description: episode?.description ?? undefined,
+          timestamp:
+            unifiedTimestamp(episode?.search_document_date) ?? undefined,
+          season_number: seasonNumber ?? undefined,
+          episode_number:
+            intOrNone(episode?.[`search_${slug}_episode_number`]) ?? undefined,
+          ie_key: "AmericasTestKitchen",
+        };
+      })
+      .filter((x: any): x is ExtractorInfo => x !== null);
 
     return this.playlistResult(entries, playlistId, playlistTitle);
   }

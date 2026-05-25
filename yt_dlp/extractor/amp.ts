@@ -16,19 +16,19 @@ import {
 export class AMPIE extends InfoExtractor {
   // parse Akamai Adaptive Media Player feed
   protected async extractFeedInfo(url: string): Promise<ExtractorInfo> {
-    const feed = await this.downloadJson<any>(
-      url,
-      "feed",
-      {
-        note: "Downloading Akamai AMP feed",
-        errnote: "Unable to download Akamai AMP feed",
-        transform_source: stripJsonp,
-      }
-    );
+    const feed = await this.downloadJson<any>(url, "feed", {
+      note: "Downloading Akamai AMP feed",
+      errnote: "Unable to download Akamai AMP feed",
+      transform_source: stripJsonp,
+    });
 
-    const item = traverseObj(feed, "channel", "item") as Record<string, any> | undefined;
+    const item = traverseObj(feed, "channel", "item") as
+      | Record<string, any>
+      | undefined;
     if (!item) {
-      throw new ExtractorError(`${this.constructor.name} said: ${feed?.error ?? "Unknown error"}`);
+      throw new ExtractorError(
+        `${this.constructor.name} said: ${feed?.error ?? "Unknown error"}`,
+      );
     }
 
     const videoId = String(item.guid);
@@ -36,10 +36,13 @@ export class AMPIE extends InfoExtractor {
     const getMediaNode = (name: string, defaultValue: any = null): any => {
       const mediaName = `media-${name}`;
       const mediaGroup = item["media-group"] || item;
-      return mediaGroup[mediaName] || item[mediaName] || item[name] || defaultValue;
+      return (
+        mediaGroup[mediaName] || item[mediaName] || item[name] || defaultValue
+      );
     };
 
-    const thumbnails: Array<{ url: string; width?: number; height?: number }> = [];
+    const thumbnails: Array<{ url: string; width?: number; height?: number }> =
+      [];
     let mediaThumbnail = getMediaNode("thumbnail");
     if (mediaThumbnail) {
       if (!Array.isArray(mediaThumbnail)) {
@@ -97,23 +100,26 @@ export class AMPIE extends InfoExtractor {
         }
         const ext = mimetype2ext(media.type) || determineExt(mediaUrl);
         if (ext === "f4m") {
-          formats.push(...this.extractF4mFormats(
-            mediaUrl + "?hdcore=3.4.0&plugin=aasp-3.4.0.132.124",
-            videoId,
-            { f4mId: "hds", fatal: false }
-          ));
+          formats.push(
+            ...this.extractF4mFormats(
+              mediaUrl + "?hdcore=3.4.0&plugin=aasp-3.4.0.132.124",
+              videoId,
+              { f4mId: "hds", fatal: false },
+            ),
+          );
         } else if (ext === "m3u8") {
           const [fmts, subs] = await this.extractM3u8FormatsAndSubtitles(
             mediaUrl,
             videoId,
             "mp4",
-            { m3u8Id: "hls" }
+            { m3u8Id: "hls" },
           );
           formats.push(...fmts);
           this.mergeSubtitles(subs, subtitles);
         } else {
           formats.push({
-            format_id: mediaData["media-category"]?.["@attributes"]?.label ?? undefined,
+            format_id:
+              mediaData["media-category"]?.["@attributes"]?.label ?? undefined,
             url: mediaUrl,
             tbr: intOrNone(media.bitrate) ?? undefined,
             filesize: intOrNone(media.fileSize) ?? undefined,
@@ -123,15 +129,19 @@ export class AMPIE extends InfoExtractor {
       }
     }
 
-    const timestamp = unifiedTimestamp(item.pubDate) || parseIso8601(item["dc-date"]);
+    const timestamp =
+      unifiedTimestamp(item.pubDate) || parseIso8601(item["dc-date"]);
 
     return {
       id: videoId,
       title: String(getMediaNode("title") || ""),
-      description: getMediaNode("description") ? String(getMediaNode("description")) : undefined,
+      description: getMediaNode("description")
+        ? String(getMediaNode("description"))
+        : undefined,
       thumbnails,
       timestamp: timestamp ?? undefined,
-      duration: intOrNone(mediaContent?.[0]?.["@attributes"]?.duration) ?? undefined,
+      duration:
+        intOrNone(mediaContent?.[0]?.["@attributes"]?.duration) ?? undefined,
       subtitles,
       formats,
     };

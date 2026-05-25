@@ -6,18 +6,31 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { NotImplementedError } from "../../errors.ts";
-import { ExtractorError, intOrNone, joinNonempty, strToInt, unifiedTimestamp, urlOrNone } from "../../utils/index.ts";
-import { Ellipsis, traverseObj, type TraversePath } from "../../utils/traversal.ts";
+import {
+  ExtractorError,
+  intOrNone,
+  joinNonempty,
+  strToInt,
+  unifiedTimestamp,
+  urlOrNone,
+} from "../../utils/index.ts";
+import {
+  Ellipsis,
+  traverseObj,
+  type TraversePath,
+} from "../../utils/traversal.ts";
 import { InfoExtractor, type ExtractorInfo } from "../common.ts";
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const RecordSchema = z.record(z.string(), z.unknown());
 const ExtractorArgsSchema = z.record(z.string(), z.array(z.string()));
-const ThumbnailSchema = z.object({
-  url: z.string(),
-  height: z.union([z.string(), z.number()]).optional(),
-  width: z.union([z.string(), z.number()]).optional(),
-}).passthrough();
+const ThumbnailSchema = z
+  .object({
+    url: z.string(),
+    height: z.union([z.string(), z.number()]).optional(),
+    width: z.union([z.string(), z.number()]).optional(),
+  })
+  .passthrough();
 
 export enum BadgeType {
   AVAILABILITY_UNLISTED = "availability_unlisted",
@@ -98,7 +111,9 @@ export interface InnertubeClient {
   SUPPORTS_AD_PLAYBACK_CONTEXT?: boolean;
   REQUIRE_AUTH?: boolean;
   REQUIRE_JS_PLAYER?: boolean;
-  GVS_PO_TOKEN_POLICY?: Record<StreamingProtocol, GvsPoTokenPolicy> | Partial<Record<StreamingProtocol, GvsPoTokenPolicy>>;
+  GVS_PO_TOKEN_POLICY?:
+    | Record<StreamingProtocol, GvsPoTokenPolicy>
+    | Partial<Record<StreamingProtocol, GvsPoTokenPolicy>>;
   PLAYER_PO_TOKEN_POLICY?: PlayerPoTokenPolicy;
   SUBS_PO_TOKEN_POLICY?: SubsPoTokenPolicy;
   PLAYER_PARAMS?: string | null;
@@ -122,7 +137,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
       client: {
         clientName: "WEB",
         clientVersion: "2.20260114.08.00",
-        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)",
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)",
       },
     },
     INNERTUBE_CONTEXT_CLIENT_NAME: 1,
@@ -186,7 +202,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
         clientName: "ANDROID",
         clientVersion: "21.02.35",
         androidSdkVersion: 30,
-        userAgent: "com.google.android.youtube/21.02.35 (Linux; U; Android 11) gzip",
+        userAgent:
+          "com.google.android.youtube/21.02.35 (Linux; U; Android 11) gzip",
         osName: "Android",
         osVersion: "11",
       },
@@ -220,7 +237,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
         deviceMake: "Oculus",
         deviceModel: "Quest 3",
         androidSdkVersion: 32,
-        userAgent: "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+        userAgent:
+          "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
         osName: "Android",
         osVersion: "12L",
       },
@@ -235,7 +253,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
         clientVersion: "21.02.3",
         deviceMake: "Apple",
         deviceModel: "iPhone16,2",
-        userAgent: "com.google.ios.youtube/21.02.3 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+        userAgent:
+          "com.google.ios.youtube/21.02.3 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
         osName: "iPhone",
         osVersion: "18.3.2.22D82",
       },
@@ -261,7 +280,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
       client: {
         clientName: "MWEB",
         clientVersion: "2.20260115.01.00",
-        userAgent: "Mozilla/5.0 (iPad; CPU OS 16_7_10 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1,gzip(gfe)",
+        userAgent:
+          "Mozilla/5.0 (iPad; CPU OS 16_7_10 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1,gzip(gfe)",
       },
     },
     INNERTUBE_CONTEXT_CLIENT_NAME: 2,
@@ -291,7 +311,8 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
       client: {
         clientName: "TVHTML5",
         clientVersion: "7.20260114.12.00",
-        userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+        userAgent:
+          "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
       },
     },
     INNERTUBE_CONTEXT_CLIENT_NAME: 7,
@@ -336,7 +357,9 @@ export const INNERTUBE_CLIENTS: Record<string, InnertubeClient> = {
 
 export type InnertubeClientName = keyof typeof INNERTUBE_CLIENTS;
 
-export function splitInnertubeClient(clientName: string): [string, string, string | null] {
+export function splitInnertubeClient(
+  clientName: string,
+): [string, string, string | null] {
   const dotIndex = clientName.lastIndexOf(".");
   if (dotIndex !== -1) {
     const variant = clientName.slice(0, dotIndex);
@@ -351,15 +374,21 @@ export const _split_innertube_client = splitInnertubeClient;
 export function shortClientName(clientName: string): string {
   const [splitClient] = splitInnertubeClient(clientName);
   const [main, ...parts] = splitClient.split("_");
-  return joinNonempty((main ?? "").slice(0, 4), parts.map((part) => part[0] ?? "").join(""), { delim: "" }).toUpperCase();
+  return joinNonempty(
+    (main ?? "").slice(0, 4),
+    parts.map((part) => part[0] ?? "").join(""),
+    { delim: "" },
+  ).toUpperCase();
 }
 
 export const short_client_name = shortClientName;
 
 function fixEmbeddedYtcfg(ytcfg: InnertubeClient): void {
   const context = ytcfg.INNERTUBE_CONTEXT as Record<string, unknown>;
-  const thirdParty = z.record(z.string(), z.unknown()).safeParse(context.thirdParty).success
-    ? context.thirdParty as Record<string, unknown>
+  const thirdParty = z
+    .record(z.string(), z.unknown())
+    .safeParse(context.thirdParty).success
+    ? (context.thirdParty as Record<string, unknown>)
     : {};
   thirdParty.embedUrl = "https://www.reddit.com/";
   context.thirdParty = thirdParty;
@@ -406,17 +435,24 @@ export function getInnertubeClient(client: string = "web"): InnertubeClient {
 }
 
 export class YoutubeBaseInfoExtractor extends InfoExtractor {
-  static readonly _RESERVED_NAMES = String.raw`channel|c|user|playlist|watch|w|v|embed|e|live|watch_popup|clip|shorts|movies|results|search|shared|hashtag|trending|explore|feed|feeds|browse|oembed|get_video_info|iframe_api|s/player|source|storefront|oops|index|account|t/terms|about|upload|signin|logout`;
-  static readonly _PLAYLIST_ID_RE = String.raw`(?:(?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z-_]{10,}|RDMM|WL|LL|LM)`;
+  static readonly _RESERVED_NAMES =
+    String.raw`channel|c|user|playlist|watch|w|v|embed|e|live|watch_popup|clip|shorts|movies|results|search|shared|hashtag|trending|explore|feed|feeds|browse|oembed|get_video_info|iframe_api|s/player|source|storefront|oops|index|account|t/terms|about|upload|signin|logout`;
+  static readonly _PLAYLIST_ID_RE =
+    String.raw`(?:(?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z-_]{10,}|RDMM|WL|LL|LM)`;
   static readonly _VIDEO_ID_RE = String.raw`[0-9A-Za-z_-]{11}`;
   static readonly _YT_CHANNEL_UCID_RE = String.raw`UC[\w-]{22}`;
   static readonly _YT_HANDLE_RE = String.raw`@[\w.-]{3,30}`;
 
-  protected override async realExtract(_url: string): Promise<ExtractorInfo | null> {
+  protected override async realExtract(
+    _url: string,
+  ): Promise<ExtractorInfo | null> {
     throw new NotImplementedError("full YouTube base extractor flow");
   }
 
-  protected ytInitialData(webpage: string, videoId: string): Record<string, unknown> {
+  protected ytInitialData(
+    webpage: string,
+    videoId: string,
+  ): Record<string, unknown> {
     const rawData = this.searchJson<unknown>(
       String.raw`(?:window\s*\[\s*["']ytInitialData["']\s*\]|ytInitialData)\s*=`,
       webpage,
@@ -427,7 +463,11 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return JsonObjectSchema.parse(rawData ?? {});
   }
 
-  protected extractYtInitialData(itemId: string, webpage: string, options: { fatal?: boolean } = {}): Record<string, unknown> | null {
+  protected extractYtInitialData(
+    itemId: string,
+    webpage: string,
+    options: { fatal?: boolean } = {},
+  ): Record<string, unknown> | null {
     try {
       return this.ytInitialData(webpage, itemId);
     } catch (error) {
@@ -439,7 +479,11 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     }
   }
 
-  protected _extract_yt_initial_data(itemId: string, webpage: string, fatal = true): Record<string, unknown> | null {
+  protected _extract_yt_initial_data(
+    itemId: string,
+    webpage: string,
+    fatal = true,
+  ): Record<string, unknown> | null {
     return this.extractYtInitialData(itemId, webpage, { fatal });
   }
 
@@ -459,7 +503,13 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return this.getInnertubeHost(client);
   }
 
-  protected ytcfgGetSafe<T>(ytcfg: unknown, getters: readonly ((value: Record<string, unknown>) => T | null | undefined)[] | ((value: Record<string, unknown>) => T | null | undefined), defaultClient = "web"): T | null {
+  protected ytcfgGetSafe<T>(
+    ytcfg: unknown,
+    getters:
+      | readonly ((value: Record<string, unknown>) => T | null | undefined)[]
+      | ((value: Record<string, unknown>) => T | null | undefined),
+    defaultClient = "web",
+  ): T | null {
     const candidates = [ytcfg, this.getDefaultYtcfg(defaultClient)];
     for (const candidate of candidates) {
       const record = RecordSchema.safeParse(candidate);
@@ -476,46 +526,96 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return null;
   }
 
-  protected _ytcfg_get_safe<T>(ytcfg: unknown, getter: readonly ((value: Record<string, unknown>) => T | null | undefined)[] | ((value: Record<string, unknown>) => T | null | undefined), _expectedType: unknown = null, defaultClient = "web"): T | null {
+  protected _ytcfg_get_safe<T>(
+    ytcfg: unknown,
+    getter:
+      | readonly ((value: Record<string, unknown>) => T | null | undefined)[]
+      | ((value: Record<string, unknown>) => T | null | undefined),
+    _expectedType: unknown = null,
+    defaultClient = "web",
+  ): T | null {
     void _expectedType;
     return this.ytcfgGetSafe(ytcfg, getter, defaultClient);
   }
 
-  protected extractClientName(ytcfg: unknown, defaultClient = "web"): string | null {
-    return this.ytcfgGetSafe(ytcfg, [
-      (value) => typeof value.INNERTUBE_CLIENT_NAME === "string" ? value.INNERTUBE_CLIENT_NAME : null,
-      (value) => nestedString(value, ["INNERTUBE_CONTEXT", "client", "clientName"]),
-    ], defaultClient);
+  protected extractClientName(
+    ytcfg: unknown,
+    defaultClient = "web",
+  ): string | null {
+    return this.ytcfgGetSafe(
+      ytcfg,
+      [
+        (value) =>
+          typeof value.INNERTUBE_CLIENT_NAME === "string"
+            ? value.INNERTUBE_CLIENT_NAME
+            : null,
+        (value) =>
+          nestedString(value, ["INNERTUBE_CONTEXT", "client", "clientName"]),
+      ],
+      defaultClient,
+    );
   }
 
-  protected _extract_client_name(ytcfg: unknown, defaultClient = "web"): string | null {
+  protected _extract_client_name(
+    ytcfg: unknown,
+    defaultClient = "web",
+  ): string | null {
     return this.extractClientName(ytcfg, defaultClient);
   }
 
-  protected extractClientVersion(ytcfg: unknown, defaultClient = "web"): string | null {
-    return this.ytcfgGetSafe(ytcfg, [
-      (value) => typeof value.INNERTUBE_CLIENT_VERSION === "string" ? value.INNERTUBE_CLIENT_VERSION : null,
-      (value) => nestedString(value, ["INNERTUBE_CONTEXT", "client", "clientVersion"]),
-    ], defaultClient);
+  protected extractClientVersion(
+    ytcfg: unknown,
+    defaultClient = "web",
+  ): string | null {
+    return this.ytcfgGetSafe(
+      ytcfg,
+      [
+        (value) =>
+          typeof value.INNERTUBE_CLIENT_VERSION === "string"
+            ? value.INNERTUBE_CLIENT_VERSION
+            : null,
+        (value) =>
+          nestedString(value, ["INNERTUBE_CONTEXT", "client", "clientVersion"]),
+      ],
+      defaultClient,
+    );
   }
 
-  protected _extract_client_version(ytcfg: unknown, defaultClient = "web"): string | null {
+  protected _extract_client_version(
+    ytcfg: unknown,
+    defaultClient = "web",
+  ): string | null {
     return this.extractClientVersion(ytcfg, defaultClient);
   }
 
-  protected selectApiHostname(reqApiHostname: string | null | undefined, defaultClient = "web"): string {
-    return this.youtubeConfigurationArg("innertube_host", [])[0] ?? reqApiHostname ?? this.getInnertubeHost(defaultClient);
+  protected selectApiHostname(
+    reqApiHostname: string | null | undefined,
+    defaultClient = "web",
+  ): string {
+    return (
+      this.youtubeConfigurationArg("innertube_host", [])[0] ??
+      reqApiHostname ??
+      this.getInnertubeHost(defaultClient)
+    );
   }
 
-  protected _select_api_hostname(reqApiHostname: string | null | undefined, defaultClient = "web"): string {
+  protected _select_api_hostname(
+    reqApiHostname: string | null | undefined,
+    defaultClient = "web",
+  ): string {
     return this.selectApiHostname(reqApiHostname, defaultClient);
   }
 
-  protected youtubeConfigurationArg(key: string, defaultValue: readonly (string | null)[]): (string | null)[] {
-    const parsedArgs = ExtractorArgsSchema.safeParse(RecordSchema.safeParse(this.downloader?.params).success
-      ? (this.downloader?.params as Record<string, unknown>).extractor_args
-      : undefined);
-    const args = parsedArgs.success ? parsedArgs.data.youtube ?? [] : [];
+  protected youtubeConfigurationArg(
+    key: string,
+    defaultValue: readonly (string | null)[],
+  ): (string | null)[] {
+    const parsedArgs = ExtractorArgsSchema.safeParse(
+      RecordSchema.safeParse(this.downloader?.params).success
+        ? (this.downloader?.params as Record<string, unknown>).extractor_args
+        : undefined,
+    );
+    const args = parsedArgs.success ? (parsedArgs.data.youtube ?? []) : [];
     const results: Array<string | null> = [];
     for (const arg of args) {
       const [argKey, ...valueParts] = String(arg).split("=");
@@ -526,17 +626,18 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return results.length ? results : [...defaultValue];
   }
 
-  protected extractContext(ytcfg: unknown = null, defaultClient = "web"): Record<string, unknown> {
+  protected extractContext(
+    ytcfg: unknown = null,
+    defaultClient = "web",
+  ): Record<string, unknown> {
     const context = structuredClone(
-      firstRecord(
-        [
-          nestedUnknown(ytcfg, ["INNERTUBE_CONTEXT"]),
-          this.getDefaultYtcfg(defaultClient).INNERTUBE_CONTEXT,
-        ],
-      ) ?? {},
+      firstRecord([
+        nestedUnknown(ytcfg, ["INNERTUBE_CONTEXT"]),
+        this.getDefaultYtcfg(defaultClient).INNERTUBE_CONTEXT,
+      ]) ?? {},
     );
     const client = RecordSchema.safeParse(context.client).success
-      ? context.client as Record<string, unknown>
+      ? (context.client as Record<string, unknown>)
       : {};
     client.hl = "en";
     client.timeZone = "UTC";
@@ -545,21 +646,47 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return context;
   }
 
-  protected _extract_context(ytcfg: unknown = null, defaultClient = "web"): Record<string, unknown> {
+  protected _extract_context(
+    ytcfg: unknown = null,
+    defaultClient = "web",
+  ): Record<string, unknown> {
     return this.extractContext(ytcfg, defaultClient);
   }
 
-  static makeSidAuthorization(scheme: string, sid: string, origin: string, additionalParts: Record<string, string> = {}): string {
+  static makeSidAuthorization(
+    scheme: string,
+    sid: string,
+    origin: string,
+    additionalParts: Record<string, string> = {},
+  ): string {
     const timestamp = String(Math.round(Date.now() / 1000));
-    const hashParts = Object.keys(additionalParts).length ? [Object.values(additionalParts).join(":")] : [];
+    const hashParts = Object.keys(additionalParts).length
+      ? [Object.values(additionalParts).join(":")]
+      : [];
     hashParts.push(timestamp, sid, origin);
-    const sidHash = createHash("sha1").update(hashParts.join(" ")).digest("hex");
-    const suffix = Object.keys(additionalParts).length ? Object.entries(additionalParts).map(([key, value]) => `${key}${value}`).join("") : "";
+    const sidHash = createHash("sha1")
+      .update(hashParts.join(" "))
+      .digest("hex");
+    const suffix = Object.keys(additionalParts).length
+      ? Object.entries(additionalParts)
+          .map(([key, value]) => `${key}${value}`)
+          .join("")
+      : "";
     return `${scheme} ${[timestamp, sidHash, suffix].filter(Boolean).join("_")}`;
   }
 
-  static _make_sid_authorization(scheme: string, sid: string, origin: string, additionalParts: Record<string, string> = {}): string {
-    return YoutubeBaseInfoExtractor.makeSidAuthorization(scheme, sid, origin, additionalParts);
+  static _make_sid_authorization(
+    scheme: string,
+    sid: string,
+    origin: string,
+    additionalParts: Record<string, string> = {},
+  ): string {
+    return YoutubeBaseInfoExtractor.makeSidAuthorization(
+      scheme,
+      sid,
+      origin,
+      additionalParts,
+    );
   }
 
   protected getYoutubeCookies() {
@@ -568,7 +695,8 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
 
   protected getSidCookies(): [string | null, string | null, string | null] {
     const cookies = this.getYoutubeCookies();
-    const sapisid = cookies.get("SAPISID") ?? cookies.get("__Secure-3PAPISID") ?? null;
+    const sapisid =
+      cookies.get("SAPISID") ?? cookies.get("__Secure-3PAPISID") ?? null;
     return [
       sapisid,
       cookies.get("__Secure-1PAPISID") ?? null,
@@ -580,24 +708,56 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return this.getSidCookies();
   }
 
-  protected getSidAuthorizationHeader(origin = "https://www.youtube.com", userSessionId: string | null = null): string | null {
-    const additionalParts: Record<string, string> = userSessionId ? { u: userSessionId } : {};
+  protected getSidAuthorizationHeader(
+    origin = "https://www.youtube.com",
+    userSessionId: string | null = null,
+  ): string | null {
+    const additionalParts: Record<string, string> = userSessionId
+      ? { u: userSessionId }
+      : {};
     const [sapisid, onePSapisid, threePSapisid] = this.getSidCookies();
     const authorizations = [
-      sapisid ? YoutubeBaseInfoExtractor.makeSidAuthorization("SAPISIDHASH", sapisid, origin, additionalParts) : null,
-      onePSapisid ? YoutubeBaseInfoExtractor.makeSidAuthorization("SAPISID1PHASH", onePSapisid, origin, additionalParts) : null,
-      threePSapisid ? YoutubeBaseInfoExtractor.makeSidAuthorization("SAPISID3PHASH", threePSapisid, origin, additionalParts) : null,
+      sapisid
+        ? YoutubeBaseInfoExtractor.makeSidAuthorization(
+            "SAPISIDHASH",
+            sapisid,
+            origin,
+            additionalParts,
+          )
+        : null,
+      onePSapisid
+        ? YoutubeBaseInfoExtractor.makeSidAuthorization(
+            "SAPISID1PHASH",
+            onePSapisid,
+            origin,
+            additionalParts,
+          )
+        : null,
+      threePSapisid
+        ? YoutubeBaseInfoExtractor.makeSidAuthorization(
+            "SAPISID3PHASH",
+            threePSapisid,
+            origin,
+            additionalParts,
+          )
+        : null,
     ].filter((value): value is string => Boolean(value));
     return authorizations.length ? authorizations.join(" ") : null;
   }
 
-  protected _get_sid_authorization_header(origin = "https://www.youtube.com", userSessionId: string | null = null): string | null {
+  protected _get_sid_authorization_header(
+    origin = "https://www.youtube.com",
+    userSessionId: string | null = null,
+  ): string | null {
     return this.getSidAuthorizationHeader(origin, userSessionId);
   }
 
   protected hasAuthCookies(): boolean {
     const [sapisid, onePSapisid, threePSapisid] = this.getSidCookies();
-    return Boolean(this.getYoutubeCookies().get("LOGIN_INFO") && (sapisid || onePSapisid || threePSapisid));
+    return Boolean(
+      this.getYoutubeCookies().get("LOGIN_INFO") &&
+        (sapisid || onePSapisid || threePSapisid),
+    );
   }
 
   get isAuthenticated(): boolean {
@@ -631,7 +791,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return second ? [first, second] : [null, first];
   }
 
-  static _parse_data_sync_id(dataSyncId: unknown): [string | null, string | null] {
+  static _parse_data_sync_id(
+    dataSyncId: unknown,
+  ): [string | null, string | null] {
     return YoutubeBaseInfoExtractor.parseDataSyncId(dataSyncId);
   }
 
@@ -640,7 +802,10 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (configured) {
       return configured;
     }
-    return firstStringDeep(args, ["DATASYNC_ID", ["responseContext", "mainAppWebResponseContext", "datasyncId"]]);
+    return firstStringDeep(args, [
+      "DATASYNC_ID",
+      ["responseContext", "mainAppWebResponseContext", "datasyncId"],
+    ]);
   }
 
   protected _extract_data_sync_id(...args: unknown[]): string | null {
@@ -648,7 +813,12 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   protected extractDelegatedSessionId(...args: unknown[]): string | null {
-    return firstStringDeep(args, ["DELEGATED_SESSION_ID"]) ?? YoutubeBaseInfoExtractor.parseDataSyncId(this.extractDataSyncId(...args))[0];
+    return (
+      firstStringDeep(args, ["DELEGATED_SESSION_ID"]) ??
+      YoutubeBaseInfoExtractor.parseDataSyncId(
+        this.extractDataSyncId(...args),
+      )[0]
+    );
   }
 
   protected _extract_delegated_session_id(...args: unknown[]): string | null {
@@ -656,7 +826,12 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
   }
 
   protected extractUserSessionId(...args: unknown[]): string | null {
-    return firstStringDeep(args, ["USER_SESSION_ID"]) ?? YoutubeBaseInfoExtractor.parseDataSyncId(this.extractDataSyncId(...args))[1];
+    return (
+      firstStringDeep(args, ["USER_SESSION_ID"]) ??
+      YoutubeBaseInfoExtractor.parseDataSyncId(
+        this.extractDataSyncId(...args),
+      )[1]
+    );
   }
 
   protected _extract_user_session_id(...args: unknown[]): string | null {
@@ -668,14 +843,21 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (configured) {
       return configured;
     }
-    return firstStringDeep(args, ["VISITOR_DATA", ["INNERTUBE_CONTEXT", "client", "visitorData"], ["responseContext", "visitorData"]]);
+    return firstStringDeep(args, [
+      "VISITOR_DATA",
+      ["INNERTUBE_CONTEXT", "client", "visitorData"],
+      ["responseContext", "visitorData"],
+    ]);
   }
 
   protected _extract_visitor_data(...args: unknown[]): string | null {
     return this.extractVisitorData(...args);
   }
 
-  protected extractYtcfg(videoId: string, webpage: string | null | undefined): Record<string, unknown> {
+  protected extractYtcfg(
+    videoId: string,
+    webpage: string | null | undefined,
+  ): Record<string, unknown> {
     if (!webpage) {
       return {};
     }
@@ -691,14 +873,29 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     }
   }
 
-  protected extract_ytcfg(videoId: string, webpage: string | null | undefined): Record<string, unknown> {
+  protected extract_ytcfg(
+    videoId: string,
+    webpage: string | null | undefined,
+  ): Record<string, unknown> {
     return this.extractYtcfg(videoId, webpage);
   }
 
-  protected generateCookieAuthHeaders(options: { ytcfg?: unknown; delegatedSessionId?: string | null; userSessionId?: string | null; sessionIndex?: number | null; origin?: string } = {}): Record<string, string> {
+  protected generateCookieAuthHeaders(
+    options: {
+      ytcfg?: unknown;
+      delegatedSessionId?: string | null;
+      userSessionId?: string | null;
+      sessionIndex?: number | null;
+      origin?: string;
+    } = {},
+  ): Record<string, string> {
     const origin = options.origin ?? "https://www.youtube.com";
-    const delegatedSessionId = options.delegatedSessionId ?? this.extractDelegatedSessionId(options.ytcfg);
-    const sessionIndex = options.sessionIndex ?? YoutubeBaseInfoExtractor.extractSessionIndex(options.ytcfg);
+    const delegatedSessionId =
+      options.delegatedSessionId ??
+      this.extractDelegatedSessionId(options.ytcfg);
+    const sessionIndex =
+      options.sessionIndex ??
+      YoutubeBaseInfoExtractor.extractSessionIndex(options.ytcfg);
     const headers: Record<string, string> = {};
     if (delegatedSessionId) {
       headers["X-Goog-PageId"] = delegatedSessionId;
@@ -706,7 +903,10 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (delegatedSessionId || sessionIndex !== null) {
       headers["X-Goog-AuthUser"] = String(sessionIndex ?? 0);
     }
-    const auth = this.getSidAuthorizationHeader(origin, options.userSessionId ?? this.extractUserSessionId(options.ytcfg));
+    const auth = this.getSidAuthorizationHeader(
+      origin,
+      options.userSessionId ?? this.extractUserSessionId(options.ytcfg),
+    );
     if (auth) {
       headers.Authorization = auth;
       headers["X-Origin"] = origin;
@@ -717,7 +917,15 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return headers;
   }
 
-  protected _generate_cookie_auth_headers(options: { ytcfg?: unknown; delegated_session_id?: string | null; user_session_id?: string | null; session_index?: number | null; origin?: string } = {}): Record<string, string> {
+  protected _generate_cookie_auth_headers(
+    options: {
+      ytcfg?: unknown;
+      delegated_session_id?: string | null;
+      user_session_id?: string | null;
+      session_index?: number | null;
+      origin?: string;
+    } = {},
+  ): Record<string, string> {
     return this.generateCookieAuthHeaders({
       ytcfg: options.ytcfg,
       delegatedSessionId: options.delegated_session_id,
@@ -727,15 +935,40 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     });
   }
 
-  protected generateApiHeaders(options: { ytcfg?: unknown; delegatedSessionId?: string | null; userSessionId?: string | null; sessionIndex?: number | null; visitorData?: string | null; apiHostname?: string | null; defaultClient?: string } = {}): Record<string, string> {
+  protected generateApiHeaders(
+    options: {
+      ytcfg?: unknown;
+      delegatedSessionId?: string | null;
+      userSessionId?: string | null;
+      sessionIndex?: number | null;
+      visitorData?: string | null;
+      apiHostname?: string | null;
+      defaultClient?: string;
+    } = {},
+  ): Record<string, string> {
     const defaultClient = options.defaultClient ?? "web";
     const origin = `https://${this.selectApiHostname(options.apiHostname, defaultClient)}`;
     return filterNullish({
-      "X-YouTube-Client-Name": String(this.ytcfgGetSafe(options.ytcfg, (value) => value.INNERTUBE_CONTEXT_CLIENT_NAME as number | null, defaultClient)),
-      "X-YouTube-Client-Version": this.extractClientVersion(options.ytcfg, defaultClient),
+      "X-YouTube-Client-Name": String(
+        this.ytcfgGetSafe(
+          options.ytcfg,
+          (value) => value.INNERTUBE_CONTEXT_CLIENT_NAME as number | null,
+          defaultClient,
+        ),
+      ),
+      "X-YouTube-Client-Version": this.extractClientVersion(
+        options.ytcfg,
+        defaultClient,
+      ),
       Origin: origin,
-      "X-Goog-Visitor-Id": options.visitorData ?? this.extractVisitorData(options.ytcfg),
-      "User-Agent": this.ytcfgGetSafe(options.ytcfg, (value) => nestedString(value, ["INNERTUBE_CONTEXT", "client", "userAgent"]), defaultClient),
+      "X-Goog-Visitor-Id":
+        options.visitorData ?? this.extractVisitorData(options.ytcfg),
+      "User-Agent": this.ytcfgGetSafe(
+        options.ytcfg,
+        (value) =>
+          nestedString(value, ["INNERTUBE_CONTEXT", "client", "userAgent"]),
+        defaultClient,
+      ),
       ...this.generateCookieAuthHeaders({
         ytcfg: options.ytcfg,
         delegatedSessionId: options.delegatedSessionId,
@@ -746,7 +979,17 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     });
   }
 
-  protected generate_api_headers(options: { ytcfg?: unknown; delegated_session_id?: string | null; user_session_id?: string | null; session_index?: number | null; visitor_data?: string | null; api_hostname?: string | null; default_client?: string } = {}): Record<string, string> {
+  protected generate_api_headers(
+    options: {
+      ytcfg?: unknown;
+      delegated_session_id?: string | null;
+      user_session_id?: string | null;
+      session_index?: number | null;
+      visitor_data?: string | null;
+      api_hostname?: string | null;
+      default_client?: string;
+    } = {},
+  ): Record<string, string> {
     return this.generateApiHeaders({
       ytcfg: options.ytcfg,
       delegatedSessionId: options.delegated_session_id,
@@ -758,7 +1001,21 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     });
   }
 
-  protected async callApi<T = unknown>(ep: string, query: Record<string, unknown>, videoId: string, options: { fatal?: boolean; headers?: Record<string, string>; note?: string; errnote?: string; context?: Record<string, unknown>; apiKey?: string | null; apiHostname?: string | null; defaultClient?: string } = {}): Promise<T | false | null> {
+  protected async callApi<T = unknown>(
+    ep: string,
+    query: Record<string, unknown>,
+    videoId: string,
+    options: {
+      fatal?: boolean;
+      headers?: Record<string, string>;
+      note?: string;
+      errnote?: string;
+      context?: Record<string, unknown>;
+      apiKey?: string | null;
+      apiHostname?: string | null;
+      defaultClient?: string;
+    } = {},
+  ): Promise<T | false | null> {
     const defaultClient = options.defaultClient ?? "web";
     const data = {
       context: options.context ?? this.extractContext(null, defaultClient),
@@ -769,7 +1026,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
       "content-type": "application/json",
       ...options.headers,
     };
-    const apiKey = this.youtubeConfigurationArg("innertube_key", [options.apiKey ?? null])[0];
+    const apiKey = this.youtubeConfigurationArg("innertube_key", [
+      options.apiKey ?? null,
+    ])[0];
     return await this.downloadJson<T>(
       `https://${this.selectApiHostname(options.apiHostname, defaultClient)}/youtubei/v1/${ep}`,
       videoId,
@@ -787,21 +1046,53 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     );
   }
 
-  protected _call_api<T = unknown>(ep: string, query: Record<string, unknown>, videoId: string, fatal = true, headers?: Record<string, string>, note?: string, errnote?: string, context?: Record<string, unknown>, apiKey?: string | null, apiHostname?: string | null, defaultClient = "web"): Promise<T | false | null> {
-    return this.callApi<T>(ep, query, videoId, { fatal, headers, note, errnote, context, apiKey, apiHostname, defaultClient });
+  protected _call_api<T = unknown>(
+    ep: string,
+    query: Record<string, unknown>,
+    videoId: string,
+    fatal = true,
+    headers?: Record<string, string>,
+    note?: string,
+    errnote?: string,
+    context?: Record<string, unknown>,
+    apiKey?: string | null,
+    apiHostname?: string | null,
+    defaultClient = "web",
+  ): Promise<T | false | null> {
+    return this.callApi<T>(ep, query, videoId, {
+      fatal,
+      headers,
+      note,
+      errnote,
+      context,
+      apiKey,
+      apiHostname,
+      defaultClient,
+    });
   }
 
-  static buildApiContinuationQuery(continuation: string, ctp: string | null = null): Record<string, unknown> {
+  static buildApiContinuationQuery(
+    continuation: string,
+    ctp: string | null = null,
+  ): Record<string, unknown> {
     return ctp
       ? { continuation, clickTracking: { clickTrackingParams: ctp } }
       : { continuation };
   }
 
-  static _build_api_continuation_query(continuation: string, ctp: string | null = null): Record<string, unknown> {
-    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
+  static _build_api_continuation_query(
+    continuation: string,
+    ctp: string | null = null,
+  ): Record<string, unknown> {
+    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(
+      continuation,
+      ctp,
+    );
   }
 
-  static extractNextContinuationData(renderer: unknown): Record<string, unknown> | null {
+  static extractNextContinuationData(
+    renderer: unknown,
+  ): Record<string, unknown> | null {
     const nextContinuation = firstRecord([
       nestedUnknown(renderer, ["continuations", 0, "nextContinuationData"]),
       nestedUnknown(renderer, ["continuation", "reloadContinuationData"]),
@@ -809,41 +1100,79 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (!nextContinuation) {
       return null;
     }
-    const continuation = typeof nextContinuation.continuation === "string" ? nextContinuation.continuation : null;
+    const continuation =
+      typeof nextContinuation.continuation === "string"
+        ? nextContinuation.continuation
+        : null;
     if (!continuation) {
       return null;
     }
-    const ctp = typeof nextContinuation.clickTrackingParams === "string" ? nextContinuation.clickTrackingParams : null;
-    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
+    const ctp =
+      typeof nextContinuation.clickTrackingParams === "string"
+        ? nextContinuation.clickTrackingParams
+        : null;
+    return YoutubeBaseInfoExtractor.buildApiContinuationQuery(
+      continuation,
+      ctp,
+    );
   }
 
-  static _extract_next_continuation_data(renderer: unknown): Record<string, unknown> | null {
+  static _extract_next_continuation_data(
+    renderer: unknown,
+  ): Record<string, unknown> | null {
     return YoutubeBaseInfoExtractor.extractNextContinuationData(renderer);
   }
 
-  static extractContinuationEpData(continuationEp: unknown): Record<string, unknown> | null {
-    const commands = arrayOfRecords(nestedUnknown(continuationEp, ["commandExecutorCommand", "commands"]));
-    const continuationCommands = [...commands, ...arrayOfRecords([continuationEp])];
+  static extractContinuationEpData(
+    continuationEp: unknown,
+  ): Record<string, unknown> | null {
+    const commands = arrayOfRecords(
+      nestedUnknown(continuationEp, ["commandExecutorCommand", "commands"]),
+    );
+    const continuationCommands = [
+      ...commands,
+      ...arrayOfRecords([continuationEp]),
+    ];
     for (const command of continuationCommands) {
-      const continuation = nestedString(command, ["continuationCommand", "token"]);
+      const continuation = nestedString(command, [
+        "continuationCommand",
+        "token",
+      ]);
       if (!continuation) {
         continue;
       }
-      const ctp = typeof command.clickTrackingParams === "string" ? command.clickTrackingParams : null;
-      return YoutubeBaseInfoExtractor.buildApiContinuationQuery(continuation, ctp);
+      const ctp =
+        typeof command.clickTrackingParams === "string"
+          ? command.clickTrackingParams
+          : null;
+      return YoutubeBaseInfoExtractor.buildApiContinuationQuery(
+        continuation,
+        ctp,
+      );
     }
     return null;
   }
 
-  static _extract_continuation_ep_data(continuationEp: unknown): Record<string, unknown> | null {
+  static _extract_continuation_ep_data(
+    continuationEp: unknown,
+  ): Record<string, unknown> | null {
     return YoutubeBaseInfoExtractor.extractContinuationEpData(continuationEp);
   }
 
-  static extractContinuation(renderer: unknown): Record<string, unknown> | null {
-    return YoutubeBaseInfoExtractor.extractNextContinuationData(renderer) ?? YoutubeBaseInfoExtractor.extractContinuationEpData(findContinuationEndpoint(renderer));
+  static extractContinuation(
+    renderer: unknown,
+  ): Record<string, unknown> | null {
+    return (
+      YoutubeBaseInfoExtractor.extractNextContinuationData(renderer) ??
+      YoutubeBaseInfoExtractor.extractContinuationEpData(
+        findContinuationEndpoint(renderer),
+      )
+    );
   }
 
-  static _extract_continuation(renderer: unknown): Record<string, unknown> | null {
+  static _extract_continuation(
+    renderer: unknown,
+  ): Record<string, unknown> | null {
     return YoutubeBaseInfoExtractor.extractContinuation(renderer);
   }
 
@@ -869,7 +1198,10 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return YoutubeBaseInfoExtractor.extractAlerts(data);
   }
 
-  protected reportAlerts(alerts: Iterable<[string, string]>, options: { expected?: boolean; fatal?: boolean; onlyOnce?: boolean } = {}): void {
+  protected reportAlerts(
+    alerts: Iterable<[string, string]>,
+    options: { expected?: boolean; fatal?: boolean; onlyOnce?: boolean } = {},
+  ): void {
     const fatal = options.fatal ?? true;
     const errors: Array<[string, string]> = [];
     const warnings: Array<[string, string]> = [];
@@ -880,29 +1212,54 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
         warnings.push([alertType, alertMessage]);
       }
     }
-    for (const [alertType, alertMessage] of [...warnings, ...errors.slice(0, -1)]) {
-      this.reportWarning(`YouTube said: ${alertType} - ${alertMessage}`, null, options.onlyOnce ?? false);
+    for (const [alertType, alertMessage] of [
+      ...warnings,
+      ...errors.slice(0, -1),
+    ]) {
+      this.reportWarning(
+        `YouTube said: ${alertType} - ${alertMessage}`,
+        null,
+        options.onlyOnce ?? false,
+      );
     }
     const lastError = errors.at(-1);
     if (lastError) {
-      throw new ExtractorError(`YouTube said: ${lastError[1]}`, { expected: options.expected ?? true });
+      throw new ExtractorError(`YouTube said: ${lastError[1]}`, {
+        expected: options.expected ?? true,
+      });
     }
   }
 
-  protected _report_alerts(alerts: Iterable<[string, string]>, expected = true, fatal = true, onlyOnce = false): void {
+  protected _report_alerts(
+    alerts: Iterable<[string, string]>,
+    expected = true,
+    fatal = true,
+    onlyOnce = false,
+  ): void {
     this.reportAlerts(alerts, { expected, fatal, onlyOnce });
   }
 
-  protected extractAndReportAlerts(data: unknown, options: { expected?: boolean; fatal?: boolean; onlyOnce?: boolean } = {}): void {
+  protected extractAndReportAlerts(
+    data: unknown,
+    options: { expected?: boolean; fatal?: boolean; onlyOnce?: boolean } = {},
+  ): void {
     this.reportAlerts(YoutubeBaseInfoExtractor.extractAlerts(data), options);
   }
 
-  protected _extract_and_report_alerts(data: unknown, expected = true, fatal = true, onlyOnce = false): void {
+  protected _extract_and_report_alerts(
+    data: unknown,
+    expected = true,
+    fatal = true,
+    onlyOnce = false,
+  ): void {
     this.extractAndReportAlerts(data, { expected, fatal, onlyOnce });
   }
 
   static extractRelativeTime(relativeTimeText: string): Date | null {
-    const match = /(?<start>today|yesterday|now)|(?<time>\d+)\s*(?<unit>sec(?:ond)?|s|min(?:ute)?|h(?:our|r)?|d(?:ay)?|w(?:eek|k)?|mo(?:nth)?|y(?:ear|r)?)s?\s*ago/i.exec(relativeTimeText);
+    const match =
+      /(?<start>today|yesterday|now)|(?<time>\d+)\s*(?<unit>sec(?:ond)?|s|min(?:ute)?|h(?:our|r)?|d(?:ay)?|w(?:eek|k)?|mo(?:nth)?|y(?:ear|r)?)s?\s*ago/i.exec(
+        relativeTimeText,
+      );
     if (!match?.groups) {
       return null;
     }
@@ -916,7 +1273,15 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     }
     const date = new Date();
     const lowered = unit.toLowerCase();
-    const days = lowered.startsWith("w") ? amount * 7 : lowered.startsWith("mo") ? amount * 30 : lowered.startsWith("y") ? amount * 365 : lowered.startsWith("d") ? amount : 0;
+    const days = lowered.startsWith("w")
+      ? amount * 7
+      : lowered.startsWith("mo")
+        ? amount * 30
+        : lowered.startsWith("y")
+          ? amount * 365
+          : lowered.startsWith("d")
+            ? amount
+            : 0;
     if (days) {
       date.setUTCDate(date.getUTCDate() - days);
     } else if (lowered.startsWith("h")) {
@@ -933,19 +1298,31 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return YoutubeBaseInfoExtractor.extractRelativeTime(relativeTimeText);
   }
 
-  protected parseTimeText(text: string | null | undefined, reportFailure = true): number | null {
+  protected parseTimeText(
+    text: string | null | undefined,
+    reportFailure = true,
+  ): number | null {
     if (!text) {
       return null;
     }
     const relative = YoutubeBaseInfoExtractor.extractRelativeTime(text);
-    const timestamp = relative ? Math.floor(relative.getTime() / 1000) : unifiedTimestamp(text);
+    const timestamp = relative
+      ? Math.floor(relative.getTime() / 1000)
+      : unifiedTimestamp(text);
     if (reportFailure && timestamp === null) {
-      this.reportWarning(`Cannot parse localized time text "${text}"`, null, true);
+      this.reportWarning(
+        `Cannot parse localized time text "${text}"`,
+        null,
+        true,
+      );
     }
     return timestamp;
   }
 
-  protected _parse_time_text(text: string | null | undefined, reportFailure = true): number | null {
+  protected _parse_time_text(
+    text: string | null | undefined,
+    reportFailure = true,
+  ): number | null {
     return this.parseTimeText(text, reportFailure);
   }
 
@@ -953,7 +1330,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (typeof ucid !== "string") {
       return null;
     }
-    const match = new RegExp(`^(${YoutubeBaseInfoExtractor._YT_CHANNEL_UCID_RE})$`).exec(ucid);
+    const match = new RegExp(
+      `^(${YoutubeBaseInfoExtractor._YT_CHANNEL_UCID_RE})$`,
+    ).exec(ucid);
     return match?.[1] ?? null;
   }
 
@@ -961,7 +1340,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (typeof handle !== "string") {
       return null;
     }
-    const match = new RegExp(`^(${YoutubeBaseInfoExtractor._YT_HANDLE_RE})$`).exec(decodeURIComponent(handle));
+    const match = new RegExp(
+      `^(${YoutubeBaseInfoExtractor._YT_HANDLE_RE})$`,
+    ).exec(decodeURIComponent(handle));
     return match?.[1] ?? null;
   }
 
@@ -969,7 +1350,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (typeof url !== "string") {
       return null;
     }
-    const match = new RegExp(String.raw`^(?:https?://(?:www\.)?youtube\.com)?/(${YoutubeBaseInfoExtractor._YT_HANDLE_RE})`).exec(decodeURIComponent(url));
+    const match = new RegExp(
+      String.raw`^(?:https?://(?:www\.)?youtube\.com)?/(${YoutubeBaseInfoExtractor._YT_HANDLE_RE})`,
+    ).exec(decodeURIComponent(url));
     return match?.[1] ?? null;
   }
 
@@ -977,7 +1360,9 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     if (typeof url !== "string") {
       return null;
     }
-    const match = new RegExp(String.raw`^(?:https?://(?:www\.)?youtube\.com)?/channel/(${YoutubeBaseInfoExtractor._YT_CHANNEL_UCID_RE})`).exec(decodeURIComponent(url));
+    const match = new RegExp(
+      String.raw`^(?:https?://(?:www\.)?youtube\.com)?/channel/(${YoutubeBaseInfoExtractor._YT_CHANNEL_UCID_RE})`,
+    ).exec(decodeURIComponent(url));
     return match?.[1] ?? null;
   }
 
@@ -1018,25 +1403,43 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     const badgeRenderers = collectBadgeRenderers(badgeList);
     const badges: YoutubeBadge[] = [];
     for (const badge of badgeRenderers) {
-      const iconType = traverseObj<string>(badge, ["icon", "iconType"], { expected_type: isString, get_all: false });
-      const style = traverseObj<string>(badge, "style", { expected_type: isString, get_all: false });
+      const iconType = traverseObj<string>(badge, ["icon", "iconType"], {
+        expected_type: isString,
+        get_all: false,
+      });
+      const style = traverseObj<string>(badge, "style", {
+        expected_type: isString,
+        get_all: false,
+      });
       const badgeType =
-        (!Array.isArray(iconType) && iconType ? iconTypeMap[iconType] : undefined) ??
+        (!Array.isArray(iconType) && iconType
+          ? iconTypeMap[iconType]
+          : undefined) ??
         (!Array.isArray(style) && style ? badgeStyleMap[style] : undefined);
       if (badgeType) {
         badges.push({ type: badgeType });
         continue;
       }
 
-      const label = firstString(
-        traverseObj<string>(badge, "label", ["accessibilityData", "label"], "tooltip", "iconTooltip", {
-          expected_type: isString,
-          get_all: false,
-          default: "",
-        }),
-      ) ?? "";
+      const label =
+        firstString(
+          traverseObj<string>(
+            badge,
+            "label",
+            ["accessibilityData", "label"],
+            "tooltip",
+            "iconTooltip",
+            {
+              expected_type: isString,
+              get_all: false,
+              default: "",
+            },
+          ),
+        ) ?? "";
       const lowerLabel = label.toLowerCase();
-      const labelBadgeType = labelMap.find(([match]) => lowerLabel.includes(match))?.[1];
+      const labelBadgeType = labelMap.find(([match]) =>
+        lowerLabel.includes(match),
+      )?.[1];
       if (labelBadgeType) {
         badges.push({ type: labelBadgeType });
       }
@@ -1044,7 +1447,10 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return badges;
   }
 
-  protected hasBadge(badges: readonly YoutubeBadge[] | null | undefined, badgeType: BadgeType): boolean {
+  protected hasBadge(
+    badges: readonly YoutubeBadge[] | null | undefined,
+    badgeType: BadgeType,
+  ): boolean {
     return Boolean(badges?.some((badge) => badge.type === badgeType));
   }
 
@@ -1061,18 +1467,34 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return null;
   }
 
-  protected getCount(data: unknown, ...pathList: TraversePath[]): number | null {
+  protected getCount(
+    data: unknown,
+    ...pathList: TraversePath[]
+  ): number | null {
     const countText = this.getText(data, ...pathList) ?? "";
-    return parseYoutubeCount(countText) ?? strToInt(countText.replace(/\s/g, ""));
+    return (
+      parseYoutubeCount(countText) ?? strToInt(countText.replace(/\s/g, ""))
+    );
   }
 
-  protected extractThumbnails(data: unknown, ...pathList: TraversePath[]): YoutubeThumbnail[] {
+  protected extractThumbnails(
+    data: unknown,
+    ...pathList: TraversePath[]
+  ): YoutubeThumbnail[] {
     const paths = pathList.length ? pathList : [[]];
     const thumbnails: YoutubeThumbnail[] = [];
     for (const path of paths) {
       const pathArray = Array.isArray(path) ? path : [path];
-      const values = traverseObj<unknown>(data, [...pathArray, "thumbnails", Ellipsis]);
-      for (const value of Array.isArray(values) ? values : values ? [values] : []) {
+      const values = traverseObj<unknown>(data, [
+        ...pathArray,
+        "thumbnails",
+        Ellipsis,
+      ]);
+      for (const value of Array.isArray(values)
+        ? values
+        : values
+          ? [values]
+          : []) {
         const thumbnail = ThumbnailSchema.safeParse(value);
         if (!thumbnail.success) {
           continue;
@@ -1086,8 +1508,12 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
         }
         thumbnails.push({
           url: thumbnailUrl,
-          ...(intOrNone(thumbnail.data.height) == null ? {} : { height: intOrNone(thumbnail.data.height)! }),
-          ...(intOrNone(thumbnail.data.width) == null ? {} : { width: intOrNone(thumbnail.data.width)! }),
+          ...(intOrNone(thumbnail.data.height) == null
+            ? {}
+            : { height: intOrNone(thumbnail.data.height)! }),
+          ...(intOrNone(thumbnail.data.width) == null
+            ? {}
+            : { width: intOrNone(thumbnail.data.width)! }),
         });
       }
     }
@@ -1098,19 +1524,31 @@ export class YoutubeBaseInfoExtractor extends InfoExtractor {
     return this.extractBadges(badgeList);
   }
 
-  protected _has_badge(badges: readonly YoutubeBadge[] | null | undefined, badgeType: BadgeType): boolean {
+  protected _has_badge(
+    badges: readonly YoutubeBadge[] | null | undefined,
+    badgeType: BadgeType,
+  ): boolean {
     return this.hasBadge(badges, badgeType);
   }
 
-  protected _get_text(data: unknown, ...pathList: TraversePath[]): string | null {
+  protected _get_text(
+    data: unknown,
+    ...pathList: TraversePath[]
+  ): string | null {
     return this.getText(data, ...pathList);
   }
 
-  protected _get_count(data: unknown, ...pathList: TraversePath[]): number | null {
+  protected _get_count(
+    data: unknown,
+    ...pathList: TraversePath[]
+  ): number | null {
     return this.getCount(data, ...pathList);
   }
 
-  protected _extract_thumbnails(data: unknown, ...pathList: TraversePath[]): YoutubeThumbnail[] {
+  protected _extract_thumbnails(
+    data: unknown,
+    ...pathList: TraversePath[]
+  ): YoutubeThumbnail[] {
     return this.extractThumbnails(data, ...pathList);
   }
 }
@@ -1151,7 +1589,9 @@ function valuesForTextPath(data: unknown, path: TraversePath): unknown[] {
   }
   const value = traverseObj<unknown>(data, path, { default: [] });
   const pathArray = Array.isArray(path) ? path : [path];
-  const hasBranch = pathArray.some((key) => key === Ellipsis || Array.isArray(key));
+  const hasBranch = pathArray.some(
+    (key) => key === Ellipsis || Array.isArray(key),
+  );
   if (hasBranch) {
     return Array.isArray(value) ? value : value == null ? [] : [value];
   }
@@ -1166,13 +1606,23 @@ function extractTextItem(item: unknown): string | null {
       return simpleText;
     }
     const runs = Array.isArray(record.data.runs) ? record.data.runs : [];
-    const text = runs.map((run) => RecordSchema.safeParse(run).success ? RecordSchema.parse(run).text : null)
+    const text = runs
+      .map((run) =>
+        RecordSchema.safeParse(run).success
+          ? RecordSchema.parse(run).text
+          : null,
+      )
       .filter(isString)
       .join("");
     return text || null;
   }
   if (Array.isArray(item)) {
-    const text = item.map((run) => RecordSchema.safeParse(run).success ? RecordSchema.parse(run).text : null)
+    const text = item
+      .map((run) =>
+        RecordSchema.safeParse(run).success
+          ? RecordSchema.parse(run).text
+          : null,
+      )
       .filter(isString)
       .join("");
     return text || null;
@@ -1189,15 +1639,20 @@ function parseYoutubeCount(value: string): number | null {
   if (!Number.isFinite(numeric)) {
     return null;
   }
-  const multiplier = { k: 1_000, m: 1_000_000, b: 1_000_000_000 }[match[2]?.toLowerCase() ?? ""] ?? 1;
+  const multiplier =
+    { k: 1_000, m: 1_000_000, b: 1_000_000_000 }[
+      match[2]?.toLowerCase() ?? ""
+    ] ?? 1;
   return Math.trunc(numeric * multiplier);
 }
 
 function firstString(value: string | string[] | null): string | null {
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-function firstRecord(values: readonly unknown[]): Record<string, unknown> | null {
+function firstRecord(
+  values: readonly unknown[],
+): Record<string, unknown> | null {
   for (const value of values) {
     const parsed = RecordSchema.safeParse(value);
     if (parsed.success) {
@@ -1215,7 +1670,10 @@ function arrayOfRecords(value: unknown): Record<string, unknown>[] {
   });
 }
 
-function nestedUnknown(value: unknown, path: readonly (string | number)[]): unknown {
+function nestedUnknown(
+  value: unknown,
+  path: readonly (string | number)[],
+): unknown {
   let current: unknown = value;
   for (const key of path) {
     if (typeof key === "number") {
@@ -1234,12 +1692,18 @@ function nestedUnknown(value: unknown, path: readonly (string | number)[]): unkn
   return current;
 }
 
-function nestedString(value: unknown, path: readonly (string | number)[]): string | null {
+function nestedString(
+  value: unknown,
+  path: readonly (string | number)[],
+): string | null {
   const result = nestedUnknown(value, path);
   return typeof result === "string" ? result : null;
 }
 
-function tryGetter<T>(record: Record<string, unknown>, getter: (value: Record<string, unknown>) => T | null | undefined): T | null {
+function tryGetter<T>(
+  record: Record<string, unknown>,
+  getter: (value: Record<string, unknown>) => T | null | undefined,
+): T | null {
   try {
     return getter(record) ?? null;
   } catch {
@@ -1247,11 +1711,17 @@ function tryGetter<T>(record: Record<string, unknown>, getter: (value: Record<st
   }
 }
 
-function firstStringDeep(value: unknown, paths: readonly (string | readonly (string | number)[])[]): string | null {
+function firstStringDeep(
+  value: unknown,
+  paths: readonly (string | readonly (string | number)[])[],
+): string | null {
   const values = Array.isArray(value) ? value : [value];
   for (const item of values) {
     for (const path of paths) {
-      const result = nestedString(item, typeof path === "string" ? [path] : path);
+      const result = nestedString(
+        item,
+        typeof path === "string" ? [path] : path,
+      );
       if (result) {
         return result;
       }
@@ -1260,7 +1730,9 @@ function firstStringDeep(value: unknown, paths: readonly (string | readonly (str
   return null;
 }
 
-function filterNullish(record: Record<string, string | number | null | undefined>): Record<string, string> {
+function filterNullish(
+  record: Record<string, string | number | null | undefined>,
+): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(record)) {
     if (value !== null && value !== undefined) {
@@ -1284,8 +1756,17 @@ function findContinuationEndpoint(value: unknown): unknown {
       }
       return null;
     }
-    const direct = nestedUnknown(record.data, ["continuationItemRenderer", "continuationEndpoint"])
-      ?? nestedUnknown(record.data, ["continuationItemRenderer", "button", "buttonRenderer", "command"]);
+    const direct =
+      nestedUnknown(record.data, [
+        "continuationItemRenderer",
+        "continuationEndpoint",
+      ]) ??
+      nestedUnknown(record.data, [
+        "continuationItemRenderer",
+        "button",
+        "buttonRenderer",
+        "command",
+      ]);
     if (direct) {
       return direct;
     }

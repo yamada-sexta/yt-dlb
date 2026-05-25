@@ -11,7 +11,7 @@ class TestInfoExtractor extends InfoExtractor {
   }
 
   protected override async urlopen(request: Request): Promise<Response> {
-    return this.responseOverride ?? await fetch(request);
+    return this.responseOverride ?? (await fetch(request));
   }
 
   downloadJsonPublic<T = unknown>(
@@ -22,15 +22,21 @@ class TestInfoExtractor extends InfoExtractor {
     return this.downloadJson<T>(urlOrRequest, videoId, options);
   }
 
-  downloadWebpageHandlePublic(...args: Parameters<InfoExtractor["downloadWebpageHandle"]>): ReturnType<InfoExtractor["downloadWebpageHandle"]> {
+  downloadWebpageHandlePublic(
+    ...args: Parameters<InfoExtractor["downloadWebpageHandle"]>
+  ): ReturnType<InfoExtractor["downloadWebpageHandle"]> {
     return this.downloadWebpageHandle(...args);
   }
 
-  searchRegexPublic(...args: Parameters<InfoExtractor["searchRegex"]>): ReturnType<InfoExtractor["searchRegex"]> {
+  searchRegexPublic(
+    ...args: Parameters<InfoExtractor["searchRegex"]>
+  ): ReturnType<InfoExtractor["searchRegex"]> {
     return this.searchRegex(...args);
   }
 
-  htmlSearchRegexPublic(...args: Parameters<InfoExtractor["htmlSearchRegex"]>): ReturnType<InfoExtractor["htmlSearchRegex"]> {
+  htmlSearchRegexPublic(
+    ...args: Parameters<InfoExtractor["htmlSearchRegex"]>
+  ): ReturnType<InfoExtractor["htmlSearchRegex"]> {
     return this.htmlSearchRegex(...args);
   }
 
@@ -39,7 +45,13 @@ class TestInfoExtractor extends InfoExtractor {
     text: string,
     name: string,
     videoId: string,
-    options: { endPattern?: string; containsPattern?: string; fatal?: boolean; defaultValue?: T | typeof import("../yt_dlp/utils/index.ts").NO_DEFAULT; transform_source?: (source: string) => string | null } = {},
+    options: {
+      endPattern?: string;
+      containsPattern?: string;
+      fatal?: boolean;
+      defaultValue?: T | typeof import("../yt_dlp/utils/index.ts").NO_DEFAULT;
+      transform_source?: (source: string) => string | null;
+    } = {},
   ): T | null {
     return this.searchJson<T>(startPattern, text, name, videoId, options);
   }
@@ -47,32 +59,47 @@ class TestInfoExtractor extends InfoExtractor {
   parseJsonPublic<T = unknown>(
     jsonString: string,
     videoId: string,
-    options: { fatal?: boolean; transform_source?: (source: string) => string | null } = {},
+    options: {
+      fatal?: boolean;
+      transform_source?: (source: string) => string | null;
+    } = {},
   ): T | null {
     return this.parseJson<T>(jsonString, videoId, options);
   }
 
-  htmlSearchMetaPublic(...args: Parameters<InfoExtractor["htmlSearchMeta"]>): ReturnType<InfoExtractor["htmlSearchMeta"]> {
+  htmlSearchMetaPublic(
+    ...args: Parameters<InfoExtractor["htmlSearchMeta"]>
+  ): ReturnType<InfoExtractor["htmlSearchMeta"]> {
     return this.htmlSearchMeta(...args);
   }
 
-  ogSearchPropertyPublic(...args: Parameters<InfoExtractor["ogSearchProperty"]>): ReturnType<InfoExtractor["ogSearchProperty"]> {
+  ogSearchPropertyPublic(
+    ...args: Parameters<InfoExtractor["ogSearchProperty"]>
+  ): ReturnType<InfoExtractor["ogSearchProperty"]> {
     return this.ogSearchProperty(...args);
   }
 
-  ogSearchTitlePublic(...args: Parameters<InfoExtractor["ogSearchTitle"]>): ReturnType<InfoExtractor["ogSearchTitle"]> {
+  ogSearchTitlePublic(
+    ...args: Parameters<InfoExtractor["ogSearchTitle"]>
+  ): ReturnType<InfoExtractor["ogSearchTitle"]> {
     return this.ogSearchTitle(...args);
   }
 
-  ogSearchDescriptionPublic(...args: Parameters<InfoExtractor["ogSearchDescription"]>): ReturnType<InfoExtractor["ogSearchDescription"]> {
+  ogSearchDescriptionPublic(
+    ...args: Parameters<InfoExtractor["ogSearchDescription"]>
+  ): ReturnType<InfoExtractor["ogSearchDescription"]> {
     return this.ogSearchDescription(...args);
   }
 
-  ogSearchThumbnailPublic(...args: Parameters<InfoExtractor["ogSearchThumbnail"]>): ReturnType<InfoExtractor["ogSearchThumbnail"]> {
+  ogSearchThumbnailPublic(
+    ...args: Parameters<InfoExtractor["ogSearchThumbnail"]>
+  ): ReturnType<InfoExtractor["ogSearchThumbnail"]> {
     return this.ogSearchThumbnail(...args);
   }
 
-  searchJsonLdPublic(...args: Parameters<InfoExtractor["searchJsonLd"]>): ReturnType<InfoExtractor["searchJsonLd"]> {
+  searchJsonLdPublic(
+    ...args: Parameters<InfoExtractor["searchJsonLd"]>
+  ): ReturnType<InfoExtractor["searchJsonLd"]> {
     return this.searchJsonLd(...args);
   }
 
@@ -84,80 +111,118 @@ class TestInfoExtractor extends InfoExtractor {
     return this.searchNextjsData<T>(webpage, videoId, options);
   }
 
-  searchNextjsV13DataPublic(...args: Parameters<InfoExtractor["searchNextjsV13Data"]>): ReturnType<InfoExtractor["searchNextjsV13Data"]> {
+  searchNextjsV13DataPublic(
+    ...args: Parameters<InfoExtractor["searchNextjsV13Data"]>
+  ): ReturnType<InfoExtractor["searchNextjsV13Data"]> {
     return this.searchNextjsV13Data(...args);
   }
 
   searchNuxtJsonPublic<T = unknown>(
     webpage: string | null | undefined,
     videoId: string | null,
-    options: { fatal?: boolean; defaultValue?: T | typeof import("../yt_dlp/utils/index.ts").NO_DEFAULT } = {},
+    options: {
+      fatal?: boolean;
+      defaultValue?: T | typeof import("../yt_dlp/utils/index.ts").NO_DEFAULT;
+    } = {},
   ): T | Record<string, unknown> {
     return this.searchNuxtJson<T>(webpage, videoId, options);
   }
 
-  htmlExtractTitlePublic(...args: Parameters<InfoExtractor["htmlExtractTitle"]>): ReturnType<InfoExtractor["htmlExtractTitle"]> {
+  htmlExtractTitlePublic(
+    ...args: Parameters<InfoExtractor["htmlExtractTitle"]>
+  ): ReturnType<InfoExtractor["htmlExtractTitle"]> {
     return this.htmlExtractTitle(...args);
   }
 
-  extractM3u8FormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["extractM3u8FormatsAndSubtitles"]>): ReturnType<InfoExtractor["extractM3u8FormatsAndSubtitles"]> {
+  extractM3u8FormatsAndSubtitlesPublic(
+    ...args: Parameters<InfoExtractor["extractM3u8FormatsAndSubtitles"]>
+  ): ReturnType<InfoExtractor["extractM3u8FormatsAndSubtitles"]> {
     return this.extractM3u8FormatsAndSubtitles(...args);
   }
 
-  rtaSearchPublic(...args: Parameters<InfoExtractor["rtaSearch"]>): ReturnType<InfoExtractor["rtaSearch"]> {
+  rtaSearchPublic(
+    ...args: Parameters<InfoExtractor["rtaSearch"]>
+  ): ReturnType<InfoExtractor["rtaSearch"]> {
     return this.rtaSearch(...args);
   }
 
-  protoRelativeUrlPublic(...args: Parameters<InfoExtractor["protoRelativeUrl"]>): ReturnType<InfoExtractor["protoRelativeUrl"]> {
+  protoRelativeUrlPublic(
+    ...args: Parameters<InfoExtractor["protoRelativeUrl"]>
+  ): ReturnType<InfoExtractor["protoRelativeUrl"]> {
     return this.protoRelativeUrl(...args);
   }
 
-  extractM3u8FormatsPublic(...args: Parameters<InfoExtractor["extractM3u8Formats"]>): ReturnType<InfoExtractor["extractM3u8Formats"]> {
+  extractM3u8FormatsPublic(
+    ...args: Parameters<InfoExtractor["extractM3u8Formats"]>
+  ): ReturnType<InfoExtractor["extractM3u8Formats"]> {
     return this.extractM3u8Formats(...args);
   }
 
-  parseM3u8FormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseM3u8FormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseM3u8FormatsAndSubtitles"]> {
+  parseM3u8FormatsAndSubtitlesPublic(
+    ...args: Parameters<InfoExtractor["parseM3u8FormatsAndSubtitles"]>
+  ): ReturnType<InfoExtractor["parseM3u8FormatsAndSubtitles"]> {
     return this.parseM3u8FormatsAndSubtitles(...args);
   }
 
-  extractMpdFormatsPublic(...args: Parameters<InfoExtractor["extractMpdFormats"]>): ReturnType<InfoExtractor["extractMpdFormats"]> {
+  extractMpdFormatsPublic(
+    ...args: Parameters<InfoExtractor["extractMpdFormats"]>
+  ): ReturnType<InfoExtractor["extractMpdFormats"]> {
     return this.extractMpdFormats(...args);
   }
 
-  parseMpdFormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseMpdFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseMpdFormatsAndSubtitles"]> {
+  parseMpdFormatsAndSubtitlesPublic(
+    ...args: Parameters<InfoExtractor["parseMpdFormatsAndSubtitles"]>
+  ): ReturnType<InfoExtractor["parseMpdFormatsAndSubtitles"]> {
     return this.parseMpdFormatsAndSubtitles(...args);
   }
 
-  parseIsmFormatsAndSubtitlesPublic(...args: Parameters<InfoExtractor["parseIsmFormatsAndSubtitles"]>): ReturnType<InfoExtractor["parseIsmFormatsAndSubtitles"]> {
+  parseIsmFormatsAndSubtitlesPublic(
+    ...args: Parameters<InfoExtractor["parseIsmFormatsAndSubtitles"]>
+  ): ReturnType<InfoExtractor["parseIsmFormatsAndSubtitles"]> {
     return this.parseIsmFormatsAndSubtitles(...args);
   }
 
-  mergeSubtitlesPublic(...args: Parameters<InfoExtractor["mergeSubtitles"]>): ReturnType<InfoExtractor["mergeSubtitles"]> {
+  mergeSubtitlesPublic(
+    ...args: Parameters<InfoExtractor["mergeSubtitles"]>
+  ): ReturnType<InfoExtractor["mergeSubtitles"]> {
     return this.mergeSubtitles(...args);
   }
 
-  parseF4mFormatsPublic(...args: Parameters<InfoExtractor["parseF4mFormats"]>): ReturnType<InfoExtractor["parseF4mFormats"]> {
+  parseF4mFormatsPublic(
+    ...args: Parameters<InfoExtractor["parseF4mFormats"]>
+  ): ReturnType<InfoExtractor["parseF4mFormats"]> {
     return this.parseF4mFormats(...args);
   }
 
-  parseXspfPublic(...args: Parameters<InfoExtractor["parseXspf"]>): ReturnType<InfoExtractor["parseXspf"]> {
+  parseXspfPublic(
+    ...args: Parameters<InfoExtractor["parseXspf"]>
+  ): ReturnType<InfoExtractor["parseXspf"]> {
     return this.parseXspf(...args);
   }
 
-  parseHtml5MediaEntriesPublic(...args: Parameters<InfoExtractor["parseHtml5MediaEntries"]>): ReturnType<InfoExtractor["parseHtml5MediaEntries"]> {
+  parseHtml5MediaEntriesPublic(
+    ...args: Parameters<InfoExtractor["parseHtml5MediaEntries"]>
+  ): ReturnType<InfoExtractor["parseHtml5MediaEntries"]> {
     return this.parseHtml5MediaEntries(...args);
   }
 
-  extractJwplayerDataPublic(...args: Parameters<InfoExtractor["extractJwplayerData"]>): ReturnType<InfoExtractor["extractJwplayerData"]> {
+  extractJwplayerDataPublic(
+    ...args: Parameters<InfoExtractor["extractJwplayerData"]>
+  ): ReturnType<InfoExtractor["extractJwplayerData"]> {
     return this.extractJwplayerData(...args);
   }
 
-  getNetrcLoginInfoPublic(...args: Parameters<InfoExtractor["getNetrcLoginInfo"]>): ReturnType<InfoExtractor["getNetrcLoginInfo"]> {
+  getNetrcLoginInfoPublic(
+    ...args: Parameters<InfoExtractor["getNetrcLoginInfo"]>
+  ): ReturnType<InfoExtractor["getNetrcLoginInfo"]> {
     return this.getNetrcLoginInfo(...args);
   }
 }
 
-function fakeDownloader(params: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+function fakeDownloader(
+  params: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     params,
     async urlopen(url: string | URL | Request) {
@@ -174,10 +239,19 @@ describe("InfoExtractor HTML helpers", () => {
   const ie = new TestInfoExtractor();
 
   test("htmlSearchRegex mirrors Python helper behavior", () => {
-    const html = '<p id="foo">Watch this <a href="http://www.youtube.com/watch?v=BaW_jenozKc">video</a></p>';
-    expect(ie.htmlSearchRegexPublic(/<p id="foo">(.+?)<\/p>/, html, "foo")).toBe("Watch this <a href=\"http://www.youtube.com/watch?v=BaW_jenozKc\">video</a>");
-    expect(ie.htmlSearchRegexPublic(/missing/, html, "missing", { fatal: false })).toBeNull();
-    expect(() => ie.htmlSearchRegexPublic(/missing/, html, "missing")).toThrow(RegexNotFoundError);
+    const html =
+      '<p id="foo">Watch this <a href="http://www.youtube.com/watch?v=BaW_jenozKc">video</a></p>';
+    expect(
+      ie.htmlSearchRegexPublic(/<p id="foo">(.+?)<\/p>/, html, "foo"),
+    ).toBe(
+      'Watch this <a href="http://www.youtube.com/watch?v=BaW_jenozKc">video</a>',
+    );
+    expect(
+      ie.htmlSearchRegexPublic(/missing/, html, "missing", { fatal: false }),
+    ).toBeNull();
+    expect(() => ie.htmlSearchRegexPublic(/missing/, html, "missing")).toThrow(
+      RegexNotFoundError,
+    );
   });
 
   test("htmlSearchMeta handles attribute order and quoting", () => {
@@ -198,8 +272,12 @@ describe("InfoExtractor HTML helpers", () => {
     expect(ie.htmlSearchMetaPublic(["a", "b", "c"], webpage)).toBe("1");
     expect(ie.htmlSearchMetaPublic(["c", "b", "a"], webpage)).toBe("3");
     expect(ie.htmlSearchMetaPublic(["z", "x", "c"], webpage)).toBe("3");
-    expect(() => ie.htmlSearchMetaPublic("z", webpage, "missing", true)).toThrow(RegexNotFoundError);
-    expect(() => ie.htmlSearchMetaPublic(["z", "x"], webpage, "missing", true)).toThrow(RegexNotFoundError);
+    expect(() =>
+      ie.htmlSearchMetaPublic("z", webpage, "missing", true),
+    ).toThrow(RegexNotFoundError);
+    expect(() =>
+      ie.htmlSearchMetaPublic(["z", "x"], webpage, "missing", true),
+    ).toThrow(RegexNotFoundError);
   });
 
   test("OpenGraph helpers parse HTML instead of tag regexes", () => {
@@ -215,42 +293,76 @@ describe("InfoExtractor HTML helpers", () => {
       <meta property=og:test4 content=unquoted-value/>
     `;
     expect(ie.ogSearchTitlePublic(webpage)).toBe("Foo");
-    expect(ie.ogSearchDescriptionPublic(webpage)).toBe("Some video's description ");
-    expect(ie.ogSearchThumbnailPublic(webpage)).toBe("http://domain.com/pic.jpg?key1=val1&key2=val2");
-    expect(ie.ogSearchPropertyPublic("video:type", webpage)).toBe("application/x-shockwave-flash");
+    expect(ie.ogSearchDescriptionPublic(webpage)).toBe(
+      "Some video's description ",
+    );
+    expect(ie.ogSearchThumbnailPublic(webpage)).toBe(
+      "http://domain.com/pic.jpg?key1=val1&key2=val2",
+    );
+    expect(ie.ogSearchPropertyPublic("video:type", webpage)).toBe(
+      "application/x-shockwave-flash",
+    );
     expect(ie.ogSearchPropertyPublic("foobar", webpage)).toBe("Foo");
     expect(ie.ogSearchPropertyPublic("test1", webpage)).toBe("foo > < bar");
     expect(ie.ogSearchPropertyPublic("test2", webpage)).toBe("foo >//< bar");
     expect(ie.ogSearchPropertyPublic("test3", webpage, false)).toBeNull();
     expect(ie.ogSearchPropertyPublic("test4", webpage)).toBe("unquoted-value");
-    expect(() => ie.ogSearchPropertyPublic("test0", webpage, true)).toThrow(RegexNotFoundError);
+    expect(() => ie.ogSearchPropertyPublic("test0", webpage, true)).toThrow(
+      RegexNotFoundError,
+    );
   });
 
   test("parseJson and searchJson handle transforms and fatal defaults", () => {
-    expect(ie.parseJsonPublic<{ foo: string }>('{"foo":"blah"}', "id")).toEqual({ foo: "blah" });
-    expect(ie.parseJsonPublic<{ foo: string }>("callback({\"foo\":\"blah\"})", "id", {
-      transform_source: (source) => source.slice("callback(".length, -1),
-    })).toEqual({ foo: "blah" });
+    expect(ie.parseJsonPublic<{ foo: string }>('{"foo":"blah"}', "id")).toEqual(
+      { foo: "blah" },
+    );
+    expect(
+      ie.parseJsonPublic<{ foo: string }>('callback({"foo":"blah"})', "id", {
+        transform_source: (source) => source.slice("callback(".length, -1),
+      }),
+    ).toEqual({ foo: "blah" });
     expect(ie.parseJsonPublic("{bad", "id", { fatal: false })).toBeNull();
     expect(() => ie.parseJsonPublic("{bad", "id")).toThrow();
 
-    const text = "window.__DATA__ = {\"foo\":\"bar\"};";
-    expect(ie.searchJsonPublic<{ foo: string }>("window\\.__DATA__\\s*=", text, "data", "id", { endPattern: ";" })).toEqual({ foo: "bar" });
-    expect(ie.searchJsonPublic<{ foo: string }>("missing\\s*=", text, "missing", "id", { fatal: false })).toBeNull();
+    const text = 'window.__DATA__ = {"foo":"bar"};';
+    expect(
+      ie.searchJsonPublic<{ foo: string }>(
+        "window\\.__DATA__\\s*=",
+        text,
+        "data",
+        "id",
+        { endPattern: ";" },
+      ),
+    ).toEqual({ foo: "bar" });
+    expect(
+      ie.searchJsonPublic<{ foo: string }>(
+        "missing\\s*=",
+        text,
+        "missing",
+        "id",
+        { fatal: false },
+      ),
+    ).toBeNull();
   });
 
   test("downloadJson parses data URLs and handles nonfatal parse errors", async () => {
     const jsonUrl = `data:application/json,${encodeURIComponent('{"foo":"blah"}')}`;
-    expect(await ie.downloadJsonPublic<{ foo: string }>(jsonUrl, "id")).toEqual({ foo: "blah" });
+    expect(await ie.downloadJsonPublic<{ foo: string }>(jsonUrl, "id")).toEqual(
+      { foo: "blah" },
+    );
 
     const jsonpUrl = `data:application/javascript,${encodeURIComponent('callback({"foo":"blah"})')}`;
-    expect(await ie.downloadJsonPublic<{ foo: string }>(jsonpUrl, "id", {
-      transform_source: (source) => source.slice("callback(".length, -1),
-    })).toEqual({ foo: "blah" });
+    expect(
+      await ie.downloadJsonPublic<{ foo: string }>(jsonpUrl, "id", {
+        transform_source: (source) => source.slice("callback(".length, -1),
+      }),
+    ).toEqual({ foo: "blah" });
 
     const invalidUrl = `data:application/json,${encodeURIComponent('{"foo": invalid}')}`;
     await expect(ie.downloadJsonPublic(invalidUrl, "id")).rejects.toThrow();
-    expect(await ie.downloadJsonPublic(invalidUrl, "id", { fatal: false })).toBeNull();
+    expect(
+      await ie.downloadJsonPublic(invalidUrl, "id", { fatal: false }),
+    ).toBeNull();
   });
 
   test("searchJsonLd extracts first object candidate", () => {
@@ -259,14 +371,31 @@ describe("InfoExtractor HTML helpers", () => {
         [{"@context":"https://schema.org"}, {"name":"second"}]
       </script>
     `;
-    expect(ie.searchJsonLdPublic(webpage, "id")).toEqual({ "@context": "https://schema.org" });
-    expect(ie.searchJsonLdPublic(false, "id", { defaultValue: { fallback: true } })).toEqual({ fallback: true });
-    expect(ie.searchJsonLdPublic('<script type="application/ld+json">null</script>', "id", { defaultValue: { fallback: true } })).toEqual({ fallback: true });
+    expect(ie.searchJsonLdPublic(webpage, "id")).toEqual({
+      "@context": "https://schema.org",
+    });
+    expect(
+      ie.searchJsonLdPublic(false, "id", { defaultValue: { fallback: true } }),
+    ).toEqual({ fallback: true });
+    expect(
+      ie.searchJsonLdPublic(
+        '<script type="application/ld+json">null</script>',
+        "id",
+        { defaultValue: { fallback: true } },
+      ),
+    ).toEqual({ fallback: true });
   });
 
   test("searchJsonLd normalizes real-world schema.org objects", () => {
-    const cases: Array<[string, Record<string, unknown>, Parameters<TestInfoExtractor["searchJsonLdPublic"]>[2]?]> = [
-      [`<script type="application/ld+json">{
+    const cases: Array<
+      [
+        string,
+        Record<string, unknown>,
+        Parameters<TestInfoExtractor["searchJsonLdPublic"]>[2]?,
+      ]
+    > = [
+      [
+        `<script type="application/ld+json">{
         "@context": "http://schema.org/",
         "@type": "VideoObject",
         "name": "1 On 1 With Kleio",
@@ -283,17 +412,20 @@ describe("InfoExtractor HTML helpers", () => {
           "interactionType": { "@type": "http://schema.org/WatchAction" },
           "userInteractionCount": 1120958
         }
-      }</script>`, {
-        title: "1 On 1 With Kleio",
-        description: "Kleio Valentien",
-        url: "https://gvideo.eporner.com/xN49A1cT3eB/xN49A1cT3eB.mp4",
-        timestamp: 1449347075,
-        duration: 743,
-        view_count: 1120958,
-        width: 1920,
-        height: 1080,
-      }],
-      [`<script type="application/ld+json">{
+      }</script>`,
+        {
+          title: "1 On 1 With Kleio",
+          description: "Kleio Valentien",
+          url: "https://gvideo.eporner.com/xN49A1cT3eB/xN49A1cT3eB.mp4",
+          timestamp: 1449347075,
+          duration: 743,
+          view_count: 1120958,
+          width: 1920,
+          height: 1080,
+        },
+      ],
+      [
+        `<script type="application/ld+json">{
         "@context": "https://schema.org",
         "@graph": [{
           "@type": "NewsArticle",
@@ -301,11 +433,16 @@ describe("InfoExtractor HTML helpers", () => {
           "description": "Τα παιδιά δέχθηκαν την επίθεση επειδή αρνήθηκαν να γίνουν μέλη της συμμορίας, ανέφερε ο Γ. Ζαχαρόπουλος.",
           "datePublished": "2021-11-10T08:50:00+03:00"
         }]
-      }</script>`, {
-        timestamp: 1636523400,
-        title: "Συμμορία ανηλίκων – δικηγόρος θυμάτων: ήθελαν να τους αποτελειώσουν",
-      }, { expectedType: "NewsArticle" }],
-      [`<script type="application/ld+json">{
+      }</script>`,
+        {
+          timestamp: 1636523400,
+          title:
+            "Συμμορία ανηλίκων – δικηγόρος θυμάτων: ήθελαν να τους αποτελειώσουν",
+        },
+        { expectedType: "NewsArticle" },
+      ],
+      [
+        `<script type="application/ld+json">{
         "@context": "https://schema.org",
         "@type": "TVEpisode",
         "name": "Het journaal 19u",
@@ -327,44 +464,103 @@ describe("InfoExtractor HTML helpers", () => {
             {"name":"Sober oudjaar in Nederland","startOffset":1873,"@type":"Clip"}
           ]
         }
-      }</script>`, {
-        title: "Het journaal - Aflevering 365 (Seizoen 2021)",
-        chapters: [
-          { title: "Explosie Turnhout", start_time: 70, end_time: 440 },
-          { title: "Jaarwisseling", start_time: 440, end_time: 1179 },
-          { title: "Natuurbranden Colorado", start_time: 1179, end_time: 1263 },
-          { title: "Klimaatverandering", start_time: 1263, end_time: 1367 },
-          { title: "Zacht weer", start_time: 1367, end_time: 1383 },
-          { title: "Financiële balans", start_time: 1383, end_time: 1484 },
-          { title: "Club Brugge", start_time: 1484, end_time: 1575 },
-          { title: "Mentale gezondheid bij topsporters", start_time: 1575, end_time: 1728 },
-          { title: "Olympische Winterspelen", start_time: 1728, end_time: 1873 },
-          { title: "Sober oudjaar in Nederland", start_time: 1873, end_time: 2079.23 },
-        ],
-      }],
-      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":["https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"]}</script>`, {
-        thumbnails: [{ url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg" }],
-      }],
-      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":"https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"}</script>`, {
-        thumbnails: [{ url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg" }],
-      }],
-      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnail_url":"//www.nobelprize.org/images/12693-landscape-medium-gallery.jpg"}</script>`, {
-        thumbnails: [{ url: "https://www.nobelprize.org/images/12693-landscape-medium-gallery.jpg" }],
-      }],
+      }</script>`,
+        {
+          title: "Het journaal - Aflevering 365 (Seizoen 2021)",
+          chapters: [
+            { title: "Explosie Turnhout", start_time: 70, end_time: 440 },
+            { title: "Jaarwisseling", start_time: 440, end_time: 1179 },
+            {
+              title: "Natuurbranden Colorado",
+              start_time: 1179,
+              end_time: 1263,
+            },
+            { title: "Klimaatverandering", start_time: 1263, end_time: 1367 },
+            { title: "Zacht weer", start_time: 1367, end_time: 1383 },
+            { title: "Financiële balans", start_time: 1383, end_time: 1484 },
+            { title: "Club Brugge", start_time: 1484, end_time: 1575 },
+            {
+              title: "Mentale gezondheid bij topsporters",
+              start_time: 1575,
+              end_time: 1728,
+            },
+            {
+              title: "Olympische Winterspelen",
+              start_time: 1728,
+              end_time: 1873,
+            },
+            {
+              title: "Sober oudjaar in Nederland",
+              start_time: 1873,
+              end_time: 2079.23,
+            },
+          ],
+        },
+      ],
+      [
+        `<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":["https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"]}</script>`,
+        {
+          thumbnails: [
+            {
+              url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg",
+            },
+          ],
+        },
+      ],
+      [
+        `<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":"https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"}</script>`,
+        {
+          thumbnails: [
+            {
+              url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg",
+            },
+          ],
+        },
+      ],
+      [
+        `<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnail_url":"//www.nobelprize.org/images/12693-landscape-medium-gallery.jpg"}</script>`,
+        {
+          thumbnails: [
+            {
+              url: "https://www.nobelprize.org/images/12693-landscape-medium-gallery.jpg",
+            },
+          ],
+        },
+      ],
     ];
 
     for (const [html, expected, options] of cases) {
-      expect(ie.searchJsonLdPublic(html, "id", options)).toMatchObject(expected);
+      expect(ie.searchJsonLdPublic(html, "id", options)).toMatchObject(
+        expected,
+      );
     }
   });
 
   test("searchNextjsData extracts script body by id", () => {
-    const webpage = '<script id="__NEXT_DATA__" type="application/json">{"props":{}}</script>';
-    expect(ie.searchNextjsDataPublic<{ props: Record<string, unknown> }>(webpage, "id")).toEqual({ props: {} });
-    expect(ie.searchNextjsDataPublic<Record<string, unknown>>("<html></html>", "id", { fatal: false })).toEqual({});
-    expect(ie.searchNextjsDataPublic("<html></html>", "id", { defaultValue: null })).toBeNull();
-    expect(ie.searchNextjsDataPublic("<html></html>", "id", { defaultValue: {} })).toEqual({});
-    expect(() => ie.searchNextjsDataPublic("<html></html>", "id")).toThrow(RegexNotFoundError);
+    const webpage =
+      '<script id="__NEXT_DATA__" type="application/json">{"props":{}}</script>';
+    expect(
+      ie.searchNextjsDataPublic<{ props: Record<string, unknown> }>(
+        webpage,
+        "id",
+      ),
+    ).toEqual({ props: {} });
+    expect(
+      ie.searchNextjsDataPublic<Record<string, unknown>>(
+        "<html></html>",
+        "id",
+        { fatal: false },
+      ),
+    ).toEqual({});
+    expect(
+      ie.searchNextjsDataPublic("<html></html>", "id", { defaultValue: null }),
+    ).toBeNull();
+    expect(
+      ie.searchNextjsDataPublic("<html></html>", "id", { defaultValue: {} }),
+    ).toEqual({});
+    expect(() => ie.searchNextjsDataPublic("<html></html>", "id")).toThrow(
+      RegexNotFoundError,
+    );
   });
 
   test("searchNextjsV13Data extracts app router flight data", () => {
@@ -379,7 +575,12 @@ describe("InfoExtractor HTML helpers", () => {
     `;
     expect(ie.searchNextjsV13DataPublic(html, null)).toEqual({
       "18": { foo: "bar" },
-      "16": { meta: { dateCreated: 1730489700, uuid: "40cac41d-8d29-4ef5-aa11-75047b9f0907" } },
+      "16": {
+        meta: {
+          dateCreated: 1730489700,
+          uuid: "40cac41d-8d29-4ef5-aa11-75047b9f0907",
+        },
+      },
       "19": { duplicated_field_name: { x: 1 } },
       "20": { duplicated_field_name: { y: 2 } },
     });
@@ -388,7 +589,8 @@ describe("InfoExtractor HTML helpers", () => {
   });
 
   test("searchNuxtJson resolves rich payload arrays", () => {
-    const htmlTemplate = (data: string) => `<script data-ssr="true" id="__NUXT_DATA__" type="application/json">[${data}]</script>`;
+    const htmlTemplate = (data: string) =>
+      `<script data-ssr="true" id="__NUXT_DATA__" type="application/json">[${data}]</script>`;
     const validData = `
       ["ShallowReactive",1],
       {"data":2,"state":21,"once":25,"_errors":28,"_server_errors":30},
@@ -437,7 +639,7 @@ describe("InfoExtractor HTML helpers", () => {
     `;
     expect(ie.searchNuxtJsonPublic(htmlTemplate(validData), null)).toEqual({
       data: {
-        "$abcdef123456": {
+        $abcdef123456: {
           podcast: {
             podcast: { title: "Series Title", id: "podcast-id-01" },
             seasons: [1, 2, 3],
@@ -469,27 +671,51 @@ describe("InfoExtractor HTML helpers", () => {
 
     expect(ie.searchNuxtJsonPublic("", null, { fatal: false })).toEqual({});
     const defaultValue = { fallback: true };
-    expect(ie.searchNuxtJsonPublic("", null, { defaultValue })).toBe(defaultValue);
-    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+    expect(ie.searchNuxtJsonPublic("", null, { defaultValue })).toBe(
+      defaultValue,
+    );
+    expect(
+      ie.searchNuxtJsonPublic(
+        htmlTemplate(`
       {"data":1},
       {"invalid_raw_list":2},
       [15,16,17]
-    `), null, { fatal: false })).toEqual({ data: { invalid_raw_list: [null, null, null] } });
-    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+    `),
+        null,
+        { fatal: false },
+      ),
+    ).toEqual({ data: { invalid_raw_list: [null, null, null] } });
+    expect(
+      ie.searchNuxtJsonPublic(
+        htmlTemplate(`
       {"data":1},
       ["EmptyRef",2],
       "not valid JSON"
-    `), null, { fatal: false })).toEqual({ data: null });
-    expect(ie.searchNuxtJsonPublic(htmlTemplate("[]"), null, { defaultValue })).toBe(defaultValue);
-    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+    `),
+        null,
+        { fatal: false },
+      ),
+    ).toEqual({ data: null });
+    expect(
+      ie.searchNuxtJsonPublic(htmlTemplate("[]"), null, { defaultValue }),
+    ).toBe(defaultValue);
+    expect(
+      ie.searchNuxtJsonPublic(
+        htmlTemplate(`
       ["unsupported",1],
       {"data":2},
       {}
-    `), null, { defaultValue })).toBe(defaultValue);
+    `),
+        null,
+        { defaultValue },
+      ),
+    ).toBe(defaultValue);
   });
 
   test("htmlExtractTitle uses parsed title text", () => {
-    expect(ie.htmlExtractTitlePublic("<title>Foo &amp; Bar</title>")).toBe("Foo & Bar");
+    expect(ie.htmlExtractTitlePublic("<title>Foo &amp; Bar</title>")).toBe(
+      "Foo & Bar",
+    );
     expect(ie.htmlExtractTitlePublic("<html></html>")).toBeNull();
   });
 });
@@ -497,7 +723,8 @@ describe("InfoExtractor HTML helpers", () => {
 describe("InfoExtractor common helpers", () => {
   const ie = new TestInfoExtractor();
 
-  test.todo("test_ie_key once the full extractor registry imports cleanly", () => undefined);
+  test.todo("test_ie_key once the full extractor registry imports cleanly", () =>
+    undefined);
 
   test("netrc login info matches Python fixture behavior", async () => {
     for (const params of [
@@ -506,41 +733,73 @@ describe("InfoExtractor common helpers", () => {
     ]) {
       const netrcIe = new TestInfoExtractor();
       netrcIe.setDownloader(fakeDownloader(params));
-      expect(await netrcIe.getNetrcLoginInfoPublic("normal_use")).toEqual(["user", "pass"]);
-      expect(await netrcIe.getNetrcLoginInfoPublic("empty_user")).toEqual(["", "pass"]);
-      expect(await netrcIe.getNetrcLoginInfoPublic("empty_pass")).toEqual(["user", ""]);
-      expect(await netrcIe.getNetrcLoginInfoPublic("both_empty")).toEqual(["", ""]);
-      expect(await netrcIe.getNetrcLoginInfoPublic("nonexistent")).toEqual([null, null]);
-      await expect(netrcIe.getNetrcLoginInfoPublic(";echo rce")).rejects.toThrow();
+      expect(await netrcIe.getNetrcLoginInfoPublic("normal_use")).toEqual([
+        "user",
+        "pass",
+      ]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("empty_user")).toEqual([
+        "",
+        "pass",
+      ]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("empty_pass")).toEqual([
+        "user",
+        "",
+      ]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("both_empty")).toEqual([
+        "",
+        "",
+      ]);
+      expect(await netrcIe.getNetrcLoginInfoPublic("nonexistent")).toEqual([
+        null,
+        null,
+      ]);
+      await expect(
+        netrcIe.getNetrcLoginInfoPublic(";echo rce"),
+      ).rejects.toThrow();
     }
   });
 
   test("url and playlist result helpers", () => {
-    expect(InfoExtractor.urlResult("https://example.com/v", "Example", "id", "title")).toEqual({
+    expect(
+      InfoExtractor.urlResult(
+        "https://example.com/v",
+        "Example",
+        "id",
+        "title",
+      ),
+    ).toEqual({
       _type: "url",
       url: "https://example.com/v",
       ie_key: "Example",
       id: "id",
       title: "title",
     });
-    expect(InfoExtractor.urlResult("https://example.com/v", null, null, null, { url_transparent: true })).toEqual({
+    expect(
+      InfoExtractor.urlResult("https://example.com/v", null, null, null, {
+        url_transparent: true,
+      }),
+    ).toEqual({
       _type: "url_transparent",
       url: "https://example.com/v",
       url_transparent: true,
     });
 
     const entries = [InfoExtractor.urlResult("https://example.com/1")];
-    expect(InfoExtractor.playlistResult(entries, "pl", "Playlist", "Description")).toEqual({
+    expect(
+      InfoExtractor.playlistResult(entries, "pl", "Playlist", "Description"),
+    ).toEqual({
       _type: "playlist",
       id: "pl",
       title: "Playlist",
       description: "Description",
       entries,
     });
-    expect(InfoExtractor.playlistFromMatches(["/a", "/a", "/b"], {
-      getter: (path) => `https://example.com${path}`,
-      playlistId: "matches",
-    })).toMatchObject({
+    expect(
+      InfoExtractor.playlistFromMatches(["/a", "/a", "/b"], {
+        getter: (path) => `https://example.com${path}`,
+        playlistId: "matches",
+      }),
+    ).toMatchObject({
       _type: "playlist",
       id: "matches",
       entries: [
@@ -551,249 +810,391 @@ describe("InfoExtractor common helpers", () => {
   });
 
   test("protocol-relative and age-limit helpers", () => {
-    expect(ie.protoRelativeUrlPublic("//cdn.example.com/v.mp4")).toBe("http://cdn.example.com/v.mp4");
-    expect(ie.protoRelativeUrlPublic("//cdn.example.com/v.mp4", "https:")).toBe("https://cdn.example.com/v.mp4");
-    expect(ie.protoRelativeUrlPublic("https://example.com/v.mp4")).toBe("https://example.com/v.mp4");
+    expect(ie.protoRelativeUrlPublic("//cdn.example.com/v.mp4")).toBe(
+      "http://cdn.example.com/v.mp4",
+    );
+    expect(ie.protoRelativeUrlPublic("//cdn.example.com/v.mp4", "https:")).toBe(
+      "https://cdn.example.com/v.mp4",
+    );
+    expect(ie.protoRelativeUrlPublic("https://example.com/v.mp4")).toBe(
+      "https://example.com/v.mp4",
+    );
     expect(ie.protoRelativeUrlPublic(null)).toBeNull();
 
-    expect(ie.rtaSearchPublic('<meta name="rating" content="RTA-5042-1996-1400-1577-RTA">')).toBe(18);
-    expect(ie.rtaSearchPublic("> you acknowledge you are at least 21 years old")).toBe(21);
+    expect(
+      ie.rtaSearchPublic(
+        '<meta name="rating" content="RTA-5042-1996-1400-1577-RTA">',
+      ),
+    ).toBe(18);
+    expect(
+      ie.rtaSearchPublic("> you acknowledge you are at least 21 years old"),
+    ).toBe(21);
     expect(ie.rtaSearchPublic("<html></html>")).toBeNull();
   });
 
   test("manifest and subtitle helpers expose ported behavior", () => {
-    expect(ie.extractM3u8FormatsPublic("https://example.com/master.m3u8", "id", "mp4", { m3u8Id: "hls" })).toEqual([{
-      url: "https://example.com/master.m3u8",
-      ext: "mp4",
-      protocol: "m3u8_native",
-      format_id: "hls",
-      manifest_url: "https://example.com/master.m3u8",
-    }]);
-    expect(ie.extractMpdFormatsPublic("https://example.com/manifest.mpd", "id", { mpdId: "dash" })).toEqual([{
-      url: "https://example.com/manifest.mpd",
-      protocol: "http_dash_segments",
-      format_id: "dash",
-      manifest_url: "https://example.com/manifest.mpd",
-    }]);
+    expect(
+      ie.extractM3u8FormatsPublic(
+        "https://example.com/master.m3u8",
+        "id",
+        "mp4",
+        { m3u8Id: "hls" },
+      ),
+    ).toEqual([
+      {
+        url: "https://example.com/master.m3u8",
+        ext: "mp4",
+        protocol: "m3u8_native",
+        format_id: "hls",
+        manifest_url: "https://example.com/master.m3u8",
+      },
+    ]);
+    expect(
+      ie.extractMpdFormatsPublic("https://example.com/manifest.mpd", "id", {
+        mpdId: "dash",
+      }),
+    ).toEqual([
+      {
+        url: "https://example.com/manifest.mpd",
+        protocol: "http_dash_segments",
+        format_id: "dash",
+        manifest_url: "https://example.com/manifest.mpd",
+      },
+    ]);
 
-    expect(ie.mergeSubtitlesPublic({ en: [{ url: "a" }], fr: [{ url: "b" }] }, { en: [{ url: "base" }] })).toEqual({
+    expect(
+      ie.mergeSubtitlesPublic(
+        { en: [{ url: "a" }], fr: [{ url: "b" }] },
+        { en: [{ url: "base" }] },
+      ),
+    ).toEqual({
       en: [{ url: "base" }, { url: "a" }],
       fr: [{ url: "b" }],
     });
   });
 
   test("parse_m3u8_formats matches local Python fixture cases", async () => {
-    const bipbopUrl = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8";
-    const bipbop = await Bun.file("./test/testdata/m3u8/bipbop_16x9.m3u8").text();
-    const [bipbopFormats, bipbopSubs] = ie.parseM3u8FormatsAndSubtitlesPublic(bipbop, bipbopUrl, { ext: "mp4" });
-    expect(bipbopFormats).toContainEqual(expect.objectContaining({
-      format_id: "bipbop_audio-BipBop Audio 2",
-      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/alternate_audio_aac/prog_index.m3u8",
-      language: "eng",
-      vcodec: "none",
-      protocol: "m3u8_native",
-    }));
-    expect(bipbopFormats).toContainEqual(expect.objectContaining({
-      format_id: "263.851",
-      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8",
-      width: 416,
-      height: 234,
-      vcodec: "avc1.4d400d",
-      acodec: "mp4a.40.2",
-    }));
+    const bipbopUrl =
+      "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8";
+    const bipbop = await Bun.file(
+      "./test/testdata/m3u8/bipbop_16x9.m3u8",
+    ).text();
+    const [bipbopFormats, bipbopSubs] = ie.parseM3u8FormatsAndSubtitlesPublic(
+      bipbop,
+      bipbopUrl,
+      { ext: "mp4" },
+    );
+    expect(bipbopFormats).toContainEqual(
+      expect.objectContaining({
+        format_id: "bipbop_audio-BipBop Audio 2",
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/alternate_audio_aac/prog_index.m3u8",
+        language: "eng",
+        vcodec: "none",
+        protocol: "m3u8_native",
+      }),
+    );
+    expect(bipbopFormats).toContainEqual(
+      expect.objectContaining({
+        format_id: "263.851",
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8",
+        width: 416,
+        height: 234,
+        vcodec: "avc1.4d400d",
+        acodec: "mp4a.40.2",
+      }),
+    );
     expect(bipbopSubs.en).toEqual([
-      { url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" },
-      { url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng_forced/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" },
+      {
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng/prog_index.m3u8",
+        ext: "vtt",
+        protocol: "m3u8_native",
+      },
+      {
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/subtitles/eng_forced/prog_index.m3u8",
+        ext: "vtt",
+        protocol: "m3u8_native",
+      },
     ]);
 
-    const fmp4Url = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
-    const fmp4 = await Bun.file("./test/testdata/m3u8/img_bipbop_adv_example_fmp4.m3u8").text();
-    const [fmp4Formats, fmp4Subs] = ie.parseM3u8FormatsAndSubtitlesPublic(fmp4, fmp4Url, { ext: "mp4" });
-    expect(fmp4Formats).toContainEqual(expect.objectContaining({
-      format_id: "aud1-English",
-      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/a1/prog_index.m3u8",
-      language: "en",
-      vcodec: "none",
-      source_preference: 0,
-    }));
-    expect(fmp4Formats).toContainEqual(expect.objectContaining({
-      format_id: "530.721",
-      url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/v2/prog_index.m3u8",
-      width: 480,
-      height: 270,
-      vcodec: "avc1.640015",
-      acodec: "none",
-    }));
-    expect(fmp4Subs.en).toEqual([{ url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/s1/en/prog_index.m3u8", ext: "vtt", protocol: "m3u8_native" }]);
+    const fmp4Url =
+      "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
+    const fmp4 = await Bun.file(
+      "./test/testdata/m3u8/img_bipbop_adv_example_fmp4.m3u8",
+    ).text();
+    const [fmp4Formats, fmp4Subs] = ie.parseM3u8FormatsAndSubtitlesPublic(
+      fmp4,
+      fmp4Url,
+      { ext: "mp4" },
+    );
+    expect(fmp4Formats).toContainEqual(
+      expect.objectContaining({
+        format_id: "aud1-English",
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/a1/prog_index.m3u8",
+        language: "en",
+        vcodec: "none",
+        source_preference: 0,
+      }),
+    );
+    expect(fmp4Formats).toContainEqual(
+      expect.objectContaining({
+        format_id: "530.721",
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/v2/prog_index.m3u8",
+        width: 480,
+        height: 270,
+        vcodec: "avc1.640015",
+        acodec: "none",
+      }),
+    );
+    expect(fmp4Subs.en).toEqual([
+      {
+        url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/s1/en/prog_index.m3u8",
+        ext: "vtt",
+        protocol: "m3u8_native",
+      },
+    ]);
   });
 
   test("parse_mpd_formats matches local Python fixture cases", async () => {
-    const floatDuration = await Bun.file("./test/testdata/mpd/float_duration.mpd").text();
-    const [floatFormats] = ie.parseMpdFormatsAndSubtitlesPublic(floatDuration, { mpdUrl: "http://unknown/manifest.mpd" });
-    expect(floatFormats).toContainEqual(expect.objectContaining({
-      manifest_url: "http://unknown/manifest.mpd",
-      ext: "m4a",
-      format_id: "318597",
-      format_note: "DASH audio",
-      acodec: "mp4a.40.2",
-      vcodec: "none",
-      tbr: 61.587,
-    }));
-    expect(floatFormats).toContainEqual(expect.objectContaining({
-      ext: "mp4",
-      format_id: "5997485",
-      vcodec: "avc1.640032",
-      acodec: "none",
-      width: 1920,
-      height: 1080,
-      tbr: 5997.485,
-    }));
-
-    const unfragmented = await Bun.file("./test/testdata/mpd/unfragmented.mpd").text();
-    const [unfragmentedFormats] = ie.parseMpdFormatsAndSubtitlesPublic(unfragmented, {
-      mpdUrl: "https://v.redd.it/hw1x7rcg7zl21/DASHPlaylist.mpd",
-      mpdBaseUrl: "https://v.redd.it/hw1x7rcg7zl21",
+    const floatDuration = await Bun.file(
+      "./test/testdata/mpd/float_duration.mpd",
+    ).text();
+    const [floatFormats] = ie.parseMpdFormatsAndSubtitlesPublic(floatDuration, {
+      mpdUrl: "http://unknown/manifest.mpd",
     });
-    expect(unfragmentedFormats).toContainEqual(expect.objectContaining({
-      url: "https://v.redd.it/hw1x7rcg7zl21/audio",
-      ext: "m4a",
-      format_id: "AUDIO-1",
-      asr: 48000,
-      acodec: "mp4a.40.2",
-      vcodec: "none",
-    }));
-    expect(unfragmentedFormats).toContainEqual(expect.objectContaining({
-      url: "https://v.redd.it/hw1x7rcg7zl21/DASH_360",
-      ext: "mp4",
-      format_id: "VIDEO-1",
-      width: 360,
-      height: 360,
-      fps: 30,
-    }));
+    expect(floatFormats).toContainEqual(
+      expect.objectContaining({
+        manifest_url: "http://unknown/manifest.mpd",
+        ext: "m4a",
+        format_id: "318597",
+        format_note: "DASH audio",
+        acodec: "mp4a.40.2",
+        vcodec: "none",
+        tbr: 61.587,
+      }),
+    );
+    expect(floatFormats).toContainEqual(
+      expect.objectContaining({
+        ext: "mp4",
+        format_id: "5997485",
+        vcodec: "avc1.640032",
+        acodec: "none",
+        width: 1920,
+        height: 1080,
+        tbr: 5997.485,
+      }),
+    );
 
-    const subtitles = await Bun.file("./test/testdata/mpd/subtitles.mpd").text();
-    const [subtitleFormats, subtitleEntries] = ie.parseMpdFormatsAndSubtitlesPublic(subtitles, {
-      mpdUrl: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/manifest.mpd",
-      mpdBaseUrl: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/",
-    });
-    expect(subtitleFormats).toContainEqual(expect.objectContaining({
-      format_id: "audio=128001",
-      ext: "m4a",
-      tbr: 128.001,
-      asr: 48000,
-      fragment_base_url: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
-    }));
-    expect(subtitleEntries.en).toEqual([expect.objectContaining({
-      ext: "mp4",
-      protocol: "http_dash_segments",
-      fragment_base_url: "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
-    })]);
+    const unfragmented = await Bun.file(
+      "./test/testdata/mpd/unfragmented.mpd",
+    ).text();
+    const [unfragmentedFormats] = ie.parseMpdFormatsAndSubtitlesPublic(
+      unfragmented,
+      {
+        mpdUrl: "https://v.redd.it/hw1x7rcg7zl21/DASHPlaylist.mpd",
+        mpdBaseUrl: "https://v.redd.it/hw1x7rcg7zl21",
+      },
+    );
+    expect(unfragmentedFormats).toContainEqual(
+      expect.objectContaining({
+        url: "https://v.redd.it/hw1x7rcg7zl21/audio",
+        ext: "m4a",
+        format_id: "AUDIO-1",
+        asr: 48000,
+        acodec: "mp4a.40.2",
+        vcodec: "none",
+      }),
+    );
+    expect(unfragmentedFormats).toContainEqual(
+      expect.objectContaining({
+        url: "https://v.redd.it/hw1x7rcg7zl21/DASH_360",
+        ext: "mp4",
+        format_id: "VIDEO-1",
+        width: 360,
+        height: 360,
+        fps: 30,
+      }),
+    );
+
+    const subtitles = await Bun.file(
+      "./test/testdata/mpd/subtitles.mpd",
+    ).text();
+    const [subtitleFormats, subtitleEntries] =
+      ie.parseMpdFormatsAndSubtitlesPublic(subtitles, {
+        mpdUrl:
+          "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/manifest.mpd",
+        mpdBaseUrl:
+          "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/",
+      });
+    expect(subtitleFormats).toContainEqual(
+      expect.objectContaining({
+        format_id: "audio=128001",
+        ext: "m4a",
+        tbr: 128.001,
+        asr: 48000,
+        fragment_base_url:
+          "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
+      }),
+    );
+    expect(subtitleEntries.en).toEqual([
+      expect.objectContaining({
+        ext: "mp4",
+        protocol: "http_dash_segments",
+        fragment_base_url:
+          "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/dash/",
+      }),
+    ]);
   });
 
   test("parse_f4m_formats matches local Python fixture case", async () => {
-    const f4mUrl = "http://api.new.livestream.com/accounts/6115179/events/6764928/videos/144884262.f4m";
-    const f4m = await Bun.file("./test/testdata/f4m/custom_base_url.f4m").text();
-    expect(ie.parseF4mFormatsPublic(f4m, f4mUrl, null)).toEqual([expect.objectContaining({
-      manifest_url: f4mUrl,
-      ext: "flv",
-      format_id: "2148",
-      protocol: "f4m",
-      tbr: 2148,
-      width: 1280,
-      height: 720,
-    })]);
+    const f4mUrl =
+      "http://api.new.livestream.com/accounts/6115179/events/6764928/videos/144884262.f4m";
+    const f4m = await Bun.file(
+      "./test/testdata/f4m/custom_base_url.f4m",
+    ).text();
+    expect(ie.parseF4mFormatsPublic(f4m, f4mUrl, null)).toEqual([
+      expect.objectContaining({
+        manifest_url: f4mUrl,
+        ext: "flv",
+        format_id: "2148",
+        protocol: "f4m",
+        tbr: 2148,
+        width: 1280,
+        height: 720,
+      }),
+    ]);
   });
 
   test("parse_xspf matches local Python fixture case", async () => {
     const xspfUrl = "https://example.org/src/foo_xspf.xspf";
     const xspf = await Bun.file("./test/testdata/xspf/foo_xspf.xspf").text();
-    expect(ie.parseXspfPublic(xspf, "foo_xspf", { xspfUrl, xspfBaseUrl: xspfUrl })).toMatchObject([{
-      id: "foo_xspf",
-      title: "Pandemonium",
-      description: "Visit http://bigbrother404.bandcamp.com",
-      duration: 202.416,
-      formats: [{ manifest_url: xspfUrl, url: "https://example.org/src/cd1/track%201.mp3" }],
-    }, {
-      id: "foo_xspf",
-      title: "Final Cartridge (Nichico Twelve Remix)",
-      duration: 255.857,
-      formats: [{ manifest_url: xspfUrl, url: "https://example.org/%E3%83%88%E3%83%A9%E3%83%83%E3%82%AF%E3%80%80%EF%BC%92.mp3" }],
-    }, {
-      id: "foo_xspf",
-      title: "Rebuilding Nightingale",
-      duration: 287.915,
-      formats: [
-        { manifest_url: xspfUrl, url: "https://example.org/src/track3.mp3" },
-        { manifest_url: xspfUrl, url: "https://example.com/track3.mp3" },
-      ],
-    }]);
+    expect(
+      ie.parseXspfPublic(xspf, "foo_xspf", { xspfUrl, xspfBaseUrl: xspfUrl }),
+    ).toMatchObject([
+      {
+        id: "foo_xspf",
+        title: "Pandemonium",
+        description: "Visit http://bigbrother404.bandcamp.com",
+        duration: 202.416,
+        formats: [
+          {
+            manifest_url: xspfUrl,
+            url: "https://example.org/src/cd1/track%201.mp3",
+          },
+        ],
+      },
+      {
+        id: "foo_xspf",
+        title: "Final Cartridge (Nichico Twelve Remix)",
+        duration: 255.857,
+        formats: [
+          {
+            manifest_url: xspfUrl,
+            url: "https://example.org/%E3%83%88%E3%83%A9%E3%83%83%E3%82%AF%E3%80%80%EF%BC%92.mp3",
+          },
+        ],
+      },
+      {
+        id: "foo_xspf",
+        title: "Rebuilding Nightingale",
+        duration: 287.915,
+        formats: [
+          { manifest_url: xspfUrl, url: "https://example.org/src/track3.mp3" },
+          { manifest_url: xspfUrl, url: "https://example.com/track3.mp3" },
+        ],
+      },
+    ]);
   });
 
   test("parse_ism_formats matches local Python fixture cases", async () => {
-    const sintelUrl = "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/Manifest";
+    const sintelUrl =
+      "https://sdn-global-streaming-cache-3qsdn.akamaized.net/stream/3144/files/17/07/672975/3144-kZT4LWMQw6Rh7Kpd.ism/Manifest";
     const sintel = await Bun.file("./test/testdata/ism/sintel.Manifest").text();
-    const [sintelFormats, sintelSubs] = ie.parseIsmFormatsAndSubtitlesPublic(sintel, sintelUrl);
-    expect(sintelFormats).toContainEqual(expect.objectContaining({
-      format_id: "audio-128",
-      url: sintelUrl,
-      ext: "isma",
-      tbr: 128,
-      asr: 48000,
-      vcodec: "none",
-      acodec: "AACL",
-      protocol: "ism",
-      audio_channels: 2,
-    }));
-    expect(sintelFormats).toContainEqual(expect.objectContaining({
-      format_id: "video-4482",
-      url: sintelUrl,
-      ext: "ismv",
-      width: 1688,
-      height: 720,
-      tbr: 4482,
-      vcodec: "AVC1",
-      acodec: "none",
-    }));
-    expect(sintelSubs.eng).toEqual([expect.objectContaining({
-      ext: "ismt",
-      protocol: "ism",
-      url: sintelUrl,
-      manifest_url: sintelUrl,
-    })]);
+    const [sintelFormats, sintelSubs] = ie.parseIsmFormatsAndSubtitlesPublic(
+      sintel,
+      sintelUrl,
+    );
+    expect(sintelFormats).toContainEqual(
+      expect.objectContaining({
+        format_id: "audio-128",
+        url: sintelUrl,
+        ext: "isma",
+        tbr: 128,
+        asr: 48000,
+        vcodec: "none",
+        acodec: "AACL",
+        protocol: "ism",
+        audio_channels: 2,
+      }),
+    );
+    expect(sintelFormats).toContainEqual(
+      expect.objectContaining({
+        format_id: "video-4482",
+        url: sintelUrl,
+        ext: "ismv",
+        width: 1688,
+        height: 720,
+        tbr: 4482,
+        vcodec: "AVC1",
+        acodec: "none",
+      }),
+    );
+    expect(sintelSubs.eng).toEqual([
+      expect.objectContaining({
+        ext: "ismt",
+        protocol: "ism",
+        url: sintelUrl,
+        manifest_url: sintelUrl,
+      }),
+    ]);
 
-    const ec3Url = "https://smstr01.dmm.t-online.de/smooth24/smoothstream_m1/streaming/sony/9221438342941275747/636887760842957027/25_km_h-Trailer-9221571562372022953_deu_20_1300k_HD_H_264_ISMV.ism/Manifest";
+    const ec3Url =
+      "https://smstr01.dmm.t-online.de/smooth24/smoothstream_m1/streaming/sony/9221438342941275747/636887760842957027/25_km_h-Trailer-9221571562372022953_deu_20_1300k_HD_H_264_ISMV.ism/Manifest";
     const ec3 = await Bun.file("./test/testdata/ism/ec-3_test.Manifest").text();
     const [ec3Formats] = ie.parseIsmFormatsAndSubtitlesPublic(ec3, ec3Url);
-    expect(ec3Formats).toContainEqual(expect.objectContaining({
-      format_id: "audio_deu_1-224",
-      language: "deu",
-      ext: "isma",
-      acodec: "EC-3",
-      audio_channels: 6,
-    }));
-    expect(ec3Formats).toContainEqual(expect.objectContaining({
-      format_id: "video_deu-8079",
-      language: "deu",
-      ext: "ismv",
-      width: 1920,
-      height: 1080,
-      tbr: 8079,
-    }));
+    expect(ec3Formats).toContainEqual(
+      expect.objectContaining({
+        format_id: "audio_deu_1-224",
+        language: "deu",
+        ext: "isma",
+        acodec: "EC-3",
+        audio_channels: 6,
+      }),
+    );
+    expect(ec3Formats).toContainEqual(
+      expect.objectContaining({
+        format_id: "video_deu-8079",
+        language: "deu",
+        ext: "ismv",
+        width: 1920,
+        height: 1080,
+        tbr: 8079,
+      }),
+    );
   });
 
   test("expected status returns content", async () => {
-    const teapot = new TestInfoExtractor(new Response("<h1>418 I'm a teapot</h1>", {
-      status: 418,
-      statusText: "I'm a teapot",
-      headers: { "content-type": "text/html; charset=utf-8" },
-    }));
-    const result = await teapot.downloadWebpageHandlePublic("https://example.com/teapot", "id", { expected_status: 418 });
+    const teapot = new TestInfoExtractor(
+      new Response("<h1>418 I'm a teapot</h1>", {
+        status: 418,
+        statusText: "I'm a teapot",
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
+    const result = await teapot.downloadWebpageHandlePublic(
+      "https://example.com/teapot",
+      "id",
+      { expected_status: 418 },
+    );
     expect(result).not.toBe(false);
-    expect(result === false ? undefined : result[0]).toBe("<h1>418 I'm a teapot</h1>");
+    expect(result === false ? undefined : result[0]).toBe(
+      "<h1>418 I'm a teapot</h1>",
+    );
   });
 
   test("extractJwplayerData handles real-world setup objects", () => {
-    expect(ie.extractJwplayerDataPublic(`
+    expect(
+      ie.extractJwplayerDataPublic(
+        `
       <script type='text/javascript'>
         jwplayer('my-video').setup({
           file: 'rtmp://192.138.214.154/live/sjclive',
@@ -804,15 +1205,23 @@ describe("InfoExtractor common helpers", () => {
           mediaid:'XEgvuql4'
         });
       </script>
-    `, null, { requireTitle: false })).toMatchObject({
+    `,
+        null,
+        { requireTitle: false },
+      ),
+    ).toMatchObject({
       id: "XEgvuql4",
-      formats: [{
-        url: "rtmp://192.138.214.154/live/sjclive",
-        ext: "flv",
-      }],
+      formats: [
+        {
+          url: "rtmp://192.138.214.154/live/sjclive",
+          ext: "flv",
+        },
+      ],
     });
 
-    expect(ie.extractJwplayerDataPublic(`
+    expect(
+      ie.extractJwplayerDataPublic(
+        `
       <script type="text/javascript">
         jwplayer("mediaplayer").setup({
           'videoid': "7564",
@@ -822,30 +1231,46 @@ describe("InfoExtractor common helpers", () => {
         });
         invideo.setup({ adsUrl: "/banner-iframe/?zoneId=32" });
       </script>
-    `, "dummy", { requireTitle: false })).toMatchObject({
-      thumbnail: "https://t03.vipstreamservice.com/thumbs/pxo-full/2009-12/14/a4b2157147afe5efa93ce1978e0265289c193874e02597.flv-full-13.jpg",
-      formats: [{
-        url: "https://cdn.pornoxo.com/key=MF+oEbaxqTKb50P-w9G3nA,end=1489689259,ip=104.199.146.27/ip=104.199.146.27/speed=6573765/buffer=3.0/2009-12/4b2157147afe5efa93ce1978e0265289c193874e02597.flv",
-        ext: "flv",
-      }],
+    `,
+        "dummy",
+        { requireTitle: false },
+      ),
+    ).toMatchObject({
+      thumbnail:
+        "https://t03.vipstreamservice.com/thumbs/pxo-full/2009-12/14/a4b2157147afe5efa93ce1978e0265289c193874e02597.flv-full-13.jpg",
+      formats: [
+        {
+          url: "https://cdn.pornoxo.com/key=MF+oEbaxqTKb50P-w9G3nA,end=1489689259,ip=104.199.146.27/ip=104.199.146.27/speed=6573765/buffer=3.0/2009-12/4b2157147afe5efa93ce1978e0265289c193874e02597.flv",
+          ext: "flv",
+        },
+      ],
     });
 
-    expect(ie.extractJwplayerDataPublic(String.raw`
+    expect(
+      ie.extractJwplayerDataPublic(
+        String.raw`
       <script>
       jwplayer("mediaplayer").setup({"title":"king machine trailer 1","sources":[{"file":"http:\/\/cdn.dbolical.com\/cache\/videos\/games\/1\/50\/49678\/encode_mp4\/king-machine-trailer.mp4","label":"360p SD"},{"file":"http:\/\/cdn.dbolical.com\/cache\/videos\/games\/1\/50\/49678\/encode720p_mp4\/king-machine-trailer.mp4","label":"720p HD"}],"image":"http:\/\/media.indiedb.com\/cache\/images\/games\/1\/50\/49678\/thumb_620x2000\/king-machine-trailer.mp4.jpg","width":620,"height":349}).once("play", function(event) {});
       </script>
-    `, "dummy")).toMatchObject({
+    `,
+        "dummy",
+      ),
+    ).toMatchObject({
       title: "king machine trailer 1",
-      thumbnail: "http://media.indiedb.com/cache/images/games/1/50/49678/thumb_620x2000/king-machine-trailer.mp4.jpg",
-      formats: [{
-        url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode_mp4/king-machine-trailer.mp4",
-        height: 360,
-        ext: "mp4",
-      }, {
-        url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode720p_mp4/king-machine-trailer.mp4",
-        height: 720,
-        ext: "mp4",
-      }],
+      thumbnail:
+        "http://media.indiedb.com/cache/images/games/1/50/49678/thumb_620x2000/king-machine-trailer.mp4.jpg",
+      formats: [
+        {
+          url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode_mp4/king-machine-trailer.mp4",
+          height: 360,
+          ext: "mp4",
+        },
+        {
+          url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode720p_mp4/king-machine-trailer.mp4",
+          height: 720,
+          ext: "mp4",
+        },
+      ],
     });
   });
 });
@@ -854,44 +1279,63 @@ describe("InfoExtractor HTML5 media entries", () => {
   const ie = new TestInfoExtractor();
 
   test("inline video tag", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://127.0.0.1/video.html", '<html><video src="/vid.mp4" /></html>', null)[0]).toMatchObject({
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://127.0.0.1/video.html",
+        '<html><video src="/vid.mp4" /></html>',
+        null,
+      )[0],
+    ).toMatchObject({
       formats: [{ url: "https://127.0.0.1/vid.mp4" }],
     });
   });
 
   test("source labels with kbps", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://www.r18.com/", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://www.r18.com/",
+        `
       <video controls poster="//pics.r18.com/digital/amateur/mgmr105/mgmr105jp.jpg">
         <source src="https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_sm_w.mp4" type="video/mp4" res="240" label="300kbps">
         <source src="https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dm_w.mp4" type="video/mp4" res="480" label="1000kbps">
         <source src="https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dmb_w.mp4" type="video/mp4" res="740" label="1500kbps">
       </video>
-    `, null)[0]).toMatchObject({
-      formats: [{
-        url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_sm_w.mp4",
-        ext: "mp4",
-        format_id: "300kbps",
-        height: 240,
-        tbr: 300,
-      }, {
-        url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dm_w.mp4",
-        ext: "mp4",
-        format_id: "1000kbps",
-        height: 480,
-        tbr: 1000,
-      }, {
-        url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dmb_w.mp4",
-        ext: "mp4",
-        format_id: "1500kbps",
-        height: 740,
-        tbr: 1500,
-      }],
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
+      formats: [
+        {
+          url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_sm_w.mp4",
+          ext: "mp4",
+          format_id: "300kbps",
+          height: 240,
+          tbr: 300,
+        },
+        {
+          url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dm_w.mp4",
+          ext: "mp4",
+          format_id: "1000kbps",
+          height: 480,
+          tbr: 1000,
+        },
+        {
+          url: "https://awscc3001.r18.com/litevideo/freepv/m/mgm/mgmr105/mgmr105_dmb_w.mp4",
+          ext: "mp4",
+          format_id: "1500kbps",
+          height: 740,
+          tbr: 1500,
+        },
+      ],
       thumbnail: "//pics.r18.com/digital/amateur/mgmr105/mgmr105jp.jpg",
     });
   });
 
   test("width height and subtitles", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://www.csfd.cz/", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://www.csfd.cz/",
+        `
       <video poster="https://img.csfd.cz/files/images/film/video/preview/163/344/163344118_748d20.png?h360">
         <source src="https://video.csfd.cz/files/videos/157/750/157750813/163327358_eac647.mp4" type="video/mp4" width="640" height="360">
         <source src="https://video.csfd.cz/files/videos/157/750/157750813/163327360_3d2646.mp4" type="video/mp4" width="1280" height="720">
@@ -901,70 +1345,163 @@ describe("InfoExtractor HTML5 media entries", () => {
         <source src="https://video.csfd.cz/files/videos/157/750/157750813/163327357_8ab472.webm" type="video/webm" width="1920" height="1080">
         <track src="https://video.csfd.cz/files/subtitles/163/344/163344115_4c388b.srt" type="text/x-srt" kind="subtitles" srclang="cs" label="cs">
       </video>
-    `, null)[0]).toMatchObject({
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
       formats: [
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327358_eac647.mp4", ext: "mp4", width: 640, height: 360 },
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327360_3d2646.mp4", ext: "mp4", width: 1280, height: 720 },
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327356_91f258.mp4", ext: "mp4", width: 1920, height: 1080 },
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327359_962b4a.webm", ext: "webm", width: 640, height: 360 },
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327361_6feee0.webm", ext: "webm", width: 1280, height: 720 },
-        { url: "https://video.csfd.cz/files/videos/157/750/157750813/163327357_8ab472.webm", ext: "webm", width: 1920, height: 1080 },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327358_eac647.mp4",
+          ext: "mp4",
+          width: 640,
+          height: 360,
+        },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327360_3d2646.mp4",
+          ext: "mp4",
+          width: 1280,
+          height: 720,
+        },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327356_91f258.mp4",
+          ext: "mp4",
+          width: 1920,
+          height: 1080,
+        },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327359_962b4a.webm",
+          ext: "webm",
+          width: 640,
+          height: 360,
+        },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327361_6feee0.webm",
+          ext: "webm",
+          width: 1280,
+          height: 720,
+        },
+        {
+          url: "https://video.csfd.cz/files/videos/157/750/157750813/163327357_8ab472.webm",
+          ext: "webm",
+          width: 1920,
+          height: 1080,
+        },
       ],
       subtitles: {
-        cs: [{ url: "https://video.csfd.cz/files/subtitles/163/344/163344115_4c388b.srt" }],
+        cs: [
+          {
+            url: "https://video.csfd.cz/files/subtitles/163/344/163344115_4c388b.srt",
+          },
+        ],
       },
-      thumbnail: "https://img.csfd.cz/files/images/film/video/preview/163/344/163344118_748d20.png?h360",
+      thumbnail:
+        "https://img.csfd.cz/files/images/film/video/preview/163/344/163344118_748d20.png?h360",
     });
   });
 
   test("height in label", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://tamasha.com/v/Kkdjw", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://tamasha.com/v/Kkdjw",
+        `
       <video crossorigin="anonymous">
         <source src="https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4" type="video/mp4" label="AUTO" res="0"/>
         <source src="https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4" type="video/mp4" label="240p" res="240"/>
         <source src="https://s-v2.tamasha.com/statics/videos_file/20/00/Kkdjw_200041c66f657fc967db464d156eafbc1ed9fe6f_n_144.mp4" type="video/mp4" label="144p" res="144"/>
       </video>
-    `, null)[0]).toMatchObject({
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
       formats: [
-        { url: "https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4" },
-        { url: "https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4", ext: "mp4", format_id: "240p", height: 240 },
-        { url: "https://s-v2.tamasha.com/statics/videos_file/20/00/Kkdjw_200041c66f657fc967db464d156eafbc1ed9fe6f_n_144.mp4", ext: "mp4", format_id: "144p", height: 144 },
+        {
+          url: "https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4",
+        },
+        {
+          url: "https://s-v2.tamasha.com/statics/videos_file/19/8f/Kkdjw_198feff8577d0057536e905cce1fb61438dd64e0_n_240.mp4",
+          ext: "mp4",
+          format_id: "240p",
+          height: 240,
+        },
+        {
+          url: "https://s-v2.tamasha.com/statics/videos_file/20/00/Kkdjw_200041c66f657fc967db464d156eafbc1ed9fe6f_n_144.mp4",
+          ext: "mp4",
+          format_id: "144p",
+          height: 144,
+        },
       ],
     });
   });
 
   test("data-src and data-video-src", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://www.directvnow.com", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://www.directvnow.com",
+        `
       <video><source data-src="https://cdn.directv.com/content/dam/dtv/prod/website_directvnow-international/videos/DTVN_hdr_HBO_v3.mp4" type="video/mp4" /></video>
-    `, null)[0]).toMatchObject({
-      formats: [{ ext: "mp4", url: "https://cdn.directv.com/content/dam/dtv/prod/website_directvnow-international/videos/DTVN_hdr_HBO_v3.mp4" }],
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
+      formats: [
+        {
+          ext: "mp4",
+          url: "https://cdn.directv.com/content/dam/dtv/prod/website_directvnow-international/videos/DTVN_hdr_HBO_v3.mp4",
+        },
+      ],
     });
 
-    expect(ie.parseHtml5MediaEntriesPublic("https://www.directvnow.com", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://www.directvnow.com",
+        `
       <video><source src="" data-video-src="https://www.klarna.com/uk/wp-content/uploads/sites/11/2019/01/KL062_Smooth3_0_DogWalking_5s_920x080_.mp4" type="video/mp4" /></video>
-    `, null)[0]).toMatchObject({
-      formats: [{ url: "https://www.klarna.com/uk/wp-content/uploads/sites/11/2019/01/KL062_Smooth3_0_DogWalking_5s_920x080_.mp4", ext: "mp4" }],
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
+      formats: [
+        {
+          url: "https://www.klarna.com/uk/wp-content/uploads/sites/11/2019/01/KL062_Smooth3_0_DogWalking_5s_920x080_.mp4",
+          ext: "mp4",
+        },
+      ],
     });
   });
 
   test("type attribute without extension in URL", () => {
-    expect(ie.parseHtml5MediaEntriesPublic("https://0000.studio", `
+    expect(
+      ie.parseHtml5MediaEntriesPublic(
+        "https://0000.studio",
+        `
       <video src="https://d1ggyt9m8pwf3g.cloudfront.net/protected/ap-northeast-1:1864af40-28d5-492b-b739-b32314b1a527/archive/clip/838db6a7-8973-4cd6-840d-8517e4093c92"
         type="video/mp4"></video>
-    `, null)[0]).toMatchObject({
-      formats: [{
-        url: "https://d1ggyt9m8pwf3g.cloudfront.net/protected/ap-northeast-1:1864af40-28d5-492b-b739-b32314b1a527/archive/clip/838db6a7-8973-4cd6-840d-8517e4093c92",
-        ext: "mp4",
-      }],
+    `,
+        null,
+      )[0],
+    ).toMatchObject({
+      formats: [
+        {
+          url: "https://d1ggyt9m8pwf3g.cloudfront.net/protected/ap-northeast-1:1864af40-28d5-492b-b739-b32314b1a527/archive/clip/838db6a7-8973-4cd6-840d-8517e4093c92",
+          ext: "mp4",
+        },
+      ],
     });
   });
 });
 
 describe("InfoExtractor manifest downloads", () => {
   test("test_extract_m3u8_formats", async () => {
-    const manifest = await Bun.file("test/testdata/m3u8/bipbop_16x9.m3u8").text();
+    const manifest = await Bun.file(
+      "test/testdata/m3u8/bipbop_16x9.m3u8",
+    ).text();
     const ie = new TestInfoExtractor(new Response(manifest));
-    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic("http://127.0.0.1/bipbop.m3u8", "", "mp4", { fatal: false });
+    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic(
+      "http://127.0.0.1/bipbop.m3u8",
+      "",
+      "mp4",
+      { fatal: false },
+    );
     expect(formats.length).toBeGreaterThan(0);
     expect(Object.keys(subtitles).length).toBeGreaterThan(0);
   });
@@ -972,8 +1509,18 @@ describe("InfoExtractor manifest downloads", () => {
   test("test_extract_m3u8_formats_warning", async () => {
     const warnings: string[] = [];
     const ie = new TestInfoExtractor(new Response(Buffer.alloc(1024)));
-    ie.setDownloader(fakeDownloader({}, { reportWarning: (message: string) => warnings.push(message) }));
-    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic("http://127.0.0.1/fake.m3u8", "", "mp4", { fatal: false });
+    ie.setDownloader(
+      fakeDownloader(
+        {},
+        { reportWarning: (message: string) => warnings.push(message) },
+      ),
+    );
+    const [formats, subtitles] = await ie.extractM3u8FormatsAndSubtitlesPublic(
+      "http://127.0.0.1/fake.m3u8",
+      "",
+      "mp4",
+      { fatal: false },
+    );
     expect(warnings.length).toBeGreaterThan(0);
     expect(formats).toEqual([]);
     expect(subtitles).toEqual({});

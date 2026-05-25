@@ -12,18 +12,21 @@ export abstract class AmazonMiniTVBaseIE extends InfoExtractor {
   protected static sessionId: string | undefined = undefined;
 
   protected override async realInitialize(): Promise<void> {
-    await this.downloadWebpage(
-      "https://www.amazon.in/minitv",
-      "amazonminitv",
-      { note: "Fetching guest session cookies" }
+    await this.downloadWebpage("https://www.amazon.in/minitv", "amazonminitv", {
+      note: "Fetching guest session cookies",
+    });
+    AmazonMiniTVBaseIE.sessionId = this.getCookies("https://www.amazon.in").get(
+      "session-id",
     );
-    AmazonMiniTVBaseIE.sessionId = this.getCookies("https://www.amazon.in").get("session-id");
     if (!AmazonMiniTVBaseIE.sessionId) {
       throw new ExtractorError("Failed to obtain guest session-id cookie");
     }
   }
 
-  protected async callApi(asin: string, options: { data?: any; note?: string } = {}): Promise<any> {
+  protected async callApi(
+    asin: string,
+    options: { data?: any; note?: string } = {},
+  ): Promise<any> {
     const device = { clientId: "ATVIN", deviceLocale: "en_GB" };
     const { data, note } = options;
 
@@ -36,11 +39,13 @@ export abstract class AmazonMiniTVBaseIE extends InfoExtractor {
       };
     }
 
-    const query = data ? undefined : {
-      deviceType: "A1WMMUXPCUJL4N",
-      contentId: asin,
-      ...device,
-    };
+    const query = data
+      ? undefined
+      : {
+          deviceType: "A1WMMUXPCUJL4N",
+          contentId: asin,
+          ...device,
+        };
 
     const resp = await this.downloadJson<any>(
       `https://www.amazon.in/minitv/api/web/${data ? "graphql" : "prs"}`,
@@ -54,7 +59,7 @@ export abstract class AmazonMiniTVBaseIE extends InfoExtractor {
         },
         data: data ? JSON.stringify(data) : undefined,
         query: query as any,
-      }
+      },
     );
 
     if (!resp || resp === false) {
@@ -71,7 +76,8 @@ export abstract class AmazonMiniTVBaseIE extends InfoExtractor {
 }
 
 export class AmazonMiniTVIE extends AmazonMiniTVBaseIE {
-  static override readonly _VALID_URL = String.raw`(?:https?://(?:www\.)?amazon\.in/minitv/tp/|amazonminitv:(?:amzn1\.dv\.gti\.)?)(?<id>[a-f0-9-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`(?:https?://(?:www\.)?amazon\.in/minitv/tp/|amazonminitv:(?:amzn1\.dv\.gti\.)?)(?<id>[a-f0-9-]+)`;
 
   static override get IE_NAME(): string {
     return "amazonminitv";
@@ -146,7 +152,7 @@ query content($sessionIdToken: String!, $deviceLocale: String, $contentId: ID!, 
           manifestUrl,
           asin,
           "mp4",
-          { entryProtocol: "m3u8_native", m3u8Id: type_, fatal: false }
+          { entryProtocol: "m3u8_native", m3u8Id: type_, fatal: false },
         );
         formats.push(...m3u8Fmts);
         subtitles = this.mergeSubtitles(m3u8Subs, subtitles);
@@ -154,7 +160,7 @@ query content($sessionIdToken: String!, $deviceLocale: String, $contentId: ID!, 
         const [mpdFmts, mpdSubs] = await this.extractMpdFormatsAndSubtitles(
           manifestUrl,
           asin,
-          { mpdId: type_, fatal: false }
+          { mpdId: type_, fatal: false },
         );
         formats.push(...mpdFmts);
         subtitles = this.mergeSubtitles(mpdSubs, subtitles);
@@ -172,29 +178,48 @@ query content($sessionIdToken: String!, $deviceLocale: String, $contentId: ID!, 
       },
     });
 
-    const rawCreditsTime = tryGet(titleInfo, (x: any) => x.timecode.endCreditsTime) as number | null;
+    const rawCreditsTime = tryGet(
+      titleInfo,
+      (x: any) => x.timecode.endCreditsTime,
+    ) as number | null;
     const creditsTime = rawCreditsTime !== null ? rawCreditsTime / 1000 : null;
     const isEpisode = titleInfo?.vodType === "EPISODE";
 
-    const thumbnails = Object.entries(titleInfo?.images ?? {}).map(([type_, thumbUrl]) => ({
-      id: type_,
-      url: String(thumbUrl),
-    }));
+    const thumbnails = Object.entries(titleInfo?.images ?? {}).map(
+      ([type_, thumbUrl]) => ({
+        id: type_,
+        url: String(thumbUrl),
+      }),
+    );
 
-    const rawReleaseDate = tryGet(titleInfo, (x: any) => x.publicReleaseDateUTC) as number | null;
-    const releaseTimestamp = rawReleaseDate !== null ? Math.trunc(rawReleaseDate / 1000) : null;
+    const rawReleaseDate = tryGet(
+      titleInfo,
+      (x: any) => x.publicReleaseDateUTC,
+    ) as number | null;
+    const releaseTimestamp =
+      rawReleaseDate !== null ? Math.trunc(rawReleaseDate / 1000) : null;
 
     return {
       id: asin,
       title: String(titleInfo?.name ?? ""),
       formats,
       subtitles,
-      language: traverseObj(titleInfo, ["audioTracks", 0]) as string | null ?? undefined,
+      language:
+        (traverseObj(titleInfo, ["audioTracks", 0]) as string | null) ??
+        undefined,
       thumbnails,
-      description: traverseObj(titleInfo, ["description", "synopsis"]) as string | null ?? undefined,
+      description:
+        (traverseObj(titleInfo, ["description", "synopsis"]) as
+          | string
+          | null) ?? undefined,
       release_timestamp: releaseTimestamp ?? undefined,
-      duration: traverseObj(titleInfo, ["description", "contentLengthInSeconds"]) as number | null ?? undefined,
-      chapters: creditsTime ? [{ start_time: creditsTime, title: "End Credits" }] : [],
+      duration:
+        (traverseObj(titleInfo, ["description", "contentLengthInSeconds"]) as
+          | number
+          | null) ?? undefined,
+      chapters: creditsTime
+        ? [{ start_time: creditsTime, title: "End Credits" }]
+        : [],
       series: titleInfo?.seriesName ?? undefined,
       series_id: titleInfo?.seriesId ?? undefined,
       season_number: titleInfo?.seasonNumber ?? undefined,
@@ -207,7 +232,8 @@ query content($sessionIdToken: String!, $deviceLocale: String, $contentId: ID!, 
 }
 
 export class AmazonMiniTVSeasonIE extends AmazonMiniTVBaseIE {
-  static override readonly _VALID_URL = String.raw`amazonminitv:season:(?:amzn1\.dv\.gti\.)?(?<id>[a-f0-9-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`amazonminitv:season:(?:amzn1\.dv\.gti\.)?(?<id>[a-f0-9-]+)`;
 
   static override get IE_NAME(): string {
     return "amazonminitv:season";
@@ -253,11 +279,13 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
     const entries: ExtractorInfo[] = [];
     for (const episode of episodes) {
       if (episode?.contentId) {
-        entries.push(this.urlResult(
-          `amazonminitv:${episode.contentId}`,
-          "AmazonMiniTV",
-          episode.contentId
-        ));
+        entries.push(
+          this.urlResult(
+            `amazonminitv:${episode.contentId}`,
+            AmazonMiniTVIE,
+            episode.contentId,
+          ),
+        );
       }
     }
     return entries;
@@ -267,7 +295,9 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
     const match = this.matchValidUrl(url);
     const seasonId = match?.groups?.id;
     if (!seasonId) {
-      throw new ExtractorError("Invalid Amazon MiniTV Season URL", { expected: true });
+      throw new ExtractorError("Invalid Amazon MiniTV Season URL", {
+        expected: true,
+      });
     }
     const asin = `amzn1.dv.gti.${seasonId}`;
     return this.playlistResult(await this.entries(asin), asin);
@@ -275,7 +305,8 @@ query getEpisodes($sessionIdToken: String!, $clientId: String, $episodeOrSeasonI
 }
 
 export class AmazonMiniTVSeriesIE extends AmazonMiniTVBaseIE {
-  static override readonly _VALID_URL = String.raw`amazonminitv:series:(?:amzn1\.dv\.gti\.)?(?<id>[a-f0-9-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`amazonminitv:series:(?:amzn1\.dv\.gti\.)?(?<id>[a-f0-9-]+)`;
 
   static override get IE_NAME(): string {
     return "amazonminitv:series";
@@ -307,11 +338,13 @@ query getSeasons($sessionIdToken: String!, $deviceLocale: String, $episodeOrSeas
     const entries: ExtractorInfo[] = [];
     for (const season of seasons) {
       if (season?.seasonId) {
-        entries.push(this.urlResult(
-          `amazonminitv:season:${season.seasonId}`,
-          "AmazonMiniTVSeason",
-          season.seasonId
-        ));
+        entries.push(
+          this.urlResult(
+            `amazonminitv:season:${season.seasonId}`,
+            AmazonMiniTVSeasonIE,
+            season.seasonId,
+          ),
+        );
       }
     }
     return entries;
@@ -321,7 +354,9 @@ query getSeasons($sessionIdToken: String!, $deviceLocale: String, $episodeOrSeas
     const match = this.matchValidUrl(url);
     const seriesId = match?.groups?.id;
     if (!seriesId) {
-      throw new ExtractorError("Invalid Amazon MiniTV Series URL", { expected: true });
+      throw new ExtractorError("Invalid Amazon MiniTV Series URL", {
+        expected: true,
+      });
     }
     const asin = `amzn1.dv.gti.${seriesId}`;
     return this.playlistResult(await this.entries(asin), asin);

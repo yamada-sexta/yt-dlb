@@ -14,8 +14,13 @@ export class WebPoPCSP extends PoTokenCacheSpecProvider {
   static override readonly providerName = "webpo";
 
   override generateCacheSpec(request: PoTokenRequest): PoTokenCacheSpec | null {
-    const bindToVisitorId = this.configurationArg("bind_to_visitor_id", ["true"])[0] === "true";
-    const [contentBinding, contentBindingType] = getWebpoContentBinding(request, undefined, bindToVisitorId);
+    const bindToVisitorId =
+      this.configurationArg("bind_to_visitor_id", ["true"])[0] === "true";
+    const [contentBinding, contentBindingType] = getWebpoContentBinding(
+      request,
+      undefined,
+      bindToVisitorId,
+    );
 
     if (!contentBinding || !contentBindingType) {
       return null;
@@ -26,17 +31,19 @@ export class WebPoPCSP extends PoTokenCacheSpecProvider {
         t: "webpo",
         cb: contentBinding,
         cbt: contentBindingType,
-        ip: typeof request.innertubeContext.client?.remoteHost === "string"
-          ? request.innertubeContext.client.remoteHost
-          : undefined,
+        ip:
+          typeof request.innertubeContext.client?.remoteHost === "string"
+            ? request.innertubeContext.client.remoteHost
+            : undefined,
         sa: request.requestSourceAddress,
         px: request.requestProxy,
       },
       // Integrity token responses usually state a 12 hour TTL. Use 6 hours as the conservative default from Python.
       defaultTtl: 21600,
-      writePolicy: contentBindingType === ContentBindingType.VIDEO_ID
-        ? CacheProviderWritePolicy.WRITE_FIRST
-        : CacheProviderWritePolicy.WRITE_ALL,
+      writePolicy:
+        contentBindingType === ContentBindingType.VIDEO_ID
+          ? CacheProviderWritePolicy.WRITE_FIRST
+          : CacheProviderWritePolicy.WRITE_ALL,
     };
   }
 }

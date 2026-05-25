@@ -7,8 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ExecPP } from "../yt_dlp/postprocessor/exec.ts";
-import { FFmpegPostProcessor, FFmpegThumbnailsConvertorPP } from "../yt_dlp/postprocessor/ffmpeg.ts";
-import { MetadataFromFieldPP, MetadataParserPP } from "../yt_dlp/postprocessor/metadataparser.ts";
+import {
+  FFmpegPostProcessor,
+  FFmpegThumbnailsConvertorPP,
+} from "../yt_dlp/postprocessor/ffmpeg.ts";
+import {
+  MetadataFromFieldPP,
+  MetadataParserPP,
+} from "../yt_dlp/postprocessor/metadataparser.ts";
 import { ModifyChaptersPP } from "../yt_dlp/postprocessor/modify-chapters.ts";
 import { SponsorBlockPP } from "../yt_dlp/postprocessor/sponsorblock.ts";
 
@@ -23,12 +29,17 @@ type Chapter = {
 
 class TestModifyChaptersPP extends ModifyChaptersPP {
   arrange(chapters: Chapter[]): [Chapter[], Chapter[]] {
-    return (this as unknown as {
-      removeMarkedArrangeSponsors(input: Chapter[]): [Chapter[], Chapter[]];
-    }).removeMarkedArrangeSponsors(chapters);
+    return (
+      this as unknown as {
+        removeMarkedArrangeSponsors(input: Chapter[]): [Chapter[], Chapter[]];
+      }
+    ).removeMarkedArrangeSponsors(chapters);
   }
 
-  concatSpecPublic(inputFiles: readonly string[], concatOpts: Array<Record<string, unknown>>): string[] {
+  concatSpecPublic(
+    inputFiles: readonly string[],
+    concatOpts: Array<Record<string, unknown>>,
+  ): string[] {
     return this.concatSpec(inputFiles, concatOpts);
   }
 }
@@ -36,13 +47,16 @@ class TestModifyChaptersPP extends ModifyChaptersPP {
 const fakeDownloader = {
   params: {},
   evaluateOuttmpl(template: string, info: Record<string, unknown>) {
-    return template.replaceAll(/%\(([^)]+)\)([slq])/g, (_match, key: string, type: string) => {
-      const value = info[key];
-      if (type === "l" && Array.isArray(value)) {
-        return value.join(", ");
-      }
-      return value == null ? "" : String(value);
-    });
+    return template.replaceAll(
+      /%\(([^)]+)\)([slq])/g,
+      (_match, key: string, type: string) => {
+        const value = info[key];
+        if (type === "l" && Array.isArray(value)) {
+          return value.join(", ");
+        }
+        return value == null ? "" : String(value);
+      },
+    );
   },
   toScreen() {},
   reportWarning() {},
@@ -55,11 +69,17 @@ const fakeDownloader = {
 
 describe("metadata postprocessors", () => {
   test("test_format_to_regex", () => {
-    expect(MetadataParserPP.formatToRegex("%(title)s - %(artist)s")).toBe("(?<title>.+)\\ \\-\\ (?<artist>.+)");
+    expect(MetadataParserPP.formatToRegex("%(title)s - %(artist)s")).toBe(
+      "(?<title>.+)\\ \\-\\ (?<artist>.+)",
+    );
     expect(MetadataParserPP.formatToRegex("(?P<x>.+)")).toBe("(?P<x>.+)");
-    expect(MetadataParserPP.formatToRegex("text (?P<x>.+)")).toBe("text (?P<x>.+)");
+    expect(MetadataParserPP.formatToRegex("text (?P<x>.+)")).toBe(
+      "text (?P<x>.+)",
+    );
     expect(MetadataParserPP.formatToRegex("x")).toBe("(?<x>.+)");
-    expect(MetadataParserPP.formatToRegex("Field_Name1")).toBe("(?<Field_Name1>.+)");
+    expect(MetadataParserPP.formatToRegex("Field_Name1")).toBe(
+      "(?<Field_Name1>.+)",
+    );
     expect(MetadataParserPP.formatToRegex("é")).toBe("(?<é>.+)");
     expect(MetadataParserPP.formatToRegex("invalid ")).toBe("invalid ");
   });
@@ -72,7 +92,11 @@ describe("metadata postprocessors", () => {
   });
 
   test("test_metadatafromfield", () => {
-    expect(MetadataFromFieldPP.toAction("%(title)s \\: %(artist)s:%(title)s : %(artist)s")).toEqual([
+    expect(
+      MetadataFromFieldPP.toAction(
+        "%(title)s \\: %(artist)s:%(title)s : %(artist)s",
+      ),
+    ).toEqual([
       MetadataParserPP.Actions.INTERPRET,
       "%(title)s : %(artist)s",
       "%(title)s : %(artist)s",
@@ -88,7 +112,9 @@ describe("ExecPP", () => {
 
     expect(pp.parseCmd("echo", info)).toBe(cmd);
     expect(pp.parseCmd("echo {}", info)).toBe(cmd);
-    expect(pp.parseCmd("echo %(filepath)q", info)).toBe("echo %(filepath)q 'file name'");
+    expect(pp.parseCmd("echo %(filepath)q", info)).toBe(
+      "echo %(filepath)q 'file name'",
+    );
   });
 });
 
@@ -125,7 +151,10 @@ describe("FFmpegThumbnailsConvertorPP", () => {
       const initialFile = `${file}.webp`;
       await rename(generatedFile, initialFile);
 
-      for (const [inputExt, outputExt] of [["webp", "png"], ["png", "jpg"]] as const) {
+      for (const [inputExt, outputExt] of [
+        ["webp", "png"],
+        ["png", "jpg"],
+      ] as const) {
         const outputFile = `${file}.${outputExt}`;
         await pp.convertThumbnail(`${file}.${inputExt}`, outputExt);
         expect(await Bun.file(outputFile).exists()).toBe(true);
@@ -139,7 +168,12 @@ describe("FFmpegThumbnailsConvertorPP", () => {
 describe("ModifyChaptersPP", () => {
   const pp = new TestModifyChaptersPP(fakeDownloader);
 
-  const chapterArrangementCases: Array<{ name: string; chapters: Chapter[]; expected: Chapter[]; removed: Chapter[] }> = [
+  const chapterArrangementCases: Array<{
+    name: string;
+    chapters: Chapter[];
+    expected: Chapter[];
+    removed: Chapter[];
+  }> = [
     {
       name: "CanGetThroughUnaltered",
       chapters: [...chapters([10, 20, 30, 40], ["c1", "c2", "c3", "c4"])],
@@ -156,7 +190,15 @@ describe("ModifyChaptersPP", () => {
       ],
       expected: chapters(
         [10, 20, 30, 40, 50, 60, 70],
-        ["c", "[SponsorBlock]: Sponsor", "c", "[SponsorBlock]: Preview/Recap", "c", "[SponsorBlock]: Filler Tangent", "c"],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "c",
+          "[SponsorBlock]: Preview/Recap",
+          "c",
+          "[SponsorBlock]: Filler Tangent",
+          "c",
+        ],
       ),
       removed: [],
     },
@@ -183,7 +225,16 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(30, 40, "selfpromo", true),
         sponsorChapter(50, 60, "interaction"),
       ],
-      expected: chapters([10, 20, 40, 50, 60], ["c", "[SponsorBlock]: Sponsor", "c", "[SponsorBlock]: Interaction Reminder", "c"]),
+      expected: chapters(
+        [10, 20, 40, 50, 60],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "c",
+          "[SponsorBlock]: Interaction Reminder",
+          "c",
+        ],
+      ),
       removed: [chapter(30, 40, undefined, true)],
     },
     {
@@ -195,7 +246,10 @@ describe("ModifyChaptersPP", () => {
         chapter(40, 50, undefined, true),
       ],
       expected: chapters([10, 40, 50], ["c", "[SponsorBlock]: Sponsor", "c"]),
-      removed: [chapter(20, 30, undefined, true), chapter(40, 50, undefined, true)],
+      removed: [
+        chapter(20, 30, undefined, true),
+        chapter(40, 50, undefined, true),
+      ],
     },
     {
       name: "ChapterWithCutHidingSponsor",
@@ -206,7 +260,14 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(50, 60, "outro"),
         sponsorChapter(20, 50, "selfpromo", true),
       ],
-      expected: chapters([10, 20, 30], ["c", "[SponsorBlock]: Intermission/Intro Animation", "[SponsorBlock]: Endcards/Credits"]),
+      expected: chapters(
+        [10, 20, 30],
+        [
+          "c",
+          "[SponsorBlock]: Intermission/Intro Animation",
+          "[SponsorBlock]: Endcards/Credits",
+        ],
+      ),
       removed: [chapter(20, 50, undefined, true)],
     },
     {
@@ -217,7 +278,16 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(20, 30, "selfpromo"),
         sponsorChapter(30, 40, "interaction"),
       ],
-      expected: chapters([10, 20, 30, 40, 70], ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Unpaid/Self Promotion", "[SponsorBlock]: Interaction Reminder", "c"]),
+      expected: chapters(
+        [10, 20, 30, 40, 70],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "[SponsorBlock]: Interaction Reminder",
+          "c",
+        ],
+      ),
       removed: [],
     },
     {
@@ -230,7 +300,15 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(40, 50, "selfpromo", true),
         sponsorChapter(50, 60, "interaction"),
       ],
-      expected: chapters([10, 20, 30, 40], ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Interaction Reminder", "c"]),
+      expected: chapters(
+        [10, 20, 30, 40],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Interaction Reminder",
+          "c",
+        ],
+      ),
       removed: [chapter(20, 50, undefined, true)],
     },
     {
@@ -243,7 +321,15 @@ describe("ModifyChaptersPP", () => {
       ],
       expected: chapters(
         [10, 20, 30, 40, 50, 60, 70],
-        ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Sponsor, Unpaid/Self Promotion", "[SponsorBlock]: Unpaid/Self Promotion", "[SponsorBlock]: Unpaid/Self Promotion, Interaction Reminder", "[SponsorBlock]: Interaction Reminder", "c"],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Sponsor, Unpaid/Self Promotion",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "[SponsorBlock]: Unpaid/Self Promotion, Interaction Reminder",
+          "[SponsorBlock]: Interaction Reminder",
+          "c",
+        ],
       ),
       removed: [],
     },
@@ -307,7 +393,11 @@ describe("ModifyChaptersPP", () => {
         chapter(150, 170, undefined, true),
       ],
       expected: chapters([20], ["c"]),
-      removed: [chapter(0, 60, undefined, true), chapter(70, 110, undefined, true), chapter(120, 170, undefined, true)],
+      removed: [
+        chapter(0, 60, undefined, true),
+        chapter(70, 110, undefined, true),
+        chapter(120, 170, undefined, true),
+      ],
     },
     {
       name: "OverlappingSponsorsDifferentTitlesAfterCut",
@@ -320,7 +410,14 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(40, 50, "interaction"),
         sponsorChapter(50, 60, "outro"),
       ],
-      expected: chapters([10, 30, 40], ["c", "[SponsorBlock]: Sponsor, Intermission/Intro Animation", "[SponsorBlock]: Sponsor, Endcards/Credits"]),
+      expected: chapters(
+        [10, 30, 40],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor, Intermission/Intro Animation",
+          "[SponsorBlock]: Sponsor, Endcards/Credits",
+        ],
+      ),
       removed: [chapter(30, 50, undefined, true)],
     },
     {
@@ -333,7 +430,15 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(40, 60, "sponsor"),
         sponsorChapter(50, 60, "interaction"),
       ],
-      expected: chapters([10, 20, 40, 50], ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Sponsor, Interaction Reminder", "c"]),
+      expected: chapters(
+        [10, 20, 40, 50],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Sponsor, Interaction Reminder",
+          "c",
+        ],
+      ),
       removed: [chapter(30, 50, undefined, true)],
     },
     {
@@ -344,7 +449,15 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(20, 60, "interaction"),
         sponsorChapter(30, 50, "selfpromo", true),
       ],
-      expected: chapters([10, 20, 40, 50], ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Sponsor, Interaction Reminder", "c"]),
+      expected: chapters(
+        [10, 20, 40, 50],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Sponsor, Interaction Reminder",
+          "c",
+        ],
+      ),
       removed: [chapter(30, 50, undefined, true)],
     },
     {
@@ -382,7 +495,11 @@ describe("ModifyChaptersPP", () => {
           "c",
         ],
       ),
-      removed: [chapter(20, 30, undefined, true), chapter(70, 80, undefined, true), chapter(140, 160, undefined, true)],
+      removed: [
+        chapter(20, 30, undefined, true),
+        chapter(70, 80, undefined, true),
+        chapter(140, 160, undefined, true),
+      ],
     },
     {
       name: "SponsorOverlapsMultipleChapters",
@@ -390,7 +507,10 @@ describe("ModifyChaptersPP", () => {
         ...chapters([20, 40, 60, 80, 100], ["c1", "c2", "c3", "c4", "c5"]),
         sponsorChapter(10, 90, "sponsor"),
       ],
-      expected: chapters([10, 90, 100], ["c1", "[SponsorBlock]: Sponsor", "c5"]),
+      expected: chapters(
+        [10, 90, 100],
+        ["c1", "[SponsorBlock]: Sponsor", "c5"],
+      ),
       removed: [],
     },
     {
@@ -409,7 +529,18 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(20, 30, "sponsor"),
         sponsorChapter(50, 70, "selfpromo"),
       ],
-      expected: chapters([10, 20, 30, 40, 50, 70, 80], ["c1", "c2", "[SponsorBlock]: Sponsor", "c2", "c3", "[SponsorBlock]: Unpaid/Self Promotion", "c4"]),
+      expected: chapters(
+        [10, 20, 30, 40, 50, 70, 80],
+        [
+          "c1",
+          "c2",
+          "[SponsorBlock]: Sponsor",
+          "c2",
+          "c3",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "c4",
+        ],
+      ),
       removed: [],
     },
     {
@@ -420,7 +551,10 @@ describe("ModifyChaptersPP", () => {
         chapter(50, 70, undefined, true),
       ],
       expected: chapters([10, 30, 40, 50], ["c1", "c2", "c3", "c4"]),
-      removed: [chapter(20, 30, undefined, true), chapter(50, 70, undefined, true)],
+      removed: [
+        chapter(20, 30, undefined, true),
+        chapter(50, 70, undefined, true),
+      ],
     },
     {
       name: "ChaptersAfterLastSponsor",
@@ -428,7 +562,10 @@ describe("ModifyChaptersPP", () => {
         ...chapters([20, 40, 50, 60], ["c1", "c2", "c3", "c4"]),
         sponsorChapter(10, 30, "music_offtopic"),
       ],
-      expected: chapters([10, 30, 40, 50, 60], ["c1", "[SponsorBlock]: Non-Music Section", "c2", "c3", "c4"]),
+      expected: chapters(
+        [10, 30, 40, 50, 60],
+        ["c1", "[SponsorBlock]: Non-Music Section", "c2", "c3", "c4"],
+      ),
       removed: [],
     },
     {
@@ -446,7 +583,10 @@ describe("ModifyChaptersPP", () => {
         ...chapters([10, 20, 40], ["c1", "c2", "c3"]),
         sponsorChapter(20, 30, "sponsor"),
       ],
-      expected: chapters([10, 20, 30, 40], ["c1", "c2", "[SponsorBlock]: Sponsor", "c3"]),
+      expected: chapters(
+        [10, 20, 30, 40],
+        ["c1", "c2", "[SponsorBlock]: Sponsor", "c3"],
+      ),
       removed: [],
     },
     {
@@ -464,7 +604,10 @@ describe("ModifyChaptersPP", () => {
         ...chapters([10, 30, 40], ["c1", "c2", "c3"]),
         sponsorChapter(20, 30, "sponsor"),
       ],
-      expected: chapters([10, 20, 30, 40], ["c1", "c2", "[SponsorBlock]: Sponsor", "c3"]),
+      expected: chapters(
+        [10, 20, 30, 40],
+        ["c1", "c2", "[SponsorBlock]: Sponsor", "c3"],
+      ),
       removed: [],
     },
     {
@@ -501,7 +644,16 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(0, 10, "intro"),
         sponsorChapter(50, 60, "outro"),
       ],
-      expected: chapters([10, 20, 40, 50, 60], ["[SponsorBlock]: Intermission/Intro Animation", "c1", "c2", "c3", "[SponsorBlock]: Endcards/Credits"]),
+      expected: chapters(
+        [10, 20, 40, 50, 60],
+        [
+          "[SponsorBlock]: Intermission/Intro Animation",
+          "c1",
+          "c2",
+          "c3",
+          "[SponsorBlock]: Endcards/Credits",
+        ],
+      ),
       removed: [],
     },
     {
@@ -512,7 +664,10 @@ describe("ModifyChaptersPP", () => {
         chapter(50, 60, undefined, true),
       ],
       expected: chapters([10, 30, 40], ["c1", "c2", "c3"]),
-      removed: [chapter(0, 10, undefined, true), chapter(50, 60, undefined, true)],
+      removed: [
+        chapter(0, 10, undefined, true),
+        chapter(50, 60, undefined, true),
+      ],
     },
     {
       name: "SponsorsOverlapChaptersAtVideoBoundaries",
@@ -521,7 +676,14 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(0, 20, "intro"),
         sponsorChapter(30, 50, "outro"),
       ],
-      expected: chapters([20, 30, 50], ["[SponsorBlock]: Intermission/Intro Animation", "c2", "[SponsorBlock]: Endcards/Credits"]),
+      expected: chapters(
+        [20, 30, 50],
+        [
+          "[SponsorBlock]: Intermission/Intro Animation",
+          "c2",
+          "[SponsorBlock]: Endcards/Credits",
+        ],
+      ),
       removed: [],
     },
     {
@@ -532,7 +694,10 @@ describe("ModifyChaptersPP", () => {
         chapter(30, 50, undefined, true),
       ],
       expected: chapters([10], ["c2"]),
-      removed: [chapter(0, 20, undefined, true), chapter(30, 50, undefined, true)],
+      removed: [
+        chapter(0, 20, undefined, true),
+        chapter(30, 50, undefined, true),
+      ],
     },
     {
       name: "EverythingSponsored",
@@ -541,7 +706,13 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(0, 20, "intro"),
         sponsorChapter(20, 40, "outro"),
       ],
-      expected: chapters([20, 40], ["[SponsorBlock]: Intermission/Intro Animation", "[SponsorBlock]: Endcards/Credits"]),
+      expected: chapters(
+        [20, 40],
+        [
+          "[SponsorBlock]: Intermission/Intro Animation",
+          "[SponsorBlock]: Endcards/Credits",
+        ],
+      ),
       removed: [],
     },
     {
@@ -583,10 +754,7 @@ describe("ModifyChaptersPP", () => {
     },
     {
       name: "SingleTinyChapterIsPreserved",
-      chapters: [
-        ...chapters([2], ["c"]),
-        chapter(0.5, 2, undefined, true),
-      ],
+      chapters: [...chapters([2], ["c"]), chapter(0.5, 2, undefined, true)],
       expected: chapters([0.5], ["c"]),
       removed: [chapter(0.5, 2, undefined, true)],
     },
@@ -605,7 +773,10 @@ describe("ModifyChaptersPP", () => {
         ...chapters([1, 3, 4], ["c1", "c2", "c3"]),
         sponsorChapter(1.5, 2.5, "sponsor"),
       ],
-      expected: chapters([1.5, 2.5, 4], ["c1", "[SponsorBlock]: Sponsor", "c3"]),
+      expected: chapters(
+        [1.5, 2.5, 4],
+        ["c1", "[SponsorBlock]: Sponsor", "c3"],
+      ),
       removed: [],
     },
     {
@@ -615,7 +786,15 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(1, 3, "sponsor"),
         sponsorChapter(2.5, 4, "selfpromo"),
       ],
-      expected: chapters([1, 3, 4, 5], ["c1", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Unpaid/Self Promotion", "c3"]),
+      expected: chapters(
+        [1, 3, 4, 5],
+        [
+          "c1",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "c3",
+        ],
+      ),
       removed: [],
     },
     {
@@ -625,12 +804,21 @@ describe("ModifyChaptersPP", () => {
         sponsorChapter(1.5, 2, "sponsor"),
         sponsorChapter(2, 4, "selfpromo"),
       ],
-      expected: chapters([1.5, 4], ["c", "[SponsorBlock]: Unpaid/Self Promotion"]),
+      expected: chapters(
+        [1.5, 4],
+        ["c", "[SponsorBlock]: Unpaid/Self Promotion"],
+      ),
       removed: [],
     },
   ];
 
-  test.each(chapterArrangementCases)("test_remove_marked_arrange_sponsors_$name", ({ chapters: input, expected, removed }) => {
+  test.each(
+    chapterArrangementCases,
+  )("test_remove_marked_arrange_sponsors_$name", ({
+    chapters: input,
+    expected,
+    removed,
+  }) => {
     const [actualChapters, actualRemoved] = pp.arrange(input);
     expect(normalizeChapters(actualChapters)).toEqual(expected);
     expect(normalizeRemoved(actualRemoved)).toEqual(removed);
@@ -644,10 +832,22 @@ describe("ModifyChaptersPP", () => {
       sponsorChapter(30, 40, "preview"),
       sponsorChapter(50, 60, "filler"),
     ]);
-    expect(normalizeChapters(actualChapters)).toEqual(chapters(
-      [10, 15, 16, 20, 30, 40, 50, 60, 70],
-      ["c", "[SponsorBlock]: sb c1", "[SponsorBlock]: sb c1, sb c2", "[SponsorBlock]: sb c1", "c", "[SponsorBlock]: Preview/Recap", "c", "[SponsorBlock]: Filler Tangent", "c"],
-    ));
+    expect(normalizeChapters(actualChapters)).toEqual(
+      chapters(
+        [10, 15, 16, 20, 30, 40, 50, 60, 70],
+        [
+          "c",
+          "[SponsorBlock]: sb c1",
+          "[SponsorBlock]: sb c1, sb c2",
+          "[SponsorBlock]: sb c1",
+          "c",
+          "[SponsorBlock]: Preview/Recap",
+          "c",
+          "[SponsorBlock]: Filler Tangent",
+          "c",
+        ],
+      ),
+    );
     expect(normalizeRemoved(actualRemoved)).toEqual([]);
   });
 
@@ -661,82 +861,115 @@ describe("ModifyChaptersPP", () => {
       sponsorChapter(90, 120, "selfpromo"),
       sponsorChapter(100, 110, "sponsor"),
     ]);
-    expect(normalizeChapters(actualChapters)).toEqual(chapters(
-      [10, 20, 40, 45, 50, 60, 70, 85, 90, 100, 110, 120],
-      [
-        "c",
-        "[SponsorBlock]: Sponsor",
-        "[SponsorBlock]: Sponsor, Unpaid/Self Promotion",
-        "[SponsorBlock]: Sponsor",
-        "c",
-        "[SponsorBlock]: Sponsor",
-        "[SponsorBlock]: Sponsor, Unpaid/Self Promotion",
-        "[SponsorBlock]: Unpaid/Self Promotion",
-        "c",
-        "[SponsorBlock]: Unpaid/Self Promotion",
-        "[SponsorBlock]: Unpaid/Self Promotion, Sponsor",
-        "[SponsorBlock]: Unpaid/Self Promotion",
-      ],
-    ));
+    expect(normalizeChapters(actualChapters)).toEqual(
+      chapters(
+        [10, 20, 40, 45, 50, 60, 70, 85, 90, 100, 110, 120],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Sponsor, Unpaid/Self Promotion",
+          "[SponsorBlock]: Sponsor",
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Sponsor, Unpaid/Self Promotion",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "c",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "[SponsorBlock]: Unpaid/Self Promotion, Sponsor",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+        ],
+      ),
+    );
     expect(normalizeRemoved(actualRemoved)).toEqual([]);
   });
 
   test("test_remove_marked_arrange_sponsors_SmallestSponsorInTheOverlapGetsNamed", () => {
-    const namedPp = new TestModifyChaptersPP(fakeDownloader, null, null, null, { sponsorblock_chapter_title: "[SponsorBlock]: %(name)s" });
+    const namedPp = new TestModifyChaptersPP(fakeDownloader, null, null, null, {
+      sponsorblock_chapter_title: "[SponsorBlock]: %(name)s",
+    });
     const [actualChapters, actualRemoved] = namedPp.arrange([
       ...chapters([10], ["c"]),
       sponsorChapter(2, 8, "sponsor"),
       sponsorChapter(4, 6, "selfpromo"),
     ]);
-    expect(normalizeChapters(actualChapters)).toEqual(chapters(
-      [2, 4, 6, 8, 10],
-      ["c", "[SponsorBlock]: Sponsor", "[SponsorBlock]: Unpaid/Self Promotion", "[SponsorBlock]: Sponsor", "c"],
-    ));
+    expect(normalizeChapters(actualChapters)).toEqual(
+      chapters(
+        [2, 4, 6, 8, 10],
+        [
+          "c",
+          "[SponsorBlock]: Sponsor",
+          "[SponsorBlock]: Unpaid/Self Promotion",
+          "[SponsorBlock]: Sponsor",
+          "c",
+        ],
+      ),
+    );
     expect(normalizeRemoved(actualRemoved)).toEqual([]);
   });
 
   test("test_make_concat_opts common cases", () => {
-    const common = ModifyChaptersPP.makeConcatOpts([chapter(1, 2, "s1"), chapter(10, 20, "s2")], 30);
+    const common = ModifyChaptersPP.makeConcatOpts(
+      [chapter(1, 2, "s1"), chapter(10, 20, "s2")],
+      30,
+    );
     expect(pp.concatSpecPublic(["test", "test", "test"], common).join("")).toBe(
-      "ffconcat version 1.0\n"
-      + "file 'file:test'\n"
-      + "outpoint 1.000000\n"
-      + "file 'file:test'\n"
-      + "inpoint 2.000000\n"
-      + "outpoint 10.000000\n"
-      + "file 'file:test'\n"
-      + "inpoint 20.000000\n",
+      "ffconcat version 1.0\n" +
+        "file 'file:test'\n" +
+        "outpoint 1.000000\n" +
+        "file 'file:test'\n" +
+        "inpoint 2.000000\n" +
+        "outpoint 10.000000\n" +
+        "file 'file:test'\n" +
+        "inpoint 20.000000\n",
     );
 
-    const start = ModifyChaptersPP.makeConcatOpts([chapter(0, 1, "s1"), chapter(10, 20, "s2")], 30);
+    const start = ModifyChaptersPP.makeConcatOpts(
+      [chapter(0, 1, "s1"), chapter(10, 20, "s2")],
+      30,
+    );
     expect(pp.concatSpecPublic(["test", "test"], start).join("")).toBe(
-      "ffconcat version 1.0\n"
-      + "file 'file:test'\n"
-      + "inpoint 1.000000\n"
-      + "outpoint 10.000000\n"
-      + "file 'file:test'\n"
-      + "inpoint 20.000000\n",
+      "ffconcat version 1.0\n" +
+        "file 'file:test'\n" +
+        "inpoint 1.000000\n" +
+        "outpoint 10.000000\n" +
+        "file 'file:test'\n" +
+        "inpoint 20.000000\n",
     );
 
-    const end = ModifyChaptersPP.makeConcatOpts([chapter(1, 2, "s1"), chapter(10, 20, "s2")], 20);
+    const end = ModifyChaptersPP.makeConcatOpts(
+      [chapter(1, 2, "s1"), chapter(10, 20, "s2")],
+      20,
+    );
     expect(pp.concatSpecPublic(["test", "test"], end).join("")).toBe(
-      "ffconcat version 1.0\n"
-      + "file 'file:test'\n"
-      + "outpoint 1.000000\n"
-      + "file 'file:test'\n"
-      + "inpoint 2.000000\n"
-      + "outpoint 10.000000\n",
+      "ffconcat version 1.0\n" +
+        "file 'file:test'\n" +
+        "outpoint 1.000000\n" +
+        "file 'file:test'\n" +
+        "inpoint 2.000000\n" +
+        "outpoint 10.000000\n",
     );
   });
 
   test("test_quote_for_concat", () => {
-    expect(FFmpegPostProcessor.quoteForFfmpeg("special ' ''characters'''galore")).toBe("'special '\\'' '\\'\\''characters'\\'\\'\\''galore'");
-    expect(FFmpegPostProcessor.quoteForFfmpeg("'''special ' characters ' galore")).toBe("'\\'\\'\\''special '\\'' characters '\\'' galore'");
-    expect(FFmpegPostProcessor.quoteForFfmpeg("special ' characters ' galore'''")).toBe("'special '\\'' characters '\\'' galore'\\'\\'\\''");
+    expect(
+      FFmpegPostProcessor.quoteForFfmpeg("special ' ''characters'''galore"),
+    ).toBe("'special '\\'' '\\'\\''characters'\\'\\'\\''galore'");
+    expect(
+      FFmpegPostProcessor.quoteForFfmpeg("'''special ' characters ' galore"),
+    ).toBe("'\\'\\'\\''special '\\'' characters '\\'' galore'");
+    expect(
+      FFmpegPostProcessor.quoteForFfmpeg("special ' characters ' galore'''"),
+    ).toBe("'special '\\'' characters '\\'' galore'\\'\\'\\''");
   });
 });
 
-function sponsorChapter(start: number, end: number, category: string, remove = false, title = SponsorBlockPP.CATEGORIES[category] ?? category): Chapter {
+function sponsorChapter(
+  start: number,
+  end: number,
+  category: string,
+  remove = false,
+  title = SponsorBlockPP.CATEGORIES[category] ?? category,
+): Chapter {
   return {
     start_time: start,
     end_time: end,
@@ -745,7 +978,12 @@ function sponsorChapter(start: number, end: number, category: string, remove = f
   };
 }
 
-function chapter(start: number, end: number, title?: string, remove = false): Chapter {
+function chapter(
+  start: number,
+  end: number,
+  title?: string,
+  remove = false,
+): Chapter {
   return {
     start_time: start,
     end_time: end,
@@ -754,7 +992,10 @@ function chapter(start: number, end: number, title?: string, remove = false): Ch
   };
 }
 
-function chapters(ends: readonly number[], titles: readonly string[]): Chapter[] {
+function chapters(
+  ends: readonly number[],
+  titles: readonly string[],
+): Chapter[] {
   let start = 0;
   return ends.map((end, index) => {
     const item = chapter(start, end, titles[index]);

@@ -23,13 +23,19 @@ interface BerufeVideoSource {
 
 interface BerufeVideo {
   videoSources?: { html?: Record<string, BerufeVideoSource[]> };
-  videoTracks?: Array<{ type?: string; language?: string; source?: string; label?: string }>;
+  videoTracks?: Array<{
+    type?: string;
+    language?: string;
+    source?: string;
+    label?: string;
+  }>;
   videoMetaData?: { title?: string };
   duration?: unknown;
 }
 
 export class BerufeTVIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?web\.arbeitsagentur\.de/berufetv/[^?#]+/film;filmId=(?<id>[\w-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?web\.arbeitsagentur\.de/berufetv/[^?#]+/film;filmId=(?<id>[\w-]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -45,7 +51,7 @@ export class BerufeTVIE extends InfoExtractor {
     );
     const meta = !movieMetadata
       ? {}
-      : movieMetadata.metadaten?.find((item) => item.miId === videoId) ?? {};
+      : (movieMetadata.metadaten?.find((item) => item.miId === videoId) ?? {});
 
     const video = await this.downloadJson<BerufeVideo>(
       `https://d.video-cdn.net/play/player/8YRzUk6pTzmBdrsLe9Y88W/video/${videoId}`,
@@ -58,15 +64,21 @@ export class BerufeTVIE extends InfoExtractor {
 
     const formats: Array<Record<string, unknown>> = [];
     let subtitles: Record<string, Array<Record<string, unknown>>> = {};
-    for (const [key, sources] of Object.entries(video.videoSources?.html ?? {})) {
+    for (const [key, sources] of Object.entries(
+      video.videoSources?.html ?? {},
+    )) {
       const source = sources[0];
       if (!source?.source) {
         continue;
       }
       if (key === "auto") {
-        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(source.source, videoId);
+        const [m3u8Formats, m3u8Subtitles] =
+          await this.extractM3u8FormatsAndSubtitles(source.source, videoId);
         formats.push(...m3u8Formats);
-        subtitles = m3u8Subtitles as Record<string, Array<Record<string, unknown>>>;
+        subtitles = m3u8Subtitles as Record<
+          string,
+          Array<Record<string, unknown>>
+        >;
       } else {
         formats.push({
           url: source.source,
@@ -96,7 +108,9 @@ export class BerufeTVIE extends InfoExtractor {
       id: videoId,
       title: meta.titel ?? video.videoMetaData?.title,
       description: meta.beschreibung,
-      thumbnail: meta.thumbnail ?? `https://asset-out-cdn.video-cdn.net/private/videos/${videoId}/thumbnails/active`,
+      thumbnail:
+        meta.thumbnail ??
+        `https://asset-out-cdn.video-cdn.net/private/videos/${videoId}/thumbnails/active`,
       duration: floatOrNone(video.duration, 1000) ?? undefined,
       categories: meta.kategorie ? [meta.kategorie] : undefined,
       tags: meta.themengebiete,

@@ -1,10 +1,17 @@
 // Source: yt_dlp/extractor/yfanefa.py
 
-import { determineExt, intOrNone, joinNonempty, removeEnd, urlOrNone } from "../utils/index.ts";
+import {
+  determineExt,
+  intOrNone,
+  joinNonempty,
+  removeEnd,
+  urlOrNone,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class YfanefaIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?yfanefa\.com/(?<id>[^?#]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?yfanefa\.com/(?<id>[^?#]+)`;
 
   static override get IE_NAME(): string {
     return "yfanefa";
@@ -16,14 +23,17 @@ export class YfanefaIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download Yfanefa webpage");
     }
-    const playerData = this.searchJson<Record<string, unknown>>(
-      String.raw`iwPlayer\.options\["[\w.]+"\]\s*=`,
-      webpage,
-      "player options",
-      videoId,
-    ) ?? {};
+    const playerData =
+      this.searchJson<Record<string, unknown>>(
+        String.raw`iwPlayer\.options\["[\w.]+"\]\s*=`,
+        webpage,
+        "player options",
+        videoId,
+      ) ?? {};
 
-    const rawVideoUrl = joinNonempty(playerData.url, playerData.signature, { delim: "" });
+    const rawVideoUrl = joinNonempty(playerData.url, playerData.signature, {
+      delim: "",
+    });
     const videoUrl = urlOrNone(rawVideoUrl);
     const formats = !videoUrl
       ? []
@@ -33,7 +43,13 @@ export class YfanefaIE extends InfoExtractor {
 
     return {
       id: videoId.replace(/^\/+|\/+$/g, "").replaceAll("/", "-"),
-      title: this.ogSearchTitle(webpage) ?? removeEnd(this.htmlExtractTitle(webpage), " | Yorkshire Film Archive") ?? videoId,
+      title:
+        this.ogSearchTitle(webpage) ??
+        removeEnd(
+          this.htmlExtractTitle(webpage),
+          " | Yorkshire Film Archive",
+        ) ??
+        videoId,
       formats,
       thumbnail: urlOrNone(playerData.preview),
       duration: intOrNone(playerData.duration) ?? undefined,

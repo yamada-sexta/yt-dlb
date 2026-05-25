@@ -7,7 +7,10 @@ import { FileDownloader, type DownloadInfo } from "./common.ts";
 import { headersToFfmpegArgs, outputFormat } from "./external.ts";
 
 export class FFmpegSinkFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const exe = Bun.which("ffmpeg");
     if (!exe) {
       throw new Error("ffmpeg is not available");
@@ -45,27 +48,40 @@ export class FFmpegSinkFD extends FileDownloader {
     const stderr = output.stderr.toString();
     const exitCode = output.exitCode;
     if (exitCode !== 0) {
-      throw new Error(`ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
+      throw new Error(
+        `ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`,
+      );
     }
     await this.tryRename(tmpfilename, filename);
     const size = await this.filesizeOrZero(filename);
-    await this.hookProgress({
-      status: "finished",
-      filename,
-      downloaded_bytes: size,
-      total_bytes: size,
-      elapsed: performance.now() / 1000 - started,
-    }, info);
+    await this.hookProgress(
+      {
+        status: "finished",
+        filename,
+        downloaded_bytes: size,
+        total_bytes: size,
+        elapsed: performance.now() / 1000 - started,
+      },
+      info,
+    );
     return true;
   }
 
-  async realConnection(_sink: WritableStreamDefaultWriter<Uint8Array>, _info: DownloadInfo): Promise<void> {
-    throw new Error("FFmpegSinkFD.realConnection must be implemented by subclasses");
+  async realConnection(
+    _sink: WritableStreamDefaultWriter<Uint8Array>,
+    _info: DownloadInfo,
+  ): Promise<void> {
+    throw new Error(
+      "FFmpegSinkFD.realConnection must be implemented by subclasses",
+    );
   }
 }
 
 export class WebSocketFragmentFD extends FFmpegSinkFD {
-  override async realConnection(sink: WritableStreamDefaultWriter<Uint8Array>, info: DownloadInfo): Promise<void> {
+  override async realConnection(
+    sink: WritableStreamDefaultWriter<Uint8Array>,
+    info: DownloadInfo,
+  ): Promise<void> {
     const ws = await openWebSocket(info.url, info.http_headers);
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener("message", (event) => {
@@ -76,16 +92,25 @@ export class WebSocketFragmentFD extends FFmpegSinkFD {
           .catch(reject);
       });
       ws.addEventListener("close", () => resolve());
-      ws.addEventListener("error", () => reject(new Error(`WebSocket download failed for ${info.url}`)));
+      ws.addEventListener("error", () =>
+        reject(new Error(`WebSocket download failed for ${info.url}`)),
+      );
     });
   }
 }
 
-export async function openWebSocket(url: string, headers?: Record<string, string>): Promise<WebSocket> {
+export async function openWebSocket(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<WebSocket> {
   const ws = new WebSocket(url, headers ? { headers } : undefined);
   await new Promise<void>((resolve, reject) => {
     ws.addEventListener("open", () => resolve(), { once: true });
-    ws.addEventListener("error", () => reject(new Error(`WebSocket connection failed for ${url}`)), { once: true });
+    ws.addEventListener(
+      "error",
+      () => reject(new Error(`WebSocket connection failed for ${url}`)),
+      { once: true },
+    );
   });
   return ws;
 }
@@ -103,5 +128,7 @@ async function bytesFromMessage(data: unknown): Promise<Uint8Array> {
   if (data instanceof Blob) {
     return new Uint8Array(await data.arrayBuffer());
   }
-  throw new Error(`Unsupported WebSocket message type: ${Object.prototype.toString.call(data)}`);
+  throw new Error(
+    `Unsupported WebSocket message type: ${Object.prototype.toString.call(data)}`,
+  );
 }

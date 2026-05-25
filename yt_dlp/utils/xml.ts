@@ -3,19 +3,28 @@
 import type { XmlElement } from "../compat/index.ts";
 
 export function fixXmlAmpersands(xml: string): string {
-  return xml.replaceAll(/&(?!amp;|lt;|gt;|apos;|quot;|#x[0-9a-fA-F]{0,4};|#[0-9]{0,4};)/g, "&amp;");
+  return xml.replaceAll(
+    /&(?!amp;|lt;|gt;|apos;|quot;|#x[0-9a-fA-F]{0,4};|#[0-9]{0,4};)/g,
+    "&amp;",
+  );
 }
 
 export const fix_xml_ampersands = fixXmlAmpersands;
 
-export function xpathWithNs(path: string, nsMap: Record<string, string>): string {
-  return path.split("/").map((component) => {
-    const [prefix, tag] = component.split(":", 2);
-    if (!tag || prefix === undefined) {
-      return component;
-    }
-    return `{${nsMap[prefix]}}${tag}`;
-  }).join("/");
+export function xpathWithNs(
+  path: string,
+  nsMap: Record<string, string>,
+): string {
+  return path
+    .split("/")
+    .map((component) => {
+      const [prefix, tag] = component.split(":", 2);
+      if (!tag || prefix === undefined) {
+        return component;
+      }
+      return `{${nsMap[prefix]}}${tag}`;
+    })
+    .join("/");
 }
 
 export const xpath_with_ns = xpathWithNs;
@@ -56,7 +65,9 @@ export function xpathText(
       return options.defaultValue ?? null;
     }
     if (options.fatal) {
-      throw new Error(`Could not find XML element's text ${name ?? (typeof xpath === "string" ? xpath : xpath[0])}`);
+      throw new Error(
+        `Could not find XML element's text ${name ?? (typeof xpath === "string" ? xpath : xpath[0])}`,
+      );
     }
     return null;
   }

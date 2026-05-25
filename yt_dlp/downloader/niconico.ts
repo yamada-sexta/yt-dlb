@@ -16,7 +16,10 @@ interface ClosableWebSocket {
 }
 
 export class NiconicoLiveFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const videoId = typeof info.id === "string" ? info.id : "unknown";
     const options = parseNiconicoOptions(info.downloader_options);
     let stopped = false;
@@ -32,7 +35,9 @@ export class NiconicoLiveFD extends FileDownloader {
             return;
           }
         } catch (error) {
-          this.toScreen(`[niconico:live] ${videoId}: Connection error occurred, reconnecting after 10 seconds: ${error instanceof Error ? error.message : String(error)}`);
+          this.toScreen(
+            `[niconico:live] ${videoId}: Connection error occurred, reconnecting after 10 seconds: ${error instanceof Error ? error.message : String(error)}`,
+          );
           await sleep(10_000);
         } finally {
           reconnect = true;
@@ -50,35 +55,46 @@ export class NiconicoLiveFD extends FileDownloader {
         activeWs.current.close();
       }
       await controlTask.catch((error: unknown) => {
-        this.writeDebug(`Niconico control WebSocket stopped with error: ${error instanceof Error ? error.message : String(error)}`);
+        this.writeDebug(
+          `Niconico control WebSocket stopped with error: ${error instanceof Error ? error.message : String(error)}`,
+        );
       });
     }
   }
 
-  private async communicateWs(options: NiconicoOptions, reconnect: boolean, setActive: (ws: WebSocket) => void): Promise<boolean> {
-    const ws = reconnect || !options.ws
-      ? await openWebSocket(options.ws_url, { Origin: "https://live.nicovideo.jp" })
-      : options.ws;
+  private async communicateWs(
+    options: NiconicoOptions,
+    reconnect: boolean,
+    setActive: (ws: WebSocket) => void,
+  ): Promise<boolean> {
+    const ws =
+      reconnect || !options.ws
+        ? await openWebSocket(options.ws_url, {
+            Origin: "https://live.nicovideo.jp",
+          })
+        : options.ws;
     setActive(ws);
     if (reconnect || !options.ws) {
       this.writeDebug("Sending startWatching request");
-      ws.send(JSON.stringify({
-        data: {
-          reconnect: true,
-          room: {
-            commentable: true,
-            protocol: "webSocket",
+      ws.send(
+        JSON.stringify({
+          data: {
+            reconnect: true,
+            room: {
+              commentable: true,
+              protocol: "webSocket",
+            },
+            stream: {
+              accessRightMethod: "single_cookie",
+              chasePlay: false,
+              latency: "high",
+              protocol: "hls",
+              quality: options.max_quality,
+            },
           },
-          stream: {
-            accessRightMethod: "single_cookie",
-            chasePlay: false,
-            latency: "high",
-            protocol: "hls",
-            quality: options.max_quality,
-          },
-        },
-        type: "startWatching",
-      }));
+          type: "startWatching",
+        }),
+      );
     }
     while (true) {
       const message = await nextWebSocketText(ws);
@@ -98,7 +114,10 @@ export class NiconicoLiveFD extends FileDownloader {
       } else if (data.type === "error") {
         this.writeDebug(message);
         const body = data.body;
-        const code = body && typeof body === "object" && "code" in body ? body.code : message;
+        const code =
+          body && typeof body === "object" && "code" in body
+            ? body.code
+            : message;
         throw new Error(typeof code === "string" ? code : message);
       } else {
         this.writeDebug(`Server response: ${truncate(message, 100)}`);
@@ -124,15 +143,23 @@ function parseNiconicoOptions(value: unknown): NiconicoOptions {
 
 async function nextWebSocketText(ws: WebSocket): Promise<string | null> {
   return await new Promise((resolve, reject) => {
-    ws.addEventListener("message", async (event) => {
-      try {
-        resolve(await messageToText(event.data));
-      } catch (error) {
-        reject(error);
-      }
-    }, { once: true });
+    ws.addEventListener(
+      "message",
+      async (event) => {
+        try {
+          resolve(await messageToText(event.data));
+        } catch (error) {
+          reject(error);
+        }
+      },
+      { once: true },
+    );
     ws.addEventListener("close", () => resolve(null), { once: true });
-    ws.addEventListener("error", () => reject(new Error("Niconico WebSocket failed")), { once: true });
+    ws.addEventListener(
+      "error",
+      () => reject(new Error("Niconico WebSocket failed")),
+      { once: true },
+    );
   });
 }
 
@@ -149,13 +176,17 @@ async function messageToText(data: unknown): Promise<string> {
   if (data instanceof Blob) {
     return await data.text();
   }
-  throw new Error(`Unsupported WebSocket message type: ${Object.prototype.toString.call(data)}`);
+  throw new Error(
+    `Unsupported WebSocket message type: ${Object.prototype.toString.call(data)}`,
+  );
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {
   try {
     const value: unknown = JSON.parse(text);
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }

@@ -5,33 +5,51 @@ import { ExtractorError } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 import { z } from "zod";
 
-const BlerpBiteSchema = z.object({
-  _id: z.string(),
-  title: z.string(),
-  userKeywords: z.array(z.unknown()).optional(),
-  ownerObject: z.object({
-    _id: z.string().optional(),
-    username: z.string().optional(),
-  }).passthrough().nullable().optional(),
-  audio: z.object({
-    mp3: z.object({
-      url: z.string(),
-    }).passthrough(),
-  }).passthrough(),
-}).passthrough();
+const BlerpBiteSchema = z
+  .object({
+    _id: z.string(),
+    title: z.string(),
+    userKeywords: z.array(z.unknown()).optional(),
+    ownerObject: z
+      .object({
+        _id: z.string().optional(),
+        username: z.string().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    audio: z
+      .object({
+        mp3: z
+          .object({
+            url: z.string(),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
-const BlerpResponseSchema = z.object({
-  data: z.object({
-    web: z.object({
-      biteById: BlerpBiteSchema,
-    }).passthrough(),
-  }).passthrough(),
-}).passthrough();
+const BlerpResponseSchema = z
+  .object({
+    data: z
+      .object({
+        web: z
+          .object({
+            biteById: BlerpBiteSchema,
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 export class BlerpIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?blerp\.com/soundbites/(?<id>[0-9a-zA-Z]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?blerp\.com/soundbites/(?<id>[0-9a-zA-Z]+)`;
   private static readonly GRAPHQL_OPERATION_NAME = "webBitePageGetBite";
-  private static readonly GRAPHQL_QUERY = `query webBitePageGetBite($_id: MongoID!) {
+  private static readonly GRAPHQL_QUERY =
+    `query webBitePageGetBite($_id: MongoID!) {
     web {
       biteById(_id: $_id) {
         _id
@@ -58,10 +76,14 @@ export class BlerpIE extends InfoExtractor {
       },
     );
     if (jsonResult === false) {
-      throw new ExtractorError("Unable to download Blerp metadata", { videoId: audioId });
+      throw new ExtractorError("Unable to download Blerp metadata", {
+        videoId: audioId,
+      });
     }
     const bite = BlerpResponseSchema.parse(jsonResult).data.web.biteById;
-    const tags = bite.userKeywords?.map((item) => stripOrNone(item)).filter((item): item is string => Boolean(item));
+    const tags = bite.userKeywords
+      ?.map((item) => stripOrNone(item))
+      .filter((item): item is string => Boolean(item));
 
     return {
       id: bite._id,

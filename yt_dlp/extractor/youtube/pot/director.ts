@@ -4,7 +4,11 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import { bugReportsMessage, formatField, joinNonempty } from "../../../utils/index.ts";
+import {
+  bugReportsMessage,
+  formatField,
+  joinNonempty,
+} from "../../../utils/index.ts";
 import {
   CacheProviderWritePolicy,
   type PoTokenCacheProvider,
@@ -42,12 +46,17 @@ import {
 } from "./provider.ts";
 import "./_builtin/index.ts";
 
-const PoTokenResponseSchema = z.object({
-  poToken: z.string().min(1),
-  expiresAt: z.number().int().optional(),
-}).passthrough();
+const PoTokenResponseSchema = z
+  .object({
+    poToken: z.string().min(1),
+    expiresAt: z.number().int().optional(),
+  })
+  .passthrough();
 
-const ProviderSettingsSchema = z.record(z.string(), z.array(z.string()).optional());
+const ProviderSettingsSchema = z.record(
+  z.string(),
+  z.array(z.string()).optional(),
+);
 
 export class YoutubeIEContentProviderLogger extends ConsoleIEContentProviderLogger {
   constructor(
@@ -86,7 +95,9 @@ export class YoutubeIEContentProviderLogger extends ConsoleIEContentProviderLogg
     if (this.logLevel <= LogLevel.ERROR) {
       this.host.reportError?.(this.formatMessage(message), cause);
       if (!this.host.reportError) {
-        this.host.reportWarning?.(this.formatMessage(cause ? `${message}: ${cause.message}` : message));
+        this.host.reportWarning?.(
+          this.formatMessage(cause ? `${message}: ${cause.message}` : message),
+        );
       }
     }
   }
@@ -106,14 +117,20 @@ export class PoTokenCache {
     cacheSpecProviders: readonly PoTokenCacheSpecProvider[],
     readonly cacheProviderPreferences: readonly CacheProviderPreference[] = [],
   ) {
-    this.cacheProviders = new Map(cacheProviders.map((provider) => [provider.providerName, provider]));
-    this.cacheSpecProviders = new Map(cacheSpecProviders.map((provider) => [provider.providerName, provider]));
+    this.cacheProviders = new Map(
+      cacheProviders.map((provider) => [provider.providerName, provider]),
+    );
+    this.cacheSpecProviders = new Map(
+      cacheSpecProviders.map((provider) => [provider.providerName, provider]),
+    );
   }
 
   get(request: PoTokenRequest): PoTokenResponse | null {
     const spec = this.getCacheSpec(request);
     if (!spec) {
-      this.logger.trace("No cache spec available for this request, unable to fetch from cache");
+      this.logger.trace(
+        "No cache spec available for this request, unable to fetch from cache",
+      );
       return null;
     }
     const cacheKey = this.generateKey(this.generateKeyBindings(spec));
@@ -123,37 +140,57 @@ export class PoTokenCache {
         if (!cacheResponse) {
           continue;
         }
-        const parsed = PoTokenResponseSchema.safeParse(JSON.parse(cacheResponse));
+        const parsed = PoTokenResponseSchema.safeParse(
+          JSON.parse(cacheResponse),
+        );
         const poTokenResponse = parsed.success ? parsed.data : null;
         if (!validateResponse(poTokenResponse)) {
-          this.logger.error(`Invalid PO Token response retrieved from cache provider "${provider.providerName}": ${cacheResponse}${providerBugReportMessage(provider)}`);
+          this.logger.error(
+            `Invalid PO Token response retrieved from cache provider "${provider.providerName}": ${cacheResponse}${providerBugReportMessage(provider)}`,
+          );
           provider.delete(cacheKey);
           continue;
         }
         if (index > 0) {
-          this.store(request, poTokenResponse, CacheProviderWritePolicy.WRITE_FIRST);
+          this.store(
+            request,
+            poTokenResponse,
+            CacheProviderWritePolicy.WRITE_FIRST,
+          );
         }
         return poTokenResponse;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (error instanceof PoTokenCacheProviderError && error.expected) {
-          this.logger.warning(`Error from "${provider.providerName}" PO Token cache provider: ${message}`);
+          this.logger.warning(
+            `Error from "${provider.providerName}" PO Token cache provider: ${message}`,
+          );
         } else {
-          this.logger.error(`Error occurred with "${provider.providerName}" PO Token cache provider: ${message}${providerBugReportMessage(provider)}`);
+          this.logger.error(
+            `Error occurred with "${provider.providerName}" PO Token cache provider: ${message}${providerBugReportMessage(provider)}`,
+          );
         }
       }
     }
     return null;
   }
 
-  store(request: PoTokenRequest, response: PoTokenResponse, writePolicy?: CacheProviderWritePolicy): void {
+  store(
+    request: PoTokenRequest,
+    response: PoTokenResponse,
+    writePolicy?: CacheProviderWritePolicy,
+  ): void {
     const spec = this.getCacheSpec(request);
     if (!spec) {
-      this.logger.trace("No cache spec available for this request. Not caching.");
+      this.logger.trace(
+        "No cache spec available for this request. Not caching.",
+      );
       return;
     }
     if (!validateResponse(response)) {
-      this.logger.error(`Invalid PO Token response provided to PoTokenCache.store(): ${JSON.stringify(response)}${bugReportsMessage()}`);
+      this.logger.error(
+        `Invalid PO Token response provided to PoTokenCache.store(): ${JSON.stringify(response)}${bugReportsMessage()}`,
+      );
       return;
     }
     const cacheKey = this.generateKey(this.generateKeyBindings(spec));
@@ -165,9 +202,14 @@ export class PoTokenCache {
         provider.store(cacheKey, JSON.stringify(cacheResponse), expiresAt);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warning(`Error from "${provider.providerName}" PO Token cache provider: ${message}`);
+        this.logger.warning(
+          `Error from "${provider.providerName}" PO Token cache provider: ${message}`,
+        );
       }
-      if (index === 0 && resolvedWritePolicy === CacheProviderWritePolicy.WRITE_FIRST) {
+      if (
+        index === 0 &&
+        resolvedWritePolicy === CacheProviderWritePolicy.WRITE_FIRST
+      ) {
         return;
       }
     }
@@ -183,12 +225,20 @@ export class PoTokenCache {
   }
 
   private getCacheProviders(request: PoTokenRequest): PoTokenCacheProvider[] {
-    const preferences = new Map([...this.cacheProviders.values()].map((provider) => [
-      provider,
-      this.cacheProviderPreferences.reduce((total, preference) => total + preference(provider, request), 0),
-    ]));
+    const preferences = new Map(
+      [...this.cacheProviders.values()].map((provider) => [
+        provider,
+        this.cacheProviderPreferences.reduce(
+          (total, preference) => total + preference(provider, request),
+          0,
+        ),
+      ]),
+    );
     return [...this.cacheProviders.values()]
-      .sort((left, right) => (preferences.get(right) ?? 0) - (preferences.get(left) ?? 0))
+      .sort(
+        (left, right) =>
+          (preferences.get(right) ?? 0) - (preferences.get(left) ?? 0),
+      )
       .filter((provider) => provider.isAvailable());
   }
 
@@ -203,13 +253,17 @@ export class PoTokenCache {
           continue;
         }
         if (!validateCacheSpec(spec)) {
-          this.logger.error(`PoTokenCacheSpecProvider "${provider.providerName}" generateCacheSpec() returned invalid spec ${JSON.stringify(spec)}${providerBugReportMessage(provider)}`);
+          this.logger.error(
+            `PoTokenCacheSpecProvider "${provider.providerName}" generateCacheSpec() returned invalid spec ${JSON.stringify(spec)}${providerBugReportMessage(provider)}`,
+          );
           continue;
         }
         return { ...spec, provider };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Error occurred with "${provider.providerName}" PO Token cache spec provider: ${message}${providerBugReportMessage(provider)}`);
+        this.logger.error(
+          `Error occurred with "${provider.providerName}" PO Token cache spec provider: ${message}${providerBugReportMessage(provider)}`,
+        );
       }
     }
     return null;
@@ -217,14 +271,23 @@ export class PoTokenCache {
 
   private generateKeyBindings(spec: PoTokenCacheSpec): Record<string, string> {
     return {
-      ...Object.fromEntries(Object.entries(spec.keyBindings).filter((entry): entry is [string, string] => entry[1] !== null && entry[1] !== undefined)),
+      ...Object.fromEntries(
+        Object.entries(spec.keyBindings).filter(
+          (entry): entry is [string, string] =>
+            entry[1] !== null && entry[1] !== undefined,
+        ),
+      ),
       _dlp_cache: "v1",
       ...(spec.provider ? { _p: spec.provider.providerName } : {}),
     };
   }
 
   private generateKey(bindings: Record<string, string>): string {
-    return createHash("sha256").update(JSON.stringify(Object.fromEntries(Object.entries(bindings).sort()))).digest("hex");
+    return createHash("sha256")
+      .update(
+        JSON.stringify(Object.fromEntries(Object.entries(bindings).sort())),
+      )
+      .digest("hex");
   }
 }
 
@@ -275,32 +338,51 @@ export class PoTokenRequestDirector {
   }
 
   private getProviders(request: PoTokenRequest): PoTokenProvider[] {
-    const preferences = new Map([...this.providers.values()].map((provider) => [
-      provider,
-      this.preferences.reduce((total, preference) => total + preference(provider, [request]), 0),
-    ]));
+    const preferences = new Map(
+      [...this.providers.values()].map((provider) => [
+        provider,
+        this.preferences.reduce(
+          (total, preference) => total + preference(provider, [request]),
+          0,
+        ),
+      ]),
+    );
     return [...this.providers.values()]
-      .sort((left, right) => (preferences.get(right) ?? 0) - (preferences.get(left) ?? 0))
+      .sort(
+        (left, right) =>
+          (preferences.get(right) ?? 0) - (preferences.get(left) ?? 0),
+      )
       .filter((provider) => provider.isAvailable());
   }
 
-  private async getPoTokenResponse(request: PoTokenRequest): Promise<PoTokenResponse | null> {
+  private async getPoTokenResponse(
+    request: PoTokenRequest,
+  ): Promise<PoTokenResponse | null> {
     for (const provider of this.getProviders(request)) {
       try {
         const response = await provider.requestPot({ ...request });
         if (!validateResponse(response)) {
-          this.logger.error(`Invalid PO Token response received from "${provider.providerName}" provider: ${JSON.stringify(response)}${providerBugReportMessage(provider)}`);
+          this.logger.error(
+            `Invalid PO Token response received from "${provider.providerName}" provider: ${JSON.stringify(response)}${providerBugReportMessage(provider)}`,
+          );
           continue;
         }
         return response;
       } catch (error) {
         if (error instanceof PoTokenProviderRejectedRequest) {
-          this.logger.trace(`PO Token Provider "${provider.providerName}" rejected this request, trying next available provider. Reason: ${error.message}`);
+          this.logger.trace(
+            `PO Token Provider "${provider.providerName}" rejected this request, trying next available provider. Reason: ${error.message}`,
+          );
         } else if (error instanceof PoTokenProviderError) {
-          this.logger.warning(`Error fetching PO Token from "${provider.providerName}" provider: ${error.message}${error.expected ? "" : providerBugReportMessage(provider)}`);
+          this.logger.warning(
+            `Error fetching PO Token from "${provider.providerName}" provider: ${error.message}${error.expected ? "" : providerBugReportMessage(provider)}`,
+          );
         } else {
-          const message = error instanceof Error ? error.message : String(error);
-          this.logger.error(`Unexpected error when fetching PO Token from "${provider.providerName}" provider: ${message}${providerBugReportMessage(provider)}`);
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.logger.error(
+            `Unexpected error when fetching PO Token from "${provider.providerName}" provider: ${message}${providerBugReportMessage(provider)}`,
+          );
         }
       }
     }
@@ -308,20 +390,37 @@ export class PoTokenRequestDirector {
   }
 }
 
-export function initializePotDirector(host: YoutubePoTokenHost): PoTokenRequestDirector {
+export function initializePotDirector(
+  host: YoutubePoTokenHost,
+): PoTokenRequestDirector {
   const extractorArgs = host.params?.extractor_args ?? {};
   const youtubeArgs = extractorArgs.youtube;
-  const enableTrace = Array.isArray(youtubeArgs) && youtubeArgs.includes("pot_trace=true");
-  const logLevel = enableTrace ? LogLevel.TRACE : host.params?.verbose ? LogLevel.DEBUG : LogLevel.INFO;
+  const enableTrace =
+    Array.isArray(youtubeArgs) && youtubeArgs.includes("pot_trace=true");
+  const logLevel = enableTrace
+    ? LogLevel.TRACE
+    : host.params?.verbose
+      ? LogLevel.DEBUG
+      : LogLevel.INFO;
 
-  const getLoggerAndSettings = (provider: { providerName: string }, loggerKey: string): [YoutubeIEContentProviderLogger, Record<string, readonly string[] | undefined>] => {
+  const getLoggerAndSettings = (
+    provider: { providerName: string },
+    loggerKey: string,
+  ): [
+    YoutubeIEContentProviderLogger,
+    Record<string, readonly string[] | undefined>,
+  ] => {
     const extractorKey = `youtubepot-${provider.providerName.toLowerCase()}`;
     const rawSettings = extractorArgs[extractorKey];
     const settings = ProviderSettingsSchema.safeParse(rawSettings).success
-      ? rawSettings as Record<string, readonly string[] | undefined>
+      ? (rawSettings as Record<string, readonly string[] | undefined>)
       : {};
     return [
-      new YoutubeIEContentProviderLogger(host, `${loggerKey}:${provider.providerName}`, logLevel),
+      new YoutubeIEContentProviderLogger(
+        host,
+        `${loggerKey}:${provider.providerName}`,
+        logLevel,
+      ),
       settings,
     ];
   };
@@ -342,7 +441,10 @@ export function initializePotDirector(host: YoutubePoTokenHost): PoTokenRequestD
     cacheSpecProviders,
     [...potCacheProviderPreferences] as CacheProviderPreference[],
   );
-  const director = new PoTokenRequestDirector(new YoutubeIEContentProviderLogger(host, "pot", logLevel), cache);
+  const director = new PoTokenRequestDirector(
+    new YoutubeIEContentProviderLogger(host, "pot", logLevel),
+    cache,
+  );
   host.addCloseHook?.(() => director.close());
   for (const Provider of potProviders.values()) {
     const Ctor = Provider as PoTokenProviderConstructor;
@@ -357,11 +459,15 @@ export function initializePotDirector(host: YoutubePoTokenHost): PoTokenRequestD
 
 export const initialize_pot_director = initializePotDirector;
 
-export function providerDisplayList(providers: Iterable<IEContentProvider>): string {
+export function providerDisplayList(
+  providers: Iterable<IEContentProvider>,
+): string {
   const displayNames = [...providers].map((provider) => {
     let display = joinNonempty(
       provider.providerName,
-      provider instanceof BuiltinIEContentProvider ? null : (provider.constructor as typeof IEContentProvider).providerVersion,
+      provider instanceof BuiltinIEContentProvider
+        ? null
+        : (provider.constructor as typeof IEContentProvider).providerVersion,
     );
     const statuses: string[] = [];
     if (!(provider instanceof BuiltinIEContentProvider)) {
@@ -392,7 +498,9 @@ export function cleanPot(poToken: string): string {
 
 export const clean_pot = cleanPot;
 
-export function validateResponse(response: PoTokenResponse | null | undefined): response is PoTokenResponse {
+export function validateResponse(
+  response: PoTokenResponse | null | undefined,
+): response is PoTokenResponse {
   if (!response?.poToken) {
     return false;
   }
@@ -401,20 +509,31 @@ export function validateResponse(response: PoTokenResponse | null | undefined): 
   } catch {
     return false;
   }
-  return response.expiresAt === undefined || response.expiresAt <= 0 || response.expiresAt > nowSeconds();
+  return (
+    response.expiresAt === undefined ||
+    response.expiresAt <= 0 ||
+    response.expiresAt > nowSeconds()
+  );
 }
 
 export const validate_response = validateResponse;
 
-export function validateCacheSpec(spec: PoTokenCacheSpec | null | undefined): spec is PoTokenCacheSpec {
+export function validateCacheSpec(
+  spec: PoTokenCacheSpec | null | undefined,
+): spec is PoTokenCacheSpec {
   return Boolean(
     spec &&
       Object.values(CacheProviderWritePolicy).includes(spec.writePolicy) &&
       Number.isInteger(spec.defaultTtl) &&
       spec.keyBindings &&
       Object.keys(spec.keyBindings).every((key) => typeof key === "string") &&
-      Object.values(spec.keyBindings).every((value) => value === null || value === undefined || typeof value === "string") &&
-      Object.values(spec.keyBindings).some((value) => value !== null && value !== undefined),
+      Object.values(spec.keyBindings).every(
+        (value) =>
+          value === null || value === undefined || typeof value === "string",
+      ) &&
+      Object.values(spec.keyBindings).some(
+        (value) => value !== null && value !== undefined,
+      ),
   );
 }
 
@@ -423,7 +542,12 @@ export const validate_cache_spec = validateCacheSpec;
 export interface YoutubePoTokenHost extends IEContentProviderHost {
   params?: {
     verbose?: boolean;
-    extractor_args?: Record<string, Record<string, readonly string[] | undefined> | readonly string[] | undefined>;
+    extractor_args?: Record<
+      string,
+      | Record<string, readonly string[] | undefined>
+      | readonly string[]
+      | undefined
+    >;
   };
   writeDebug?(message: string, options?: { once?: boolean }): void;
   toScreen?(message: string): void;

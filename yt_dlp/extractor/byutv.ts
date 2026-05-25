@@ -5,19 +5,22 @@ import { z } from "zod";
 import { determineExt, parseDuration, urlOrNone } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
-const ByuTvEpisodeSchema = z.object({
-  videoUrl: z.string().optional(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  imageThumbnail: z.string().optional(),
-  length: z.union([z.string(), z.number()]).optional(),
-}).passthrough();
+const ByuTvEpisodeSchema = z
+  .object({
+    videoUrl: z.string().optional(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    imageThumbnail: z.string().optional(),
+    length: z.union([z.string(), z.number()]).optional(),
+  })
+  .passthrough();
 
 const ByuTvVideoSchema = z.record(z.string(), z.unknown());
 
 export class BYUtvIE extends InfoExtractor {
   static override readonly _WORKING = false;
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?byutv\.org/(?:watch|player)/(?!event/)(?<id>[0-9a-f-]+)(?:/(?<display_id>[^/?#&]+))?`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?byutv\.org/(?:watch|player)/(?!event/)(?<id>[0-9a-f-]+)(?:/(?<display_id>[^/?#&]+))?`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -59,16 +62,19 @@ export class BYUtvIE extends InfoExtractor {
       }
       const ext = determineExt(videoUrl);
       if (ext === "m3u8") {
-        const [m3u8Formats, m3u8Subtitles] = await this.extractM3u8FormatsAndSubtitles(
-          videoUrl,
-          videoId,
-          "mp4",
-          { entryProtocol: "m3u8_native", m3u8Id: "hls" },
-        );
+        const [m3u8Formats, m3u8Subtitles] =
+          await this.extractM3u8FormatsAndSubtitles(videoUrl, videoId, "mp4", {
+            entryProtocol: "m3u8_native",
+            m3u8Id: "hls",
+          });
         formats.push(...m3u8Formats);
         this.mergeSubtitles(m3u8Subtitles, subtitles);
       } else if (ext === "mpd") {
-        const [mpdFormats, mpdSubtitles] = await this.extractMpdFormatsAndSubtitles(videoUrl, videoId, { mpdId: "dash", fatal: false });
+        const [mpdFormats, mpdSubtitles] =
+          await this.extractMpdFormatsAndSubtitles(videoUrl, videoId, {
+            mpdId: "dash",
+            fatal: false,
+          });
         formats.push(...mpdFormats);
         this.mergeSubtitles(mpdSubtitles, subtitles);
       } else {
@@ -89,8 +95,10 @@ export class BYUtvIE extends InfoExtractor {
       id: videoId,
       display_id: displayId,
       title: typeof info.title === "string" ? info.title : displayId,
-      description: typeof info.description === "string" ? info.description : undefined,
-      thumbnail: typeof info.thumbnail === "string" ? info.thumbnail : undefined,
+      description:
+        typeof info.description === "string" ? info.description : undefined,
+      thumbnail:
+        typeof info.thumbnail === "string" ? info.thumbnail : undefined,
       duration: typeof info.duration === "number" ? info.duration : undefined,
       formats,
       subtitles,
@@ -98,7 +106,10 @@ export class BYUtvIE extends InfoExtractor {
   }
 }
 
-function fillMissing(target: Record<string, unknown>, source: Record<string, unknown>): void {
+function fillMissing(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): void {
   for (const [key, value] of Object.entries(source)) {
     if (target[key] === undefined && value !== undefined && value !== null) {
       target[key] = value;

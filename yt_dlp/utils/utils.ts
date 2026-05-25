@@ -9,6 +9,67 @@ import { NotImplementedError } from "../errors.ts";
 export const NO_DEFAULT = Symbol("NO_DEFAULT");
 export const IDENTITY = <T>(value: T): T => value;
 
+const ENGLISH_MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+const MONTH_NAMES: Record<string, readonly string[]> = {
+  en: ENGLISH_MONTH_NAMES,
+  fr: [
+    "janvier",
+    "fevrier",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "aout",
+    "septembre",
+    "octobre",
+    "novembre",
+    "decembre",
+  ],
+  is: [
+    "janúar",
+    "febrúar",
+    "mars",
+    "apríl",
+    "maí",
+    "júní",
+    "júlí",
+    "ágúst",
+    "september",
+    "október",
+    "nóvember",
+    "desember",
+  ],
+  pl: [
+    "stycznia",
+    "lutego",
+    "marca",
+    "kwietnia",
+    "maja",
+    "czerwca",
+    "lipca",
+    "sierpnia",
+    "września",
+    "października",
+    "listopada",
+    "grudnia",
+  ],
+};
+
 export class YoutubeDLError extends Error {
   constructor(message?: string | null) {
     super(message ?? "YoutubeDLError");
@@ -23,7 +84,15 @@ export class ExtractorError extends YoutubeDLError {
   readonly expected: boolean | undefined;
   override readonly cause: unknown;
 
-  constructor(message: string, readonly options: { expected?: boolean; cause?: unknown; videoId?: string | null; ie?: unknown } = {}) {
+  constructor(
+    message: string,
+    readonly options: {
+      expected?: boolean;
+      cause?: unknown;
+      videoId?: string | null;
+      ie?: unknown;
+    } = {},
+  ) {
     super(message);
     this.name = "ExtractorError";
     this.expected = options.expected;
@@ -42,7 +111,10 @@ export class PostProcessingError extends YoutubeDLError {
 }
 
 export class ReExtractInfo extends YoutubeDLError {
-  constructor(message: string, readonly expected = false) {
+  constructor(
+    message: string,
+    readonly expected = false,
+  ) {
     super(message);
     this.name = "ReExtractInfo";
   }
@@ -56,15 +128,25 @@ export class RegexNotFoundError extends ExtractorError {
 }
 
 export class GeoRestrictedError extends ExtractorError {
-  constructor(message: string, readonly countries: readonly string[] = []) {
+  constructor(
+    message: string,
+    readonly countries: readonly string[] = [],
+  ) {
     super(message, { expected: true });
     this.name = "GeoRestrictedError";
   }
 }
 
 export class UserNotLive extends ExtractorError {
-  constructor(message = "The channel is not currently live", options: { videoId?: string | null; cause?: unknown } = {}) {
-    super(message, { expected: true, videoId: options.videoId, cause: options.cause });
+  constructor(
+    message = "The channel is not currently live",
+    options: { videoId?: string | null; cause?: unknown } = {},
+  ) {
+    super(message, {
+      expected: true,
+      videoId: options.videoId,
+      cause: options.cause,
+    });
     this.name = "UserNotLive";
   }
 }
@@ -76,7 +158,9 @@ export class UnsupportedError extends ExtractorError {
   }
 }
 
-export function bugReportsMessage(before = "Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q=  , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"): string {
+export function bugReportsMessage(
+  before = "Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q=  , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U",
+): string {
   return `; ${before}`;
 }
 
@@ -88,39 +172,80 @@ export function encodeArgument(value: string | Uint8Array): string {
 
 export const encodeArgument_ = encodeArgument;
 
-export function determineExt(url: string | null | undefined, defaultExt = "unknown_video"): string {
+export function determineExt(
+  url: string | null | undefined,
+  defaultExt: string | null = "unknown_video",
+): string {
+  const fallback = defaultExt ?? "unknown_video";
   if (!url?.includes(".")) {
-    return defaultExt;
+    return fallback;
   }
   const [withoutQuery = ""] = url.split("?");
   const [withoutHash = ""] = withoutQuery.split("#");
   const guess = withoutHash.split(".").pop() ?? "";
-  return /^[A-Za-z0-9]+$/.test(guess) ? guess : defaultExt;
+  return /^[A-Za-z0-9]+$/.test(guess) ? guess : fallback;
 }
 
 export const determine_ext = determineExt;
 
-export function removeStart(value: string | null | undefined, start: string): string | null | undefined {
+export function removeStart(
+  value: string | null | undefined,
+  start: string,
+): string | null | undefined {
   return value?.startsWith(start) ? value.slice(start.length) : value;
 }
 
 export const remove_start = removeStart;
 
-export function removeEnd(value: string | null | undefined, end: string): string | null | undefined {
-  return value && end && value.endsWith(end) ? value.slice(0, -end.length) : value;
+export function removeEnd(
+  value: string | null | undefined,
+  end: string,
+): string | null | undefined {
+  return value && end && value.endsWith(end)
+    ? value.slice(0, -end.length)
+    : value;
 }
 
 export const remove_end = removeEnd;
 
-export function urljoin(base: string | Uint8Array | null | undefined, path: string | Uint8Array | null | undefined): string | null {
-  const decodedPath = path instanceof Uint8Array ? new TextDecoder().decode(path) : path;
+export function removeQuotes(
+  value: string | null | undefined,
+): string | null | undefined {
+  if (value === null || value === undefined || value.length < 2) {
+    return value;
+  }
+  const quote = value[0];
+  return (quote === '"' || quote === "'") && value.at(-1) === quote
+    ? value.slice(1, -1)
+    : value;
+}
+
+export const remove_quotes = removeQuotes;
+
+export function baseUrl(url: string): string {
+  const match = /^https?:\/\/[^?#]+\//.exec(url);
+  if (!match) {
+    throw new Error(`Unable to determine base URL for ${url}`);
+  }
+  return match[0];
+}
+
+export const base_url = baseUrl;
+
+export function urljoin(
+  base: string | Uint8Array | null | undefined,
+  path: string | Uint8Array | null | undefined,
+): string | null {
+  const decodedPath =
+    path instanceof Uint8Array ? new TextDecoder().decode(path) : path;
   if (!decodedPath) {
     return null;
   }
   if (/^(?:[a-zA-Z][a-zA-Z0-9+-.]*:)?\/\//.test(decodedPath)) {
     return decodedPath;
   }
-  const decodedBase = base instanceof Uint8Array ? new TextDecoder().decode(base) : base;
+  const decodedBase =
+    base instanceof Uint8Array ? new TextDecoder().decode(base) : base;
   if (!decodedBase || !/^(?:https?:)?\/\//.test(decodedBase)) {
     return null;
   }
@@ -131,14 +256,34 @@ export function urlOrNone(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
-  if (value.startsWith("//")) {
-    return `http:${value}`;
+  if (/^\/\//.test(value)) {
+    return value;
   }
-  try {
-    return new URL(value).toString();
-  } catch {
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//
+    .exec(value)?.[1]
+    ?.toLowerCase();
+  if (
+    !scheme ||
+    ![
+      "http",
+      "https",
+      "rtmp",
+      "rtmpe",
+      "rtmps",
+      "rtmpt",
+      "rtmpte",
+      "mms",
+      "rtsp",
+      "rtspu",
+      "ftp",
+      "ftps",
+      "ws",
+      "wss",
+    ].includes(scheme)
+  ) {
     return null;
   }
+  return /\s/.test(value) ? null : value;
 }
 
 export const url_or_none = urlOrNone;
@@ -146,7 +291,18 @@ export const url_or_none = urlOrNone;
 export function updateUrl(
   url: string,
   options: {
-    query_update?: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined> | null;
+    query_update?:
+      | URLSearchParams
+      | Record<
+          string,
+          | string
+          | number
+          | boolean
+          | readonly (string | number | boolean)[]
+          | null
+          | undefined
+        >
+      | null;
     scheme?: string;
     protocol?: string;
     hostname?: string;
@@ -195,7 +351,20 @@ export function updateUrl(
 
 export const update_url = updateUrl;
 
-export function updateUrlQuery(url: string, query: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined>): string {
+export function updateUrlQuery(
+  url: string,
+  query:
+    | URLSearchParams
+    | Record<
+        string,
+        | string
+        | number
+        | boolean
+        | readonly (string | number | boolean)[]
+        | null
+        | undefined
+      >,
+): string {
   const parsed = new URL(url);
   applyQueryUpdate(parsed, query);
   return parsed.toString();
@@ -204,8 +373,14 @@ export function updateUrlQuery(url: string, query: URLSearchParams | Record<stri
 export const update_url_query = updateUrlQuery;
 
 export function parseQs(url: string): Record<string, string[]> {
-  const query = URL.canParse(url) ? new URL(url).search : url.includes("?") ? url.slice(url.indexOf("?")) : "";
-  const params = new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
+  const query = URL.canParse(url)
+    ? new URL(url).search
+    : url.includes("?")
+      ? url.slice(url.indexOf("?"))
+      : "";
+  const params = new URLSearchParams(
+    query.startsWith("?") ? query.slice(1) : query,
+  );
   const out: Record<string, string[]> = {};
   for (const [key, value] of params) {
     out[key] = [...(out[key] ?? []), value];
@@ -215,11 +390,20 @@ export function parseQs(url: string): Record<string, string[]> {
 
 export const parse_qs = parseQs;
 
-export function urlencodePostdata(data: Record<string, string | number | boolean | null | undefined> | Iterable<readonly [string, string | number | boolean | null | undefined]>): URLSearchParams {
+export function urlencodePostdata(
+  data:
+    | Record<string, string | number | boolean | null | undefined>
+    | Iterable<readonly [string, string | number | boolean | null | undefined]>,
+): URLSearchParams {
   const params = new URLSearchParams();
-  const entries = Symbol.iterator in Object(data)
-    ? data as Iterable<readonly [string, string | number | boolean | null | undefined]>
-    : Object.entries(data as Record<string, string | number | boolean | null | undefined>);
+  const entries =
+    Symbol.iterator in Object(data)
+      ? (data as Iterable<
+          readonly [string, string | number | boolean | null | undefined]
+        >)
+      : Object.entries(
+          data as Record<string, string | number | boolean | null | undefined>,
+        );
   for (const [key, value] of entries) {
     if (value !== null && value !== undefined) {
       params.append(key, String(value));
@@ -230,7 +414,9 @@ export function urlencodePostdata(data: Record<string, string | number | boolean
 
 export const urlencode_postdata = urlencodePostdata;
 
-export function parseM3u8Attributes(attributes: string): Record<string, string> {
+export function parseM3u8Attributes(
+  attributes: string,
+): Record<string, string> {
   const out: Record<string, string> = {};
   const pattern = /(?<key>[A-Z0-9-]+)=(?<value>"[^"]+"|[^",]+)(?:,|$)/g;
   for (const match of attributes.matchAll(pattern)) {
@@ -248,56 +434,95 @@ export function parseM3u8Attributes(attributes: string): Record<string, string> 
 
 export const parse_m3u8_attributes = parseM3u8Attributes;
 
-export function intOrNone(value: unknown, scale = 1, defaultValue: number | null = null, invscale = 1, base?: number): number | null {
+export function intOrNone(
+  value: unknown,
+  scale = 1,
+  defaultValue: number | null = null,
+  invscale = 1,
+  base?: number,
+): number | null {
   if (value === null || value === undefined) {
     return defaultValue;
   }
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), base);
-  return Number.isFinite(parsed) ? Math.trunc(parsed * invscale / scale) : defaultValue;
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(String(value), base);
+  return Number.isFinite(parsed)
+    ? Math.trunc((parsed * invscale) / scale)
+    : defaultValue;
 }
 
 export const int_or_none = intOrNone;
 
-export function parseAgeLimit(value: unknown): number {
-  if (value === null || value === undefined) {
-    return 0;
+export function parseAgeLimit(value: unknown): number | null {
+  if (value === null || value === undefined || value === false) {
+    return null;
   }
   const text = String(value).trim().toLowerCase();
-  if (!text || /^(?:all|everyone|general|u|g|pg)$/i.test(text)) {
+  if (!text) {
+    return null;
+  }
+  if (/^(?:all|everyone|general|u|g|tv[-_ ]?g|pg)$/i.test(text)) {
     return 0;
   }
-  return intOrNone(text) ?? 0;
+  const ratingAges: Record<string, number> = { "tv-ma": 17, tvma: 17 };
+  if (ratingAges[text] !== undefined) {
+    return ratingAges[text];
+  }
+  const age = intOrNone(/\d+/.exec(text)?.[0] ?? null);
+  return age !== null && age <= 21 ? age : null;
 }
 
 export const parse_age_limit = parseAgeLimit;
 
-export function floatOrNone(value: unknown, scale = 1, defaultValue: number | null = null, invscale = 1): number | null {
+export function floatOrNone(
+  value: unknown,
+  scale = 1,
+  defaultValue: number | null = null,
+  invscale = 1,
+): number | null {
   if (value === null || value === undefined || value === "") {
     return defaultValue;
   }
-  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
-  return Number.isFinite(parsed) ? parsed * invscale / scale : defaultValue;
+  const parsed =
+    typeof value === "number" ? value : Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? (parsed * invscale) / scale : defaultValue;
 }
 
 export const float_or_none = floatOrNone;
 
-export function strOrNone(value: unknown, defaultValue: string | null = null): string | null {
-  return value === null || value === undefined ? defaultValue : String(value);
+export function strOrNone(
+  value: unknown,
+  defaultValue: string | null = null,
+): string | null {
+  if (value === null || value === undefined) {
+    return defaultValue;
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    return defaultValue;
+  }
+  return String(value);
 }
 
 export const str_or_none = strOrNone;
 
-export function stripOrNone(value: unknown, defaultValue: string | null = null): string | null {
-  if (value === null || value === undefined) {
+export function stripOrNone(
+  value: unknown,
+  defaultValue: string | null = null,
+): string | null {
+  if (typeof value !== "string") {
     return defaultValue;
   }
   const stripped = String(value).trim();
-  return stripped || defaultValue;
+  return stripped || (value === "" ? "" : defaultValue);
 }
 
 export const strip_or_none = stripOrNone;
 
-export function tryGet<T>(source: unknown, getter: ((value: unknown) => T) | Array<(value: unknown) => T>, expectedType?: (value: unknown) => value is T): T | null {
+export function tryGet<T>(
+  source: unknown,
+  getter: ((value: unknown) => T) | Array<(value: unknown) => T>,
+  expectedType?: (value: unknown) => value is T,
+): T | null {
   const getters = Array.isArray(getter) ? getter : [getter];
   for (const item of getters) {
     try {
@@ -305,39 +530,63 @@ export function tryGet<T>(source: unknown, getter: ((value: unknown) => T) | Arr
       if (!expectedType || expectedType(value)) {
         return value;
       }
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
 
 export const try_get = tryGet;
 
-export function tryCall<T>(...funcsAndOptions: Array<(() => T) | { expected_type?: (value: unknown) => value is T; args?: unknown[]; kwargs?: Record<string, unknown> }>): T | null {
+export function tryCall<T>(
+  ...funcsAndOptions: Array<
+    | (() => T)
+    | {
+        expected_type?: (value: unknown) => value is T;
+        args?: unknown[];
+        kwargs?: Record<string, unknown>;
+      }
+  >
+): T | null {
   const maybeOptions = funcsAndOptions.at(-1);
-  const options = typeof maybeOptions === "object" && maybeOptions !== null && !("call" in maybeOptions)
-    ? funcsAndOptions.pop() as { expected_type?: (value: unknown) => value is T; args?: unknown[]; kwargs?: Record<string, unknown> }
-    : {};
+  const options =
+    typeof maybeOptions === "object" &&
+    maybeOptions !== null &&
+    !("call" in maybeOptions)
+      ? (funcsAndOptions.pop() as {
+          expected_type?: (value: unknown) => value is T;
+          args?: unknown[];
+          kwargs?: Record<string, unknown>;
+        })
+      : {};
   for (const func of funcsAndOptions as Array<() => T>) {
     try {
       const value = func();
       if (!options.expected_type || options.expected_type(value)) {
         return value;
       }
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
 
 export const try_call = tryCall;
 
-export function getFirst<T>(obj: unknown, keys: readonly unknown[], expectedType?: (value: unknown) => value is T): T | null {
+export function getFirst<T>(
+  obj: unknown,
+  keys: readonly unknown[],
+  expectedType?: (value: unknown) => value is T,
+): T | null {
   for (const key of keys) {
     const value = Array.isArray(obj)
       ? obj[Number(key)]
-      : obj && typeof obj === "object" ? (obj as Record<string, unknown>)[String(key)] : undefined;
-    if (value !== null && value !== undefined && (!expectedType || expectedType(value))) {
+      : obj && typeof obj === "object"
+        ? (obj as Record<string, unknown>)[String(key)]
+        : undefined;
+    if (
+      value !== null &&
+      value !== undefined &&
+      (!expectedType || expectedType(value))
+    ) {
       return value as T;
     }
   }
@@ -346,13 +595,21 @@ export function getFirst<T>(obj: unknown, keys: readonly unknown[], expectedType
 
 export const get_first = getFirst;
 
-export function filterDict<T>(record: Record<string, T>, predicate: (key: string, value: T) => boolean = (_key, value) => value !== null && value !== undefined): Record<string, T> {
-  return Object.fromEntries(Object.entries(record).filter(([key, value]) => predicate(key, value)));
+export function filterDict<T>(
+  record: Record<string, T>,
+  predicate: (key: string, value: T) => boolean = (_key, value) =>
+    value !== null && value !== undefined,
+): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key, value]) => predicate(key, value)),
+  );
 }
 
 export const filter_dict = filterDict;
 
-export function mergeDicts<T extends Record<string, unknown>>(...dicts: Array<T | null | undefined>): Record<string, unknown> {
+export function mergeDicts<T extends Record<string, unknown>>(
+  ...dicts: Array<T | null | undefined>
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const dict of dicts.toReversed()) {
     for (const [key, value] of Object.entries(dict ?? {})) {
@@ -366,10 +623,23 @@ export function mergeDicts<T extends Record<string, unknown>>(...dicts: Array<T 
 
 export const merge_dicts = mergeDicts;
 
-export function joinNonempty(...valuesAndOptions: Array<unknown | { delim?: string; from_dict?: Record<string, unknown> }>): string {
+export function joinNonempty(
+  ...valuesAndOptions: Array<
+    unknown | { delim?: string; from_dict?: Record<string, unknown> }
+  >
+): string {
   const maybeOptions = valuesAndOptions.at(-1);
-  const hasOptions = Boolean(maybeOptions && typeof maybeOptions === "object" && !Array.isArray(maybeOptions));
-  const options = hasOptions ? valuesAndOptions.pop() as { delim?: string; from_dict?: Record<string, unknown> } : {};
+  const hasOptions = Boolean(
+    maybeOptions &&
+      typeof maybeOptions === "object" &&
+      !Array.isArray(maybeOptions),
+  );
+  const options = hasOptions
+    ? (valuesAndOptions.pop() as {
+        delim?: string;
+        from_dict?: Record<string, unknown>;
+      })
+    : {};
   const values = valuesAndOptions.map((value) => {
     if (typeof value === "string" && options.from_dict) {
       return options.from_dict[value];
@@ -388,17 +658,25 @@ export function variadic<T>(value: T | readonly T[] | null | undefined): T[] {
   if (value === null || value === undefined) {
     return [];
   }
-  return Array.isArray(value) ? [...value] as T[] : [value as T];
+  return Array.isArray(value) ? ([...value] as T[]) : [value as T];
 }
 
-export function formatSeconds(seconds: number, delim = ":", msec = false): string {
+export function formatSeconds(
+  seconds: number,
+  delim = ":",
+  msec = false,
+): string {
   const totalMs = Math.trunc(seconds * 1000);
   const milliseconds = totalMs % 1000;
   const totalSeconds = Math.trunc(totalMs / 1000);
   const secs = totalSeconds % 60;
   const minutes = Math.trunc(totalSeconds / 60) % 60;
   const hours = Math.trunc(totalSeconds / 3600);
-  const text = hours ? `${hours}${delim}${pad2(minutes)}${delim}${pad2(secs)}` : minutes ? `${minutes}${delim}${pad2(secs)}` : String(secs);
+  const text = hours
+    ? `${hours}${delim}${pad2(minutes)}${delim}${pad2(secs)}`
+    : minutes
+      ? `${minutes}${delim}${pad2(secs)}`
+      : String(secs);
   return msec ? `${text}.${milliseconds.toString().padStart(3, "0")}` : text;
 }
 
@@ -440,7 +718,11 @@ export function cleanHtml(html: string | null | undefined): string | null {
   }
   let text = "";
   new HTMLRewriter()
-    .on("br", { element: () => { text += "\n"; } })
+    .on("br", {
+      element: () => {
+        text += "\n";
+      },
+    })
     .on("p", {
       element(element) {
         element.onEndTag(() => {
@@ -465,19 +747,28 @@ export function getElementById(id: string, html: string): string | null {
 
 export const get_element_by_id = getElementById;
 
-export function getElementByClass(className: string, html: string): string | null {
+export function getElementByClass(
+  className: string,
+  html: string,
+): string | null {
   return getElementText(`[class~="${cssString(className)}"]`, html);
 }
 
 export const get_element_by_class = getElementByClass;
 
-export function getElementByAttribute(attribute: string, value: string, html: string): string | null {
+export function getElementByAttribute(
+  attribute: string,
+  value: string,
+  html: string,
+): string | null {
   return getElementText(`[${attribute}="${cssString(value)}"]`, html);
 }
 
 export const get_element_by_attribute = getElementByAttribute;
 
-export function extractAttributes(htmlElement: string): Record<string, string | null> {
+export function extractAttributes(
+  htmlElement: string,
+): Record<string, string | null> {
   const attrs: Record<string, string | null> = {};
   const assignedAttributes = scanAssignedAttributes(htmlElement);
   let done = false;
@@ -490,7 +781,9 @@ export function extractAttributes(htmlElement: string): Record<string, string | 
         done = true;
         for (const [rawName, rawValue] of element.attributes) {
           const name = rawName.toLowerCase();
-          attrs[name] = assignedAttributes.has(name) ? unescapeHTML(rawValue) : null;
+          attrs[name] = assignedAttributes.has(name)
+            ? unescapeHTML(rawValue)
+            : null;
         }
       },
     })
@@ -528,7 +821,9 @@ function getElementText(selector: string, html: string): string | null {
       },
     })
     .transform(html);
-  return matched ? unescapeHTML(normalizeHtmlText(text))?.trim() ?? null : null;
+  return matched
+    ? (unescapeHTML(normalizeHtmlText(text))?.trim() ?? null)
+    : null;
 }
 
 function normalizeHtmlText(text: string): string {
@@ -539,7 +834,7 @@ function normalizeHtmlText(text: string): string {
 }
 
 function cssString(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 function scanAssignedAttributes(htmlElement: string): Set<string> {
@@ -549,18 +844,33 @@ function scanAssignedAttributes(htmlElement: string): Set<string> {
     index += 1;
   }
   index += 1;
-  while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== ">" && htmlElement[index] !== "/") {
+  while (
+    index < htmlElement.length &&
+    !isHtmlSpace(htmlElement[index]) &&
+    htmlElement[index] !== ">" &&
+    htmlElement[index] !== "/"
+  ) {
     index += 1;
   }
   while (index < htmlElement.length) {
     while (index < htmlElement.length && isHtmlSpace(htmlElement[index])) {
       index += 1;
     }
-    if (htmlElement[index] === ">" || htmlElement[index] === "/" || index >= htmlElement.length) {
+    if (
+      htmlElement[index] === ">" ||
+      htmlElement[index] === "/" ||
+      index >= htmlElement.length
+    ) {
       break;
     }
     const nameStart = index;
-    while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== "=" && htmlElement[index] !== ">" && htmlElement[index] !== "/") {
+    while (
+      index < htmlElement.length &&
+      !isHtmlSpace(htmlElement[index]) &&
+      htmlElement[index] !== "=" &&
+      htmlElement[index] !== ">" &&
+      htmlElement[index] !== "/"
+    ) {
       index += 1;
     }
     const name = htmlElement.slice(nameStart, index).toLowerCase();
@@ -578,14 +888,18 @@ function scanAssignedAttributes(htmlElement: string): Set<string> {
       index += 1;
     }
     const quote = htmlElement[index];
-    if (quote === "\"" || quote === "'") {
+    if (quote === '"' || quote === "'") {
       index += 1;
       while (index < htmlElement.length && htmlElement[index] !== quote) {
         index += 1;
       }
       index += 1;
     } else {
-      while (index < htmlElement.length && !isHtmlSpace(htmlElement[index]) && htmlElement[index] !== ">") {
+      while (
+        index < htmlElement.length &&
+        !isHtmlSpace(htmlElement[index]) &&
+        htmlElement[index] !== ">"
+      ) {
         index += 1;
       }
     }
@@ -594,19 +908,29 @@ function scanAssignedAttributes(htmlElement: string): Set<string> {
 }
 
 function isHtmlSpace(char: string | undefined): boolean {
-  return char === " " || char === "\n" || char === "\r" || char === "\t" || char === "\f";
+  return (
+    char === " " ||
+    char === "\n" ||
+    char === "\r" ||
+    char === "\t" ||
+    char === "\f"
+  );
 }
 
 export const extract_attributes = extractAttributes;
 
 export function cleanPodcastUrl(url: string): string {
-  const trackingPrefix = /(?:(?:(?:chtbl\.com\/track|media\.blubrry\.com|play\.podtrac\.com|chrt\.fm\/track|mgln\.ai\/e)(?:\/[^/.]+)?|(?:dts|www)\.podtrac\.com\/(?:pts\/)?redirect\.[0-9a-z]{3,4}|flex\.acast\.com|pd(?:cn\.co|st\.fm)\/e|[0-9]\.gum\.fm|pscrb\.fm\/rss\/p)\/)/g;
+  const trackingPrefix =
+    /(?:(?:(?:chtbl\.com\/track|media\.blubrry\.com|play\.podtrac\.com|chrt\.fm\/track|mgln\.ai\/e)(?:\/[^/.]+)?|(?:dts|www)\.podtrac\.com\/(?:pts\/)?redirect\.[0-9a-z]{3,4}|flex\.acast\.com|pd(?:cn\.co|st\.fm)\/e|[0-9]\.gum\.fm|pscrb\.fm\/rss\/p)\/)/g;
   return url.replace(trackingPrefix, "").replace(/^(\w+):\/\/(\w+:\/\/)/, "$2");
 }
 
 export const clean_podcast_url = cleanPodcastUrl;
 
-export function parseIso8601(dateStr: string | null | undefined, delimiter = "T"): number | null {
+export function parseIso8601(
+  dateStr: string | null | undefined,
+  delimiter = "T",
+): number | null {
   if (!dateStr) {
     return null;
   }
@@ -617,14 +941,21 @@ export function parseIso8601(dateStr: string | null | undefined, delimiter = "T"
 
 export const parse_iso8601 = parseIso8601;
 
-export function unifiedTimestamp(dateStr: unknown, _dayFirst = true, tzOffset = 0): number | null {
+export function unifiedTimestamp(
+  dateStr: unknown,
+  _dayFirst = true,
+  tzOffset = 0,
+): number | null {
   if (typeof dateStr !== "string") {
     return null;
   }
   // Logic note: Bun uses the platform Date parser after normalizing common feed date text.
   const normalized = dateStr
     .replaceAll(/[,|]/g, " ")
-    .replaceAll(/\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi, " ")
+    .replaceAll(
+      /\b(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/gi,
+      " ",
+    )
     .replaceAll(/\s+/g, " ")
     .trim();
   const timestamp = Date.parse(normalized);
@@ -633,12 +964,23 @@ export function unifiedTimestamp(dateStr: unknown, _dayFirst = true, tzOffset = 
   }
   const withoutZone = normalized.replace(/\s+[A-Z]+$/, "");
   const fallback = Date.parse(withoutZone);
-  return Number.isFinite(fallback) ? Math.trunc(fallback / 1000) - tzOffset * 3600 : null;
+  return Number.isFinite(fallback)
+    ? Math.trunc(fallback / 1000) - tzOffset * 3600
+    : null;
 }
 
 export const unified_timestamp = unifiedTimestamp;
 
-export function datetimeFromStr(dateStr: string, precision: "auto" | "microsecond" | "second" | "minute" | "hour" | "day" = "auto"): Date | null {
+export function datetimeFromStr(
+  dateStr: string,
+  precision:
+    | "auto"
+    | "microsecond"
+    | "second"
+    | "minute"
+    | "hour"
+    | "day" = "auto",
+): Date | null {
   const now = new Date();
   let date: Date;
   if (dateStr === "now" || dateStr === "today") {
@@ -646,8 +988,15 @@ export function datetimeFromStr(dateStr: string, precision: "auto" | "microsecon
   } else if (dateStr === "yesterday") {
     date = new Date(now.getTime() - 86_400_000);
   } else {
-    const relative = /^(?<start>.+)(?<sign>[+-])(?<time>\d+)(?<unit>microsecond|second|minute|hour|day|week|month|year)s?$/.exec(dateStr);
-    if (relative?.groups?.start && relative.groups.time && relative.groups.unit) {
+    const relative =
+      /^(?<start>.+)(?<sign>[+-])(?<time>\d+)(?<unit>microsecond|second|minute|hour|day|week|month|year)s?$/.exec(
+        dateStr,
+      );
+    if (
+      relative?.groups?.start &&
+      relative.groups.time &&
+      relative.groups.unit
+    ) {
       const start = datetimeFromStr(relative.groups.start, precision);
       if (!start) {
         return null;
@@ -656,9 +1005,15 @@ export function datetimeFromStr(dateStr: string, precision: "auto" | "microsecon
       const amount = Number(relative.groups.time) * sign;
       date = addDateUnit(start, relative.groups.unit, amount);
     } else {
-      const compact = /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})$/.exec(dateStr);
+      const compact = /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})$/.exec(
+        dateStr,
+      );
       const timestamp = compact?.groups
-        ? Date.UTC(Number(compact.groups.year), Number(compact.groups.month) - 1, Number(compact.groups.day))
+        ? Date.UTC(
+            Number(compact.groups.year),
+            Number(compact.groups.month) - 1,
+            Number(compact.groups.day),
+          )
         : Date.parse(dateStr);
       if (!Number.isFinite(timestamp)) {
         return null;
@@ -672,14 +1027,20 @@ export function datetimeFromStr(dateStr: string, precision: "auto" | "microsecon
 
 export const datetime_from_str = datetimeFromStr;
 
-export function strftimeOrNone(timestamp: number | string | Date | null | undefined, dateFormat = "%Y%m%d", defaultValue: string | null = null): string | null {
+export function strftimeOrNone(
+  timestamp: number | string | Date | null | undefined,
+  dateFormat = "%Y%m%d",
+  defaultValue: string | null = null,
+): string | null {
   if (timestamp === null || timestamp === undefined) {
     return defaultValue;
   }
-  const date = timestamp instanceof Date
-    ? timestamp
-    : typeof timestamp === "number" ? new Date(timestamp * 1000)
-      : datetimeFromStr(timestamp);
+  const date =
+    timestamp instanceof Date
+      ? timestamp
+      : typeof timestamp === "number"
+        ? new Date(timestamp * 1000)
+        : datetimeFromStr(timestamp);
   if (!date || Number.isNaN(date.getTime())) {
     return defaultValue;
   }
@@ -692,12 +1053,17 @@ export function strftimeOrNone(timestamp: number | string | Date | null | undefi
     "%S": String(date.getUTCSeconds()).padStart(2, "0"),
     "%s": String(Math.trunc(date.getTime() / 1000)),
   };
-  return Object.entries(replacements).reduce((out, [key, value]) => out.replaceAll(key, value), dateFormat);
+  return Object.entries(replacements).reduce(
+    (out, [key, value]) => out.replaceAll(key, value),
+    dateFormat,
+  );
 }
 
 export const strftime_or_none = strftimeOrNone;
 
-export function unifiedStrdate(dateStr: string | null | undefined): string | null {
+export function unifiedStrdate(
+  dateStr: string | null | undefined,
+): string | null {
   if (!dateStr) {
     return null;
   }
@@ -705,26 +1071,31 @@ export function unifiedStrdate(dateStr: string | null | undefined): string | nul
   if (Number.isFinite(parsed)) {
     return new Date(parsed).toISOString().slice(0, 10).replaceAll("-", "");
   }
-  const match = /(?<year>\d{4})[-/.](?<month>\d{1,2})[-/.](?<day>\d{1,2})/.exec(dateStr)
-    ?? /(?<day>\d{1,2})[-/.](?<month>\d{1,2})[-/.](?<year>\d{4})/.exec(dateStr);
+  const match =
+    /(?<year>\d{4})[-/.](?<month>\d{1,2})[-/.](?<day>\d{1,2})/.exec(dateStr) ??
+    /(?<day>\d{1,2})[-/.](?<month>\d{1,2})[-/.](?<year>\d{4})/.exec(dateStr);
   const year = match?.groups?.year;
   const month = match?.groups?.month;
   const day = match?.groups?.day;
-  return year && month && day ? `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}` : null;
+  return year && month && day
+    ? `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`
+    : null;
 }
 
 export const unified_strdate = unifiedStrdate;
 
-export function qualities(qualityIds: readonly string[]): (qualityId: string | null | undefined) => number {
+export function qualities(
+  qualityIds: readonly string[],
+): (qualityId: string | null | undefined) => number {
   const map = new Map(qualityIds.map((qualityId, index) => [qualityId, index]));
-  return (qualityId) => qualityId ? map.get(qualityId) ?? -1 : -1;
+  return (qualityId) => (qualityId ? (map.get(qualityId) ?? -1) : -1);
 }
 
 export function strToInt(value: string | null | undefined): number | null {
-  if (!value) {
+  if (value === null || value === undefined) {
     return null;
   }
-  const parsed = Number.parseInt(value.replaceAll(/[,.]/g, ""), 10);
+  const parsed = Number.parseInt(String(value).replaceAll(/[,.]/g, ""), 10);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -738,7 +1109,8 @@ export function parseCount(value: string | null | undefined): number | null {
   if (/^[\d,.]+$/.test(text)) {
     return strToInt(text);
   }
-  const unitMatch = /^(?<number>[\d,.]+)\s*(?<unit>kk|KK|[kKmMbB])(?:\b|$)/.exec(text);
+  const unitMatch =
+    /^(?<number>[\d,.]+)\s*(?<unit>kk|KK|[kKmMbB])(?:\b|$)/.exec(text);
   if (unitMatch?.groups?.number && unitMatch.groups.unit) {
     const number = Number(unitMatch.groups.number.replaceAll(",", ""));
     if (!Number.isFinite(number)) {
@@ -763,29 +1135,50 @@ export function parseCount(value: string | null | undefined): number | null {
 
 export const parse_count = parseCount;
 
-export function parseDuration(value: string | number | null | undefined): number | null {
-  if (value === null || value === undefined || value === "") {
+export function parseDuration(value: unknown): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === false
+  ) {
     return null;
   }
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
   }
-  const isoMatch = /^(?:P(?:(?<days>\d+(?:\.\d+)?)D)?(?:T(?:(?<hours>\d+(?:\.\d+)?)H)?(?:(?<minutes>\d+(?:\.\d+)?)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?)$/i.exec(value);
-  if (isoMatch?.[0] && Object.values(isoMatch.groups ?? {}).some((part) => part !== undefined)) {
-    return (Number(isoMatch.groups?.days ?? 0) * 86400)
-      + (Number(isoMatch.groups?.hours ?? 0) * 3600)
-      + (Number(isoMatch.groups?.minutes ?? 0) * 60)
-      + Number(isoMatch.groups?.seconds ?? 0);
+  if (typeof value !== "string") {
+    return null;
+  }
+  const isoMatch =
+    /^(?:P(?:(?<days>\d+(?:\.\d+)?)D)?(?:T)?(?:(?<hours>\d+(?:\.\d+)?)H)?(?:(?<minutes>\d+(?:\.\d+)?)M(?:in(?:utes?)?\.?)?)?(?:(?<seconds>\d+(?:\.\d+)?)S(?:ec(?:onds?)?)?Z?)?)$/i.exec(
+      value,
+    );
+  if (
+    isoMatch?.[0] &&
+    Object.values(isoMatch.groups ?? {}).some((part) => part !== undefined)
+  ) {
+    return (
+      Number(isoMatch.groups?.days ?? 0) * 86400 +
+      Number(isoMatch.groups?.hours ?? 0) * 3600 +
+      Number(isoMatch.groups?.minutes ?? 0) * 60 +
+      Number(isoMatch.groups?.seconds ?? 0)
+    );
   }
   const colonParts = value.split(":").map((part) => Number.parseFloat(part));
   if (colonParts.length > 1 && colonParts.every(Number.isFinite)) {
     return colonParts.reduce((total, part) => total * 60 + part, 0);
   }
-  const unitMatch = /(?:(?<hours>\d+(?:\.\d+)?)\s*h(?:ours?)?)?\s*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?)?\s*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec(?:onds?)?)?)?/i.exec(value);
+  const unitMatch =
+    /(?:(?<hours>\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?[\s,]*(?:(?<minutes>\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?\.?)?)?[\s,]*(?:(?<seconds>\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?)?/i.exec(
+      value,
+    );
   if (unitMatch?.[0]?.trim()) {
-    return (Number(unitMatch.groups?.hours ?? 0) * 3600)
-      + (Number(unitMatch.groups?.minutes ?? 0) * 60)
-      + Number(unitMatch.groups?.seconds ?? 0);
+    return (
+      Number(unitMatch.groups?.hours ?? 0) * 3600 +
+      Number(unitMatch.groups?.minutes ?? 0) * 60 +
+      Number(unitMatch.groups?.seconds ?? 0)
+    );
   }
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -825,7 +1218,9 @@ export function parseFilesize(value: string | null | undefined): number | null {
     return null;
   }
   const match = /(?<number>[\d.,]+)\s*(?<unit>[A-Za-z]+)?/.exec(value.trim());
-  const number = match?.groups?.number ? Number.parseFloat(match.groups.number.replaceAll(",", "")) : Number.NaN;
+  const number = match?.groups?.number
+    ? Number.parseFloat(match.groups.number.replaceAll(",", ""))
+    : Number.NaN;
   if (!Number.isFinite(number)) {
     return null;
   }
@@ -836,21 +1231,50 @@ export function parseFilesize(value: string | null | undefined): number | null {
 
 export const parse_filesize = parseFilesize;
 
-export function parseResolution(value: string | null | undefined): { width?: number; height?: number } {
+export function parseBitrate(value: unknown): number | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  return intOrNone(/\b(\d+)\s*kbps/i.exec(value)?.[1] ?? null);
+}
+
+export const parse_bitrate = parseBitrate;
+
+export function parseResolution(
+  value: string | null | undefined,
+  options: { lenient?: boolean } = {},
+): { width?: number; height?: number } {
   if (!value) {
     return {};
   }
   const explicit = /(?<width>\d{2,5})\s*[xX]\s*(?<height>\d{2,5})/.exec(value);
   if (explicit?.groups?.width && explicit.groups.height) {
-    return { width: Number(explicit.groups.width), height: Number(explicit.groups.height) };
+    return {
+      width: Number(explicit.groups.width),
+      height: Number(explicit.groups.height),
+    };
   }
   const height = /(?<height>\d{3,4})p\b/i.exec(value)?.groups?.height;
-  return height ? { height: Number(height) } : {};
+  if (height) {
+    return { height: Number(height) };
+  }
+  const fourK = /\b([48])k\b/i.exec(value)?.[1];
+  if (fourK) {
+    return { height: Number(fourK) * 540 };
+  }
+  const width = options.lenient
+    ? /(?<!\d)(\d{2,5})w(?![a-zA-Z0-9])/i.exec(value)?.[1]
+    : undefined;
+  return width ? { width: Number(width) } : {};
 }
 
 export const parse_resolution = parseResolution;
 
-export function truncateString(value: string | null | undefined, left: number, right = 0): string | null | undefined {
+export function truncateString(
+  value: string | null | undefined,
+  left: number,
+  right = 0,
+): string | null | undefined {
   if (value == null || value.length <= left + right) {
     return value;
   }
@@ -859,7 +1283,22 @@ export function truncateString(value: string | null | undefined, left: number, r
 
 export const truncate_string = truncateString;
 
-export function checkExecutable(exe: string, args: readonly string[] = []): string | false {
+export function limitLength(
+  value: string | null | undefined,
+  length: number,
+): string | null | undefined {
+  if (value === null || value === undefined || value.length <= length) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, length - 3))}...`;
+}
+
+export const limit_length = limitLength;
+
+export function checkExecutable(
+  exe: string,
+  args: readonly string[] = [],
+): string | false {
   const path = Bun.which(exe);
   if (!path) {
     return false;
@@ -873,30 +1312,62 @@ export function checkExecutable(exe: string, args: readonly string[] = []): stri
 
 export const check_executable = checkExecutable;
 
-export function cliOption(params: Record<string, unknown>, commandOption: string, param: string, separator?: string): string[] {
+export function cliOption(
+  params: Record<string, unknown>,
+  commandOption: string,
+  param: string,
+  separator?: string,
+): string[] {
   const value = params[param];
   if (value === null || value === undefined) {
     return [];
   }
-  return separator === undefined ? [commandOption, String(value)] : [`${commandOption}${separator}${value}`];
+  return separator === undefined
+    ? [commandOption, String(value)]
+    : [`${commandOption}${separator}${value}`];
 }
 
 export const cli_option = cliOption;
 
-export function cliBoolOption(params: Record<string, unknown>, commandOption: string, param: string, trueValue = "true", falseValue = "false", separator?: string): string[] {
+export function cliBoolOption(
+  params: Record<string, unknown>,
+  commandOption: string,
+  param: string,
+  trueValue = "true",
+  falseValue = "false",
+  separator?: string,
+): string[] {
   const value = params[param];
-  return value === undefined || value === null ? [] : cliOption({ true: trueValue, false: falseValue }, commandOption, String(Boolean(value)), separator);
+  return value === undefined || value === null
+    ? []
+    : cliOption(
+        { true: trueValue, false: falseValue },
+        commandOption,
+        String(Boolean(value)),
+        separator,
+      );
 }
 
 export const cli_bool_option = cliBoolOption;
 
-export function cliValuelessOption(params: Record<string, unknown>, commandOption: string, param: string, expectedValue: unknown = true): string[] {
+export function cliValuelessOption(
+  params: Record<string, unknown>,
+  commandOption: string,
+  param: string,
+  expectedValue: unknown = true,
+): string[] {
   return params[param] === expectedValue ? [commandOption] : [];
 }
 
 export const cli_valueless_option = cliValuelessOption;
 
-export function configurationArgs(mainKey: string, argdict: unknown, exe: string, keys: readonly string[] = [""], defaultValue: readonly string[] = []): string[] {
+export function configurationArgs(
+  mainKey: string,
+  argdict: unknown,
+  exe: string,
+  keys: readonly string[] = [""],
+  defaultValue: readonly string[] = [],
+): string[] {
   if (Array.isArray(argdict)) {
     return argdict.map(String);
   }
@@ -904,7 +1375,10 @@ export function configurationArgs(mainKey: string, argdict: unknown, exe: string
     return [...defaultValue];
   }
   const args = argdict as Record<string, string[] | string | undefined>;
-  const rootKey = mainKey.toLowerCase() === exe.toLowerCase() ? exe.toLowerCase() : `${mainKey.toLowerCase()}+${exe.toLowerCase()}`;
+  const rootKey =
+    mainKey.toLowerCase() === exe.toLowerCase()
+      ? exe.toLowerCase()
+      : `${mainKey.toLowerCase()}+${exe.toLowerCase()}`;
   const candidateKeys = keys.map((key) => `${rootKey}${key}`);
   candidateKeys.push("default");
   for (const key of candidateKeys) {
@@ -922,7 +1396,14 @@ export function configurationArgs(mainKey: string, argdict: unknown, exe: string
 export const _configuration_args = configurationArgs;
 
 export class RetryManager implements Iterable<{ error: unknown }> {
-  constructor(readonly retries: number | null | undefined, readonly errorCallback: (error: unknown, count: number, retries: number) => void = () => undefined) {}
+  constructor(
+    readonly retries: number | null | undefined,
+    readonly errorCallback: (
+      error: unknown,
+      count: number,
+      retries: number,
+    ) => void = () => undefined,
+  ) {}
 
   *[Symbol.iterator](): Iterator<{ error: unknown }> {
     const maxRetries = this.retries ?? 0;
@@ -938,19 +1419,34 @@ export class RetryManager implements Iterable<{ error: unknown }> {
 }
 
 export function shellQuote(args: readonly string[]): string {
-  return args.map((arg) => /^[\w./:=+-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`).join(" ");
+  return args
+    .map((arg) =>
+      /^[\w./:=+-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", "'\\''")}'`,
+    )
+    .join(" ");
 }
 
 export const shell_quote = shellQuote;
 
-export function detectExeVersion(output: string | null | undefined): string | false {
+export function argsToStr(args: readonly string[]): string {
+  return shellQuote(args);
+}
+
+export const args_to_str = argsToStr;
+
+export function detectExeVersion(
+  output: string | null | undefined,
+): string | false {
   const match = /(?:version|v)\s*(?<version>\d+(?:\.\d+)+)/i.exec(output ?? "");
   return match?.groups?.version ?? false;
 }
 
 export const detect_exe_version = detectExeVersion;
 
-export function getExeVersionOutput(exe: string | false | undefined, args: readonly string[] = ["--version"]): string | null {
+export function getExeVersionOutput(
+  exe: string | false | undefined,
+  args: readonly string[] = ["--version"],
+): string | null {
   if (!exe) {
     return null;
   }
@@ -960,7 +1456,11 @@ export function getExeVersionOutput(exe: string | false | undefined, args: reado
 
 export const _get_exe_version_output = getExeVersionOutput;
 
-export function isOutdatedVersion(version: string | null | false | undefined, minimum: string, defaultValue = false): boolean {
+export function isOutdatedVersion(
+  version: string | null | false | undefined,
+  minimum: string,
+  defaultValue = false,
+): boolean {
   if (!version) {
     return defaultValue;
   }
@@ -977,19 +1477,55 @@ export function isOutdatedVersion(version: string | null | false | undefined, mi
 
 export const is_outdated_version = isOutdatedVersion;
 
+export function versionTuple(
+  version: string,
+  options: { lenient?: boolean } = {},
+): number[] {
+  return version.split(/[-.]/).map((part) => {
+    const parsed = Number.parseInt(part, 10);
+    if (!Number.isFinite(parsed)) {
+      if (options.lenient) {
+        return -1;
+      }
+      throw new Error(`Invalid version component: ${part}`);
+    }
+    return parsed;
+  });
+}
+
+export const version_tuple = versionTuple;
+
 export function replaceExtension(filename: string, extension: string): string {
   const current = extname(filename);
-  return current ? `${filename.slice(0, -current.length)}.${extension}` : `${filename}.${extension}`;
+  return current
+    ? `${filename.slice(0, -current.length)}.${extension}`
+    : `${filename}.${extension}`;
 }
 
 export const replace_extension = replaceExtension;
 
 export function prependExtension(filename: string, extension: string): string {
   const current = extname(filename);
-  return current ? `${filename.slice(0, -current.length)}.${extension}${current}` : `${filename}.${extension}`;
+  return current
+    ? `${filename.slice(0, -current.length)}.${extension}${current}`
+    : `${filename}.${extension}`;
 }
 
 export const prepend_extension = prependExtension;
+
+export function subtitlesFilename(
+  filename: string,
+  subLang: string,
+  subFormat: string,
+  expectedRealExt?: string | null,
+): string {
+  const extension = `${subLang}.${subFormat}`;
+  return expectedRealExt
+    ? replaceExtension(filename, extension)
+    : prependExtension(filename, extension);
+}
+
+export const subtitles_filename = subtitlesFilename;
 
 export function orderedSet<T>(items: Iterable<T>): T[] {
   return [...new Set(items)];
@@ -1060,32 +1596,248 @@ export class LazyList<T> implements Iterable<T> {
 
 export const LazyList_ = LazyList;
 
-export function mimetype2ext(mimeType: string | null | undefined, defaultValue = "unknown_video"): string {
-  return mimeType?.split(";")[0]?.split("/").pop() ?? defaultValue;
+export function mimetype2ext(
+  mimeType: string | null | undefined,
+  defaultValue: string | null = null,
+): string | null {
+  if (typeof mimeType !== "string") {
+    return defaultValue;
+  }
+  const map: Record<string, string> = {
+    "video/ogg": "ogv",
+    "video/x-flv": "flv",
+    "video/x-matroska": "mkv",
+    "application/dash+xml": "mpd",
+    "application/f4m+xml": "f4m",
+    "application/hds+xml": "f4m",
+    "application/vnd.apple.mpegurl": "m3u8",
+    "application/vnd.ms-sstr+xml": "ism",
+    "application/x-mpegurl": "m3u8",
+    "audio/mp4": "m4a",
+    "audio/mpeg": "mp3",
+    "audio/webm": "webm",
+    "audio/x-matroska": "mka",
+    "audio/x-mpegurl": "m3u",
+    "audio/x-wav": "wav",
+    "text/vtt": "vtt",
+    "application/x-subrip": "srt",
+    "application/x-srt": "srt",
+  };
+  const mimetype = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  const subtype = mimetype.split("/").pop() ?? "";
+  return (
+    map[mimetype] ??
+    map[subtype] ??
+    subtype.replaceAll("+", ".") ??
+    defaultValue
+  );
 }
 
-export function parseCodecs(codecs: string | null | undefined): { acodec?: string; vcodec?: string } {
-  const out: { acodec?: string; vcodec?: string } = {};
-  for (const codec of codecs?.split(",").map((item) => item.trim()).filter(Boolean) ?? []) {
-    const normalized = codec.toLowerCase();
-    if (/^(?:avc|hvc|hev|vp0?[89]|av01|theora|dvh|dvav|dva1)/.test(normalized)) {
-      out.vcodec ??= codec;
-    } else if (/^(?:mp4a|ac-?3|ec-?3|opus|vorbis|flac|alac|aac|dts|mp3)/.test(normalized)) {
-      out.acodec ??= codec;
+export function ext2mimetype(
+  extOrUrl: string | null | undefined,
+): string | null {
+  if (!extOrUrl) {
+    return null;
+  }
+  const ext = (
+    extOrUrl.includes(".") ? extOrUrl.split(".").pop() : extOrUrl
+  )?.toLowerCase();
+  const map: Record<string, string> = {
+    mp4: "video/mp4",
+    m4a: "audio/mp4",
+    mp3: "audio/mpeg",
+    webm: "video/webm",
+    m3u8: "application/vnd.apple.mpegurl",
+    mpd: "application/dash+xml",
+    vtt: "text/vtt",
+    srt: "application/x-subrip",
+    json: "application/json",
+  };
+  return ext ? (map[ext] ?? null) : null;
+}
+
+export const ext2mimetype_ = ext2mimetype;
+
+export function parseCodecs(codecs: string | null | undefined): {
+  acodec?: string;
+  vcodec?: string;
+  scodec?: string;
+  dynamic_range?: string | null;
+} {
+  if (!codecs) {
+    return {};
+  }
+  let vcodec: string | undefined;
+  let acodec: string | undefined;
+  let scodec: string | undefined;
+  let dynamicRange: string | null = null;
+  const splitCodecs = codecs
+    .trim()
+    .replace(/^,+|,+$/g, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  for (const codec of codecs
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean) ?? []) {
+    const fullCodec = codec.replace(/^([^.]+)/, (part) => part.toLowerCase());
+    const parts = fullCodec.replaceAll(/0+(?=\d)/g, "").split(".");
+    const family = parts[0] ?? "";
+    if (
+      [
+        "avc1",
+        "avc2",
+        "avc3",
+        "avc4",
+        "vp9",
+        "vp8",
+        "hev1",
+        "hev2",
+        "h263",
+        "h264",
+        "mp4v",
+        "hvc1",
+        "av1",
+        "av01",
+        "theora",
+        "dvh1",
+        "dvhe",
+      ].includes(family)
+    ) {
+      vcodec ??= fullCodec;
+      if (family === "dvh1" || family === "dvhe") {
+        dynamicRange = "DV";
+      } else if ((family === "av1" || family === "av01") && parts[3] === "10") {
+        dynamicRange = "HDR10";
+      } else if (parts[0] === "vp9" && parts[1] === "2") {
+        dynamicRange = "HDR10";
+      }
+    } else if (
+      [
+        "flac",
+        "mp4a",
+        "opus",
+        "vorbis",
+        "mp3",
+        "aac",
+        "ac-4",
+        "ac-3",
+        "ec-3",
+        "eac3",
+        "dtsc",
+        "dtse",
+        "dtsh",
+        "dtsl",
+      ].includes(family)
+    ) {
+      acodec ??= fullCodec;
+    } else if (family === "stpp" || family === "wvtt") {
+      scodec ??= fullCodec;
     }
   }
-  return out;
+  if (vcodec || acodec || scodec) {
+    return {
+      vcodec: vcodec ?? "none",
+      acodec: acodec ?? "none",
+      dynamic_range: dynamicRange,
+      ...(scodec ? { scodec } : {}),
+    };
+  }
+  return splitCodecs.length === 2
+    ? { vcodec: splitCodecs[0], acodec: splitCodecs[1] }
+    : {};
 }
 
 export const parse_codecs = parseCodecs;
 
-export function filesizeFromTbr(tbr: number | null | undefined, duration: number | null | undefined): number | null {
-  return tbr == null || duration == null ? null : Math.trunc(duration * tbr * (1000 / 8));
+export function filesizeFromTbr(
+  tbr: number | null | undefined,
+  duration: number | null | undefined,
+): number | null {
+  return tbr == null || duration == null
+    ? null
+    : Math.trunc(duration * tbr * (1000 / 8));
 }
 
 export const filesize_from_tbr = filesizeFromTbr;
 
-export function parseDfxpTimeExpr(timeExpr: string | null | undefined): number | null {
+export function getCompatibleExt(options: {
+  vcodecs: readonly (string | null | undefined)[];
+  acodecs: readonly (string | null | undefined)[];
+  vexts: readonly string[];
+  aexts: readonly string[];
+  preferences?: readonly string[] | null;
+}): string {
+  const { vcodecs, acodecs, vexts, aexts, preferences } = options;
+  if (vcodecs.length !== vexts.length || acodecs.length !== aexts.length) {
+    throw new Error("Codec and extension arrays must have matching lengths");
+  }
+  const allowMkv = !preferences || preferences.includes("mkv");
+  if (allowMkv && Math.max(acodecs.length, vcodecs.length) > 1) {
+    return "mkv";
+  }
+  const compatibleCodecs: Record<string, Set<string>> = {
+    mp4: new Set([
+      "av1",
+      "hevc",
+      "avc1",
+      "mp4a",
+      "ac-4",
+      "h264",
+      "aacl",
+      "ec-3",
+    ]),
+    webm: new Set(["av1", "vp9", "vp8", "opus", "vrbs", "vp9x", "vp8x"]),
+  };
+  const sanitizeCodec = (values: readonly (string | null | undefined)[]) =>
+    values[0]?.split(".")[0]?.replaceAll("0", "").toLowerCase();
+  const vcodec = sanitizeCodec(vcodecs);
+  const acodec = sanitizeCodec(acodecs);
+  for (const ext of preferences ?? Object.keys(compatibleCodecs)) {
+    const codecSet = compatibleCodecs[ext] ?? new Set<string>();
+    if (
+      ext === "mkv" ||
+      (vcodec && acodec && codecSet.has(vcodec) && codecSet.has(acodec))
+    ) {
+      return ext;
+    }
+  }
+  const compatibleExts = [
+    new Set([
+      "mp3",
+      "mp4",
+      "m4a",
+      "m4p",
+      "m4b",
+      "m4r",
+      "m4v",
+      "ismv",
+      "isma",
+      "mov",
+    ]),
+    new Set(["webm", "weba"]),
+  ];
+  for (const ext of preferences ?? vexts) {
+    const currentExts = new Set([ext, ...vexts, ...aexts]);
+    if (
+      ext === "mkv" ||
+      (currentExts.size === 1 && currentExts.has(ext)) ||
+      compatibleExts.some((set) =>
+        [...currentExts].every((item) => set.has(item)),
+      )
+    ) {
+      return ext;
+    }
+  }
+  return allowMkv ? "mkv" : (preferences?.at(-1) ?? "mkv");
+}
+
+export const get_compatible_ext = getCompatibleExt;
+
+export function parseDfxpTimeExpr(
+  timeExpr: string | null | undefined,
+): number | null {
   if (!timeExpr) {
     return null;
   }
@@ -1097,20 +1849,33 @@ export function parseDfxpTimeExpr(timeExpr: string | null | undefined): number |
   if (!clock) {
     return null;
   }
-  return 3600 * Number(clock[1]) + 60 * Number(clock[2]) + Number(clock[3]?.replace(":", "."));
+  return (
+    3600 * Number(clock[1]) +
+    60 * Number(clock[2]) +
+    Number(clock[3]?.replace(":", "."))
+  );
 }
 
 export function dfxp2srt(dfxpData: Uint8Array | string): string {
   const decoder = new TextDecoder();
-  const xml = (typeof dfxpData === "string" ? dfxpData : decoder.decode(dfxpData))
+  const xml = (
+    typeof dfxpData === "string" ? dfxpData : decoder.decode(dfxpData)
+  )
     .replaceAll("encoding='UTF-16'", "encoding='UTF-8'")
     .replaceAll('encoding="UTF-16"', 'encoding="UTF-8"');
   const normalized = xml
     .replaceAll("http://www.w3.org/2004/11/ttaf1", "http://www.w3.org/ns/ttml")
     .replaceAll("http://www.w3.org/2006/04/ttaf1", "http://www.w3.org/ns/ttml")
     .replaceAll("http://www.w3.org/2006/10/ttaf1", "http://www.w3.org/ns/ttml")
-    .replaceAll("http://www.w3.org/ns/ttml#style", "http://www.w3.org/ns/ttml#styling");
-  const paragraphs = [...normalized.matchAll(/<(?<tag>(?:[\w-]+:)?p)\b(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/\k<tag>>/g)];
+    .replaceAll(
+      "http://www.w3.org/ns/ttml#style",
+      "http://www.w3.org/ns/ttml#styling",
+    );
+  const paragraphs = [
+    ...normalized.matchAll(
+      /<(?<tag>(?:[\w-]+:)?p)\b(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/\k<tag>>/g,
+    ),
+  ];
   if (!paragraphs.length) {
     throw new Error("Invalid dfxp/TTML subtitle");
   }
@@ -1130,7 +1895,9 @@ export function dfxp2srt(dfxpData: Uint8Array | string): string {
       endTime = beginTime + duration;
     }
     const text = ttmlTextToSrt(paragraph.groups?.body ?? "");
-    output.push(`${index + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`);
+    output.push(
+      `${index + 1}\n${srtSubtitlesTimecode(beginTime)} --> ${srtSubtitlesTimecode(endTime)}\n${text}\n\n`,
+    );
   }
   return output.join("");
 }
@@ -1141,19 +1908,25 @@ function ttmlTextToSrt(body: string): string {
   if (/<(?!\/?(?:[\w-]+:)?br\b)[^>]+>/i.test(body)) {
     throw new NotImplementedError("TTML subtitle styling conversion");
   }
-  return xmlUnescapeSubset(body
-    .replaceAll(/<(?:(?:[\w-]+:)?br)\s*\/?>/g, "\n")
-    .replaceAll(/<[^>]+>/g, ""))
+  return xmlUnescapeSubset(
+    body
+      .replaceAll(/<(?:(?:[\w-]+:)?br)\s*\/?>/g, "\n")
+      .replaceAll(/<[^>]+>/g, ""),
+  )
     .replaceAll(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 function parseXmlAttributesSubset(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const match of text.matchAll(/(?<key>[\w:-]+)\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)')/g)) {
+  for (const match of text.matchAll(
+    /(?<key>[\w:-]+)\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)')/g,
+  )) {
     const key = match.groups?.key?.split(":").pop();
     if (key) {
-      out[key] = xmlUnescapeSubset(match.groups?.double ?? match.groups?.single ?? "");
+      out[key] = xmlUnescapeSubset(
+        match.groups?.double ?? match.groups?.single ?? "",
+      );
     }
   }
   return out;
@@ -1169,7 +1942,7 @@ function xmlUnescapeSubset(text: string): string {
 }
 
 export function urlBasename(url: string): string {
-  return basename(new URL(url).pathname);
+  return basename(new URL(url).pathname.replace(/\/+$/, ""));
 }
 
 export const url_basename = urlBasename;
@@ -1182,9 +1955,10 @@ export function formatField<T>(
   defaultValue = "",
   func: (value: T) => unknown = IDENTITY,
 ): string {
-  const value = field && obj && typeof obj === "object" && !Array.isArray(obj)
-    ? (obj as Record<string, T>)[field]
-    : obj as T | null | undefined;
+  const value =
+    field && obj && typeof obj === "object" && !Array.isArray(obj)
+      ? (obj as Record<string, T>)[field]
+      : (obj as T | null | undefined);
   if (value === null || value === undefined || value === ignore) {
     return defaultValue;
   }
@@ -1198,14 +1972,262 @@ export function jwtDecodeHs256(token: string): Record<string, unknown> {
   if (!part) {
     throw new ExtractorError("Invalid JWT token", { expected: true });
   }
-  const padded = part.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
-  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
+  const padded = part
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(Math.ceil(part.length / 4) * 4, "=");
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<
+    string,
+    unknown
+  >;
 }
 
 export const jwt_decode_hs256 = jwtDecodeHs256;
 
-export function makeArchiveId(ie: { IE_NAME?: string } | string, videoId: unknown): string {
-  return `${typeof ie === "string" ? ie : ie.IE_NAME ?? "unknown"} ${videoId}`;
+export function encodeDataUri(
+  data: Uint8Array | string,
+  mimeType: string,
+): string {
+  const bytes =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
+  return `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
+}
+
+export const encode_data_uri = encodeDataUri;
+
+export function ageRestricted(
+  contentLimit: number | null | undefined,
+  ageLimit: number | null | undefined,
+): boolean {
+  return (
+    ageLimit !== null &&
+    ageLimit !== undefined &&
+    contentLimit !== null &&
+    contentLimit !== undefined &&
+    ageLimit < contentLimit
+  );
+}
+
+export const age_restricted = ageRestricted;
+
+export function isHtml(firstBytes: Uint8Array | string): boolean {
+  const text = (
+    typeof firstBytes === "string"
+      ? firstBytes
+      : new TextDecoder().decode(firstBytes.subarray(0, 512))
+  )
+    .trimStart()
+    .toLowerCase();
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<head") ||
+    text.includes("<script") ||
+    text.includes("<title")
+  );
+}
+
+export const is_html = isHtml;
+
+export function uppercaseEscape(value: string): string {
+  return value.replaceAll(/\\U([0-9a-fA-F]{8})/g, (_, code: string) =>
+    String.fromCodePoint(Number.parseInt(code, 16)),
+  );
+}
+
+export const uppercase_escape = uppercaseEscape;
+
+export function lowercaseEscape(value: string): string {
+  return value.replaceAll(/\\u([0-9a-fA-F]{4})/g, (_, code: string) =>
+    String.fromCharCode(Number.parseInt(code, 16)),
+  );
+}
+
+export const lowercase_escape = lowercaseEscape;
+
+export function monthByName(
+  name: string | null | undefined,
+  lang = "en",
+): number | null {
+  if (!name) {
+    return null;
+  }
+  const monthNames = MONTH_NAMES[lang] ?? ENGLISH_MONTH_NAMES;
+  const normalized = stripDiacritics(name);
+  const index = monthNames.findIndex(
+    (month) => stripDiacritics(month) === normalized,
+  );
+  return index >= 0 ? index + 1 : null;
+}
+
+export const month_by_name = monthByName;
+
+export function monthByAbbreviation(
+  abbrev: string | null | undefined,
+): number | null {
+  if (!abbrev) {
+    return null;
+  }
+  const index = ENGLISH_MONTH_NAMES.map((month) => month.slice(0, 3)).indexOf(
+    abbrev,
+  );
+  return index >= 0 ? index + 1 : null;
+}
+
+export const month_by_abbreviation = monthByAbbreviation;
+
+export function formatDecimalSuffix(
+  num: number | null | undefined,
+  fmt = "%d%s",
+  options: { factor?: number } = {},
+): string | null {
+  if (num === null || num === undefined) {
+    return null;
+  }
+  const factor = options.factor ?? 1000;
+  const suffixes = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
+  let value = num;
+  let suffix = "";
+  for (const candidate of suffixes) {
+    suffix = candidate;
+    if (Math.abs(value) < factor || candidate === suffixes.at(-1)) {
+      break;
+    }
+    value /= factor;
+  }
+  const precision = /%\.(\d+)f/.exec(fmt)?.[1];
+  const rendered =
+    precision !== undefined
+      ? value.toFixed(Number(precision))
+      : suffix
+        ? (value < 10
+            ? value.toFixed(2)
+            : value < 100
+              ? value.toFixed(1)
+              : value.toFixed(0)
+          ).replace(/\.0+$/, "")
+        : Math.trunc(value).toString();
+  return fmt.replace(/%(?:\.\d+f|d)/, rendered).replace("%s", suffix);
+}
+
+export const format_decimal_suffix = formatDecimalSuffix;
+
+export function formatBytes(bytes: number | null | undefined): string {
+  return formatDecimalSuffix(bytes, "%.2f%sB", { factor: 1024 }) ?? "N/A";
+}
+
+export const format_bytes = formatBytes;
+
+export function encodeBaseN(num: number, n = 62, table?: string): string {
+  const alphabet =
+    table ??
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(
+      0,
+      n,
+    );
+  if (num === 0) {
+    return alphabet[0] ?? "";
+  }
+  let value = Math.trunc(num);
+  let out = "";
+  while (value > 0) {
+    out = alphabet[value % n] + out;
+    value = Math.trunc(value / n);
+  }
+  return out;
+}
+
+export const encode_base_n = encodeBaseN;
+
+export function decodeBaseN(value: string, n = 62, table?: string): number {
+  const alphabet =
+    table ??
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(
+      0,
+      n,
+    );
+  return [...value].reduce((acc, char) => acc * n + alphabet.indexOf(char), 0);
+}
+
+export const decode_base_n = decodeBaseN;
+
+export function caesar(value: string, alphabet: string, shift: number): string {
+  const chars = [...alphabet];
+  return [...value]
+    .map((char) => {
+      const index = chars.indexOf(char);
+      return index < 0 ? char : chars[(index + shift) % chars.length];
+    })
+    .join("");
+}
+
+export function rot47(value: string): string {
+  return [...value]
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 33 && code <= 126
+        ? String.fromCharCode(33 + ((code + 14) % 94))
+        : char;
+    })
+    .join("");
+}
+
+export function urshift(value: number, shift: number): number {
+  return value >>> shift;
+}
+
+export function iriToUri(iri: string): string {
+  try {
+    return new URL(iri).toString();
+  } catch {
+    return encodeURI(iri);
+  }
+}
+
+export const iri_to_uri = iriToUri;
+
+export function extractBasicAuth(
+  url: string,
+): [string, { Authorization?: string }] {
+  const parsed = new URL(url);
+  if (!parsed.username && !parsed.password) {
+    return [url, {}];
+  }
+  const username = decodeURIComponent(parsed.username);
+  const password = decodeURIComponent(parsed.password);
+  parsed.username = "";
+  parsed.password = "";
+  return [
+    parsed.toString(),
+    {
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+    },
+  ];
+}
+
+export const extract_basic_auth = extractBasicAuth;
+
+export function sanitizeUrl(
+  url: string,
+  options: { scheme?: string } = {},
+): string {
+  const scheme = options.scheme ?? "http";
+  if (url.startsWith("//")) {
+    return `${scheme}:${url}`;
+  }
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+    return `${scheme}://${url}`;
+  }
+  return url;
+}
+
+export const sanitize_url = sanitizeUrl;
+
+export function makeArchiveId(
+  ie: { IE_NAME?: string } | string,
+  videoId: unknown,
+): string {
+  return `${typeof ie === "string" ? ie : (ie.IE_NAME ?? "unknown")} ${videoId}`;
 }
 
 export const make_archive_id = makeArchiveId;
@@ -1214,13 +2236,19 @@ const SMUGGLE_KEY = "__youtubedl_smuggle";
 
 export function smuggleUrl(url: string, data: Record<string, unknown>): string {
   const parsed = new URL(url);
-  parsed.searchParams.set(SMUGGLE_KEY, Buffer.from(JSON.stringify(data), "utf8").toString("base64url"));
+  parsed.searchParams.set(
+    SMUGGLE_KEY,
+    Buffer.from(JSON.stringify(data), "utf8").toString("base64url"),
+  );
   return parsed.toString();
 }
 
 export const smuggle_url = smuggleUrl;
 
-export function unsmuggleUrl(url: string, defaultValue: Record<string, unknown> = {}): [string, Record<string, unknown>] {
+export function unsmuggleUrl(
+  url: string,
+  defaultValue: Record<string, unknown> = {},
+): [string, Record<string, unknown>] {
   const parsed = new URL(url);
   const encoded = parsed.searchParams.get(SMUGGLE_KEY);
   if (!encoded) {
@@ -1228,7 +2256,13 @@ export function unsmuggleUrl(url: string, defaultValue: Record<string, unknown> 
   }
   parsed.searchParams.delete(SMUGGLE_KEY);
   try {
-    return [parsed.toString(), JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<string, unknown>];
+    return [
+      parsed.toString(),
+      JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<
+        string,
+        unknown
+      >,
+    ];
   } catch {
     return [parsed.toString(), defaultValue];
   }
@@ -1238,9 +2272,22 @@ export const unsmuggle_url = unsmuggleUrl;
 
 function applyQueryUpdate(
   parsed: URL,
-  query: URLSearchParams | Record<string, string | number | boolean | readonly (string | number | boolean)[] | null | undefined>,
+  query:
+    | URLSearchParams
+    | Record<
+        string,
+        | string
+        | number
+        | boolean
+        | readonly (string | number | boolean)[]
+        | null
+        | undefined
+      >,
 ): void {
-  const entries = query instanceof URLSearchParams ? [...query.entries()] : Object.entries(query);
+  const entries =
+    query instanceof URLSearchParams
+      ? [...query.entries()]
+      : Object.entries(query);
   for (const [key, value] of entries) {
     parsed.searchParams.delete(key);
     if (value === null || value === undefined) {
@@ -1275,7 +2322,10 @@ function addDateUnit(date: Date, unit: string, amount: number): Date {
   return out;
 }
 
-function roundDate(date: Date, precision: "microsecond" | "second" | "minute" | "hour" | "day"): Date {
+function roundDate(
+  date: Date,
+  precision: "microsecond" | "second" | "minute" | "hour" | "day",
+): Date {
   const out = new Date(date.getTime());
   if (precision === "day") {
     out.setUTCHours(0);
@@ -1296,16 +2346,28 @@ function pad2(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
+function stripDiacritics(value: string): string {
+  return value.normalize("NFD").replaceAll(/\p{Diacritic}/gu, "");
+}
+
 export function stripJsonp(code: string): string {
-  const match = /^(?:window\.)?([a-zA-Z0-9_.$]*)(?:\s*&&\s*\1)?\s*\(\s*([\s\S]*)\);?\s*(?:\/\/[^\n]*)*$/.exec(code.trim());
+  const match =
+    /^(?:window\.)?([a-zA-Z0-9_.$]*)(?:\s*&&\s*\1)?\s*\(\s*([\s\S]*)\);?\s*(?:\/\/[^\n]*)*$/.exec(
+      code.trim(),
+    );
   return match?.[2]?.trim() ?? code;
 }
 
 export const strip_jsonp = stripJsonp;
 
-export function jsToJson(code: string, vars: Record<string, string> = {}, strict = false): string {
+export function jsToJson(
+  code: string,
+  vars: Record<string, string> = {},
+  strict = false,
+): string {
   let processed = code.replace(/(?:new\s+)?Array\((.*?)\)/g, "[$1]");
-  const PATTERN = /(?<str>'(?:\\.|[^\\'])*'|"(?:\\.|[^\\"])*"|`(?:\\.|[^\\`])*`)|(?<comment>\/\*(?:(?!\*\/)[\s\S])*\*\/|\/\/[^\n]*\n)|(?<comma>,\s*(?=[\]}]))|(?<void>\bvoid\s+0\b|\bundefined\b)|(?<ident>(?:(?<![0-9])[eE]|[a-df-zA-DF-Z_$])[.a-zA-Z_$0-9]*)|(?<hex>\b(?:0[xX][0-9a-fA-F]+|(?<!\.)0+[0-7]+)(?:\s*:)?)|(?<num>[0-9]+(?=\s*:))|(?<excl>!+)/g;
+  const PATTERN =
+    /(?<str>'(?:\\.|[^\\'])*'|"(?:\\.|[^\\"])*"|`(?:\\.|[^\\`])*`)|(?<comment>\/\*(?:(?!\*\/)[\s\S])*\*\/|\/\/[^\n]*\n)|(?<comma>,\s*(?=[\]}]))|(?<void>\bvoid\s+0\b|\bundefined\b)|(?<ident>(?:(?<![0-9])[eE]|[a-df-zA-DF-Z_$])[.a-zA-Z_$0-9]*)|(?<hex>\b(?:0[xX][0-9a-fA-F]+|(?<!\.)0+[0-7]+)(?:\s*:)?)|(?<num>[0-9]+(?=\s*:))|(?<excl>!+)/g;
   processed = processed.replace(PATTERN, (...args) => {
     const groups = args.at(-1) as Record<string, string>;
     if (groups.str) {
@@ -1362,17 +2424,28 @@ function decodeJsStringLiteral(value: string): string {
       return value.slice(1, -1);
     }
   }
-  return value.slice(1, -1)
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)))
-    .replace(/\\x([0-9a-fA-F]{2})/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)))
+  return value
+    .slice(1, -1)
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code: string) =>
+      String.fromCharCode(Number.parseInt(code, 16)),
+    )
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, code: string) =>
+      String.fromCharCode(Number.parseInt(code, 16)),
+    )
     .replace(/\\([\\'"`/bfnrt])/g, (_, escaped: string) => {
       switch (escaped) {
-        case "b": return "\b";
-        case "f": return "\f";
-        case "n": return "\n";
-        case "r": return "\r";
-        case "t": return "\t";
-        default: return escaped;
+        case "b":
+          return "\b";
+        case "f":
+          return "\f";
+        case "n":
+          return "\n";
+        case "r":
+          return "\r";
+        case "t":
+          return "\t";
+        default:
+          return escaped;
       }
     });
 }

@@ -12,7 +12,9 @@ export class WebSocketResponse {
   }
 
   async recv(): Promise<string | Uint8Array> {
-    throw new NotImplementedError("WebSocketResponse.recv async iterator bridge");
+    throw new NotImplementedError(
+      "WebSocketResponse.recv async iterator bridge",
+    );
   }
 }
 
@@ -22,6 +24,8 @@ export abstract class WebSocketRequestHandler extends RequestHandler {
 
 export class BunWebSocketRH extends WebSocketRequestHandler {
   protected override async doSend(request: Request): Promise<Response> {
-    throw new NotImplementedError("WebSocket request handler response adaptation");
+    throw new NotImplementedError(
+      "WebSocket request handler response adaptation",
+    );
   }
 }

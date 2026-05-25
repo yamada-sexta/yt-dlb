@@ -5,7 +5,8 @@ import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class BehindKinkIE extends InfoExtractor {
   static override readonly _WORKING = false;
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?behindkink\.com/(?<year>[0-9]{4})/(?<month>[0-9]{2})/(?<day>[0-9]{2})/(?<id>[^/#?_]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?behindkink\.com/(?<year>[0-9]{4})/(?<month>[0-9]{2})/(?<day>[0-9]{2})/(?<id>[^/#?_]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -15,12 +16,20 @@ export class BehindKinkIE extends InfoExtractor {
     }
     const webpage = await this.downloadWebpage(url, displayId);
     if (webpage === false) {
-      throw new ExtractorError("Unable to download webpage", { videoId: displayId });
+      throw new ExtractorError("Unable to download webpage", {
+        videoId: displayId,
+      });
     }
 
-    const videoUrl = this.searchRegex(/<source src="([^"]+)"/, webpage, "video URL");
+    const videoUrl = this.searchRegex(
+      /<source src="([^"]+)"/,
+      webpage,
+      "video URL",
+    );
     if (typeof videoUrl !== "string") {
-      throw new ExtractorError("Unable to extract video URL", { videoId: displayId });
+      throw new ExtractorError("Unable to extract video URL", {
+        videoId: displayId,
+      });
     }
     const videoId = urlBasename(videoUrl).split("_")[0] ?? displayId;
 

@@ -46,7 +46,9 @@ export async function loadAllPlugins(): Promise<void> {
   allPluginsLoaded.value = true;
 }
 
-export async function loadPlugins(pluginSpec: PluginSpec): Promise<Record<string, unknown>> {
+export async function loadPlugins(
+  pluginSpec: PluginSpec,
+): Promise<Record<string, unknown>> {
   const regularClasses: Record<string, unknown> = {};
   if (process.env.YTDLP_NO_PLUGINS || !pluginDirs.value.length) {
     return regularClasses;
@@ -58,15 +60,25 @@ export async function loadPlugins(pluginSpec: PluginSpec): Promise<Record<string
       continue;
     }
     try {
-      const module = await import(pathToFileURL(moduleFile).href) as PluginModule;
-      Object.assign(regularClasses, getRegularClasses(module, moduleName, pluginSpec.suffix));
+      const module = (await import(
+        pathToFileURL(moduleFile).href
+      )) as PluginModule;
+      Object.assign(
+        regularClasses,
+        getRegularClasses(module, moduleName, pluginSpec.suffix),
+      );
     } catch (error) {
-      process.stderr.write(`Error while importing module ${JSON.stringify(moduleName)}\n${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+      process.stderr.write(
+        `Error while importing module ${JSON.stringify(moduleName)}\n${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+      );
     }
   }
 
   pluginSpec.pluginDestination.value = regularClasses;
-  pluginSpec.destination.value = { ...regularClasses, ...pluginSpec.destination.value };
+  pluginSpec.destination.value = {
+    ...regularClasses,
+    ...pluginSpec.destination.value,
+  };
   return regularClasses;
 }
 
@@ -78,7 +90,8 @@ export function registerPluginSpec(pluginSpec: PluginSpec): void {
 
 export async function* defaultPluginPaths(): AsyncGenerator<string> {
   const home = process.env.HOME;
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? (home ? join(home, ".config") : undefined);
+  const xdgConfigHome =
+    process.env.XDG_CONFIG_HOME ?? (home ? join(home, ".config") : undefined);
 
   if (xdgConfigHome) {
     yield join(xdgConfigHome, "yt-dlp", "plugins");
@@ -90,7 +103,9 @@ export async function* defaultPluginPaths(): AsyncGenerator<string> {
   yield process.cwd();
 }
 
-export async function* candidatePluginPaths(candidate: string): AsyncGenerator<string> {
+export async function* candidatePluginPaths(
+  candidate: string,
+): AsyncGenerator<string> {
   if (!(await isDirectory(candidate))) {
     throw new Error(`Invalid plugin directory: ${candidate}`);
   }
@@ -117,7 +132,11 @@ export async function* iterModules(subpackage: string): AsyncGenerator<string> {
   }
 }
 
-export function getRegularClasses(module: PluginModule, moduleName: string, suffix: string): Record<string, unknown> {
+export function getRegularClasses(
+  module: PluginModule,
+  moduleName: string,
+  suffix: string,
+): Record<string, unknown> {
   const allowed = module.__all__;
   const regularClasses: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(module)) {
@@ -162,7 +181,11 @@ async function* configuredPluginRoots(): AsyncGenerator<string> {
 
 async function* globModuleFiles(dir: string): AsyncGenerator<string> {
   const glob = new Glob("**/*.{mjs,js,ts}");
-  for await (const file of glob.scan({ cwd: dir, absolute: true, onlyFiles: true })) {
+  for await (const file of glob.scan({
+    cwd: dir,
+    absolute: true,
+    onlyFiles: true,
+  })) {
     const relativeParts = file.slice(dir.length + 1).split(/[\\/]/);
     if (relativeParts.some((part) => part.startsWith("_"))) {
       continue;

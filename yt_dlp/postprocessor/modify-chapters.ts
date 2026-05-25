@@ -11,7 +11,8 @@ import type { PostProcessorInfo } from "./common.ts";
 import { SponsorBlockPP } from "./sponsorblock.ts";
 
 const TINY_CHAPTER_DURATION = 1;
-export const DEFAULT_SPONSORBLOCK_CHAPTER_TITLE = "[SponsorBlock]: %(category_names)l";
+export const DEFAULT_SPONSORBLOCK_CHAPTER_TITLE =
+  "[SponsorBlock]: %(category_names)l";
 
 type CategoryTuple = [string, number, number, string];
 
@@ -31,10 +32,12 @@ interface Chapter {
   [key: string]: unknown;
 }
 
-const ChapterSchema = z.object({
-  start_time: z.number(),
-  end_time: z.number(),
-}).passthrough();
+const ChapterSchema = z
+  .object({
+    start_time: z.number(),
+    end_time: z.number(),
+  })
+  .passthrough();
 
 const RecordSchema = z.record(z.string(), z.unknown());
 
@@ -53,23 +56,41 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
 
   constructor(
     downloader: ConstructorParameters<typeof FFmpegPostProcessor>[0] = null,
-    remove_chapters_patterns: readonly RegExp[] | readonly string[] | null = null,
+    remove_chapters_patterns:
+      | readonly RegExp[]
+      | readonly string[]
+      | null = null,
     remove_sponsor_segments: readonly string[] | null = null,
     remove_ranges: readonly (readonly [number, number])[] | null = null,
-    options: { sponsorblock_chapter_title?: string; force_keyframes?: boolean } = {},
+    options: {
+      sponsorblock_chapter_title?: string;
+      force_keyframes?: boolean;
+    } = {},
   ) {
     super(downloader);
-    this.removeChapterPatterns = [...(remove_chapters_patterns ?? [])].map((pattern) => (
-      pattern instanceof RegExp ? pattern : new RegExp(pattern)
-    ));
-    const nonSkippable = new Set(Object.keys(SponsorBlockPP.NON_SKIPPABLE_CATEGORIES));
-    this.removeSponsorSegments = new Set((remove_sponsor_segments ?? []).filter((category) => !nonSkippable.has(category)));
-    this.rangesToRemove = (remove_ranges ?? []).map(([start, end]) => [start, end]);
-    this.sponsorblockChapterTitle = options.sponsorblock_chapter_title ?? DEFAULT_SPONSORBLOCK_CHAPTER_TITLE;
+    this.removeChapterPatterns = [...(remove_chapters_patterns ?? [])].map(
+      (pattern) => (pattern instanceof RegExp ? pattern : new RegExp(pattern)),
+    );
+    const nonSkippable = new Set(
+      Object.keys(SponsorBlockPP.NON_SKIPPABLE_CATEGORIES),
+    );
+    this.removeSponsorSegments = new Set(
+      (remove_sponsor_segments ?? []).filter(
+        (category) => !nonSkippable.has(category),
+      ),
+    );
+    this.rangesToRemove = (remove_ranges ?? []).map(([start, end]) => [
+      start,
+      end,
+    ]);
+    this.sponsorblockChapterTitle =
+      options.sponsorblock_chapter_title ?? DEFAULT_SPONSORBLOCK_CHAPTER_TITLE;
     this.forceKeyframesEnabled = Boolean(options.force_keyframes);
   }
 
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
     await this.fixupChapters(info);
     const [chaptersMarked, sponsorChaptersMarked] = this.markChaptersToRemove(
       cloneChapters(info.chapters),
@@ -79,45 +100,83 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       return [[], info];
     }
 
-    const filepath = requireString(info.filepath, "ModifyChaptersPP requires info.filepath");
+    const filepath = requireString(
+      info.filepath,
+      "ModifyChaptersPP requires info.filepath",
+    );
     const realDuration = await this.getRealVideoDuration(filepath);
     if (realDuration === null) {
       throw new PostProcessingError("Unable to determine video duration");
     }
-    const chapters = chaptersMarked.length ? chaptersMarked : [{
-      start_time: 0,
-      end_time: typeof info.duration === "number" ? info.duration : realDuration,
-      title: typeof info.title === "string" ? info.title : "",
-    }];
+    const chapters = chaptersMarked.length
+      ? chaptersMarked
+      : [
+          {
+            start_time: 0,
+            end_time:
+              typeof info.duration === "number" ? info.duration : realDuration,
+            title: typeof info.title === "string" ? info.title : "",
+          },
+        ];
 
-    const [newChapters, cuts] = this.removeMarkedArrangeSponsors([...chapters, ...sponsorChaptersMarked]);
+    const [newChapters, cuts] = this.removeMarkedArrangeSponsors([
+      ...chapters,
+      ...sponsorChaptersMarked,
+    ]);
     info.chapters = newChapters;
     if (!cuts.length) {
       return [[], info];
     }
     if (!newChapters.length) {
-      this.reportWarning("You have requested to remove the entire video, which is not possible");
+      this.reportWarning(
+        "You have requested to remove the entire video, which is not possible",
+      );
       return [[], info];
     }
 
-    const originalDuration = typeof info.duration === "number" ? info.duration : null;
+    const originalDuration =
+      typeof info.duration === "number" ? info.duration : null;
     info.duration = newChapters.at(-1)?.end_time;
     if (durationMismatch(realDuration, originalDuration, 1)) {
-      if (!durationMismatch(realDuration, typeof info.duration === "number" ? info.duration : null)) {
-        this.toScreen(`Skipping ${this.ppKey()} since the video appears to be already cut`);
+      if (
+        !durationMismatch(
+          realDuration,
+          typeof info.duration === "number" ? info.duration : null,
+        )
+      ) {
+        this.toScreen(
+          `Skipping ${this.ppKey()} since the video appears to be already cut`,
+        );
         return [[], info];
       }
       if (!info.__real_download) {
-        throw new PostProcessingError("Cannot cut video since the real and expected durations mismatch. Different chapters may have already been removed");
+        throw new PostProcessingError(
+          "Cannot cut video since the real and expected durations mismatch. Different chapters may have already been removed",
+        );
       }
       this.writeDebug("Expected and actual durations mismatch");
     }
 
     const concatOpts = ModifyChaptersPP.makeConcatOpts(cuts, realDuration);
-    this.writeDebug(`Concat spec = ${concatOpts.map((option) => `${option.inpoint ?? "0.0"}-${option.outpoint ?? "inf"}`).join(", ")}`);
-    const inOutFiles: Array<[string, string]> = [[filepath, await this.removeChapters(filepath, cuts, concatOpts, this.forceKeyframesEnabled)]];
+    this.writeDebug(
+      `Concat spec = ${concatOpts.map((option) => `${option.inpoint ?? "0.0"}-${option.outpoint ?? "inf"}`).join(", ")}`,
+    );
+    const inOutFiles: Array<[string, string]> = [
+      [
+        filepath,
+        await this.removeChapters(
+          filepath,
+          cuts,
+          concatOpts,
+          this.forceKeyframesEnabled,
+        ),
+      ],
+    ];
     for (const subFile of await this.getSupportedSubs(info)) {
-      inOutFiles.push([subFile, await this.removeChapters(subFile, cuts, concatOpts, false)]);
+      inOutFiles.push([
+        subFile,
+        await this.removeChapters(subFile, cuts, concatOpts, false),
+      ]);
     }
 
     const filesToRemove: string[] = [];
@@ -132,7 +191,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
     return [filesToRemove, info];
   }
 
-  private markChaptersToRemove(chapters: Chapter[], sponsorChapters: Chapter[]): [Chapter[], Chapter[]] {
+  private markChaptersToRemove(
+    chapters: Chapter[],
+    sponsorChapters: Chapter[],
+  ): [Chapter[], Chapter[]] {
     if (this.removeChapterPatterns.length) {
       let warnNoChapterToRemove = true;
       if (!chapters.length) {
@@ -158,7 +220,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
         warnNoChapterToRemove = false;
       }
       for (const chapter of sponsorChapters) {
-        if (typeof chapter.category === "string" && this.removeSponsorSegments.has(chapter.category)) {
+        if (
+          typeof chapter.category === "string" &&
+          this.removeSponsorSegments.has(chapter.category)
+        ) {
           chapter.remove = true;
           warnNoChapterToRemove = false;
         }
@@ -181,19 +246,28 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
   }
 
   private async getSupportedSubs(info: PostProcessorInfo): Promise<string[]> {
-    const subtitles = isRecord(info.requested_subtitles) ? Object.values(info.requested_subtitles) : [];
+    const subtitles = isRecord(info.requested_subtitles)
+      ? Object.values(info.requested_subtitles)
+      : [];
     const files: string[] = [];
     for (const subUnknown of subtitles) {
       if (!isRecord(subUnknown)) {
         continue;
       }
-      const subFile = typeof subUnknown.filepath === "string" ? subUnknown.filepath : null;
-      if (!subFile || !await pathExists(subFile)) {
+      const subFile =
+        typeof subUnknown.filepath === "string" ? subUnknown.filepath : null;
+      if (!subFile || !(await pathExists(subFile))) {
         continue;
       }
       const ext = typeof subUnknown.ext === "string" ? subUnknown.ext : "";
-      if (!FFmpegSubtitlesConvertorPP.SUPPORTED_EXTS.includes(ext as typeof FFmpegSubtitlesConvertorPP.SUPPORTED_EXTS[number])) {
-        this.reportWarning(`Cannot remove chapters from external ${ext} subtitles; "${subFile}" is now out of sync`);
+      if (
+        !FFmpegSubtitlesConvertorPP.SUPPORTED_EXTS.includes(
+          ext as (typeof FFmpegSubtitlesConvertorPP.SUPPORTED_EXTS)[number],
+        )
+      ) {
+        this.reportWarning(
+          `Cannot remove chapters from external ${ext} subtitles; "${subFile}" is now out of sync`,
+        );
         continue;
       }
       files.push(subFile);
@@ -201,7 +275,9 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
     return files;
   }
 
-  private removeMarkedArrangeSponsors(inputChapters: Chapter[]): [Chapter[], Chapter[]] {
+  private removeMarkedArrangeSponsors(
+    inputChapters: Chapter[],
+  ): [Chapter[], Chapter[]] {
     const cuts: Chapter[] = [];
     const appendCut = (chapter: Chapter): number => {
       const lastToCut = cuts.at(-1);
@@ -233,7 +309,8 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
     };
     const newChapters: Chapter[] = [];
     const appendChapter = (chapter: Chapter): void => {
-      const length = chapter.end_time - chapter.start_time - excessDuration(chapter);
+      const length =
+        chapter.end_time - chapter.start_time - excessDuration(chapter);
       if (length <= 0) {
         return;
       }
@@ -262,7 +339,9 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       }
       const { index, chapter } = queueItem;
       if (currentChapter.end_time <= chapter.start_time) {
-        currentChapter.remove ? appendCut(currentChapter) : appendChapter(currentChapter);
+        currentChapter.remove
+          ? appendCut(currentChapter)
+          : appendChapter(currentChapter);
         currentIndex = index;
         currentChapter = chapter;
         continue;
@@ -270,7 +349,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
 
       if (currentChapter.remove) {
         if (chapter.remove) {
-          currentChapter.end_time = Math.max(currentChapter.end_time, chapter.end_time);
+          currentChapter.end_time = Math.max(
+            currentChapter.end_time,
+            chapter.end_time,
+          );
         } else if (currentChapter.end_time < chapter.end_time) {
           chapter.start_time = currentChapter.end_time;
           chapter._was_cut = true;
@@ -286,7 +368,11 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
           continue;
         }
         if (currentChapter._categories) {
-          const afterChapter = cloneChapter({ ...currentChapter, start_time: chapter.end_time, _categories: [] });
+          const afterChapter = cloneChapter({
+            ...currentChapter,
+            start_time: chapter.end_time,
+            _categories: [],
+          });
           const currentCategories: CategoryTuple[] = [];
           for (const category of currentChapter._categories) {
             if (category[1] < chapter.start_time) {
@@ -297,8 +383,15 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
             }
           }
           currentChapter._categories = currentCategories;
-          if (JSON.stringify(currentChapter._categories) !== JSON.stringify(afterChapter._categories)) {
-            queuePush(queue, { start: afterChapter.start_time, index: currentIndex, chapter: afterChapter });
+          if (
+            JSON.stringify(currentChapter._categories) !==
+            JSON.stringify(afterChapter._categories)
+          ) {
+            queuePush(queue, {
+              start: afterChapter.start_time,
+              index: currentIndex,
+              chapter: afterChapter,
+            });
             currentChapter.end_time = chapter.start_time;
             appendChapter(currentChapter);
             currentIndex = index;
@@ -318,15 +411,32 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
         currentChapter._was_cut = true;
         chapter._was_cut = true;
         if (currentChapter.end_time > chapter.end_time) {
-          const afterChapter = cloneChapter({ ...currentChapter, start_time: chapter.end_time });
-          queuePush(queue, { start: afterChapter.start_time, index: currentIndex, chapter: afterChapter });
+          const afterChapter = cloneChapter({
+            ...currentChapter,
+            start_time: chapter.end_time,
+          });
+          queuePush(queue, {
+            start: afterChapter.start_time,
+            index: currentIndex,
+            chapter: afterChapter,
+          });
         } else if (chapter.end_time > currentChapter.end_time) {
-          const afterCurrent = cloneChapter({ ...chapter, start_time: currentChapter.end_time });
-          queuePush(queue, { start: afterCurrent.start_time, index: currentIndex, chapter: afterCurrent });
+          const afterCurrent = cloneChapter({
+            ...chapter,
+            start_time: currentChapter.end_time,
+          });
+          queuePush(queue, {
+            start: afterCurrent.start_time,
+            index: currentIndex,
+            chapter: afterCurrent,
+          });
           chapter.end_time = currentChapter.end_time;
         }
         if (currentChapter._categories) {
-          chapter._categories = [...currentChapter._categories, ...(chapter._categories ?? [])];
+          chapter._categories = [
+            ...currentChapter._categories,
+            ...(chapter._categories ?? []),
+          ];
         }
         if (currentChapter.cut_idx !== undefined) {
           chapter.cut_idx = currentChapter.cut_idx;
@@ -337,14 +447,19 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
         currentChapter = chapter;
       }
     }
-    currentChapter.remove ? appendCut(currentChapter) : appendChapter(currentChapter);
+    currentChapter.remove
+      ? appendCut(currentChapter)
+      : appendChapter(currentChapter);
     return [this.removeTinyRenameSponsors(newChapters), cuts];
   }
 
   private removeTinyRenameSponsors(chapters: Chapter[]): Chapter[] {
     const newChapters: Chapter[] = [];
     for (const [index, chapter] of chapters.entries()) {
-      if ((chapter._was_cut || chapter._categories) && chapter.end_time - chapter.start_time < TINY_CHAPTER_DURATION) {
+      if (
+        (chapter._was_cut || chapter._categories) &&
+        chapter.end_time - chapter.start_time < TINY_CHAPTER_DURATION
+      ) {
         if (!newChapters.length) {
           if (index < chapters.length - 1) {
             const next = chapters[index + 1];
@@ -365,7 +480,10 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
             }
             const prevIsSponsor = "categories" in previous;
             const nextIsSponsor = Boolean(next._categories);
-            if ((!chapter._categories && prevIsSponsor && !nextIsSponsor) || (chapter._categories && !prevIsSponsor && nextIsSponsor)) {
+            if (
+              (!chapter._categories && prevIsSponsor && !nextIsSponsor) ||
+              (chapter._categories && !prevIsSponsor && nextIsSponsor)
+            ) {
               next.start_time = chapter.start_time;
               continue;
             }
@@ -379,7 +497,9 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
       const categories = chapter._categories;
       delete chapter._categories;
       if (categories?.length) {
-        const categoryTuple = [...categories].sort((left, right) => (left[2] - left[1]) - (right[2] - right[1]))[0];
+        const categoryTuple = [...categories].sort(
+          (left, right) => left[2] - left[1] - (right[2] - right[1]),
+        )[0];
         if (!categoryTuple) {
           continue;
         }
@@ -387,10 +507,19 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
         chapter.category = category;
         chapter.categories = orderedUnique(categories.map((item) => item[0]));
         chapter.name = categoryName;
-        chapter.category_names = orderedUnique(categories.map((item) => item[3]));
-        chapter.title = this.evaluateChapterTitle(this.sponsorblockChapterTitle, chapter);
+        chapter.category_names = orderedUnique(
+          categories.map((item) => item[3]),
+        );
+        chapter.title = this.evaluateChapterTitle(
+          this.sponsorblockChapterTitle,
+          chapter,
+        );
         const previous = newChapters.at(-1);
-        if (previous && "categories" in previous && previous.title === chapter.title) {
+        if (
+          previous &&
+          "categories" in previous &&
+          previous.title === chapter.title
+        ) {
           previous.end_time = chapter.end_time;
           continue;
         }
@@ -400,21 +529,39 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
     return newChapters;
   }
 
-  async removeChapters(filename: string, rangesToCut: readonly Chapter[], concatOpts: Array<Record<string, string>>, forceKeyframes = false): Promise<string> {
+  async removeChapters(
+    filename: string,
+    rangesToCut: readonly Chapter[],
+    concatOpts: Array<Record<string, string>>,
+    forceKeyframes = false,
+  ): Promise<string> {
     let inputFile = filename;
     const outputFile = prependExtension(inputFile, "temp");
     if (forceKeyframes) {
-      inputFile = await this.forceKeyframes(inputFile, rangesToCut.flatMap((chapter) => [chapter.start_time, chapter.end_time]));
+      inputFile = await this.forceKeyframes(
+        inputFile,
+        rangesToCut.flatMap((chapter) => [
+          chapter.start_time,
+          chapter.end_time,
+        ]),
+      );
     }
     this.toScreen(`Removing chapters from ${filename}`);
-    await this.concatFiles(Array.from({ length: concatOpts.length }, () => inputFile), outputFile, concatOpts);
+    await this.concatFiles(
+      Array.from({ length: concatOpts.length }, () => inputFile),
+      outputFile,
+      concatOpts,
+    );
     if (inputFile !== filename) {
       await this.deleteDownloadedFiles(inputFile);
     }
     return outputFile;
   }
 
-  static makeConcatOpts(chaptersToRemove: readonly Chapter[], duration: number): Array<Record<string, string>> {
+  static makeConcatOpts(
+    chaptersToRemove: readonly Chapter[],
+    duration: number,
+  ): Array<Record<string, string>> {
     const opts: Array<Record<string, string>> = [{}];
     for (const segment of chaptersToRemove) {
       const current = opts.at(-1);
@@ -436,20 +583,31 @@ export class ModifyChaptersPP extends FFmpegPostProcessor {
   private evaluateChapterTitle(template: string, chapter: Chapter): string {
     const downloader = this.downloader as unknown;
     if (isRecord(downloader)) {
-      const evaluator = downloader.evaluateOuttmpl ?? downloader.evaluate_outtmpl;
+      const evaluator =
+        downloader.evaluateOuttmpl ?? downloader.evaluate_outtmpl;
       if (typeof evaluator === "function") {
-        const evaluated: unknown = evaluator.call(downloader, template, { ...chapter });
+        const evaluated: unknown = evaluator.call(downloader, template, {
+          ...chapter,
+        });
         if (typeof evaluated === "string") {
           return evaluated;
         }
-        throw new NotImplementedError("chapter title outtmpl evaluator returning non-string values");
+        throw new NotImplementedError(
+          "chapter title outtmpl evaluator returning non-string values",
+        );
       }
     }
-    throw new NotImplementedError("chapter title outtmpl evaluation without downloader.evaluateOuttmpl");
+    throw new NotImplementedError(
+      "chapter title outtmpl evaluation without downloader.evaluateOuttmpl",
+    );
   }
 }
 
-function durationMismatch(left: number | null, right: number | null, tolerance = 2): boolean | null {
+function durationMismatch(
+  left: number | null,
+  right: number | null,
+  tolerance = 2,
+): boolean | null {
   if (!left || !right) {
     return null;
   }
@@ -466,7 +624,12 @@ function compareQueueItem(left: QueueItem, right: QueueItem): number {
 }
 
 function cloneChapters(value: unknown): Chapter[] {
-  return Array.isArray(value) ? value.filter(isRecord).map((item) => cloneChapter(item)).filter(isChapter) : [];
+  return Array.isArray(value)
+    ? value
+        .filter(isRecord)
+        .map((item) => cloneChapter(item))
+        .filter(isChapter)
+    : [];
 }
 
 function cloneChapter(value: Record<string, unknown>): Chapter {

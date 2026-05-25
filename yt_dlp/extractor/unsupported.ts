@@ -8,7 +8,9 @@ abstract class UnsupportedInfoExtractor extends InfoExtractor {
   static readonly URLS: readonly string[] = [];
 
   static override get IE_NAME(): string {
-    return InfoExtractor.IE_NAME.startsWith("Known") ? InfoExtractor.IE_NAME.slice("Known".length) : InfoExtractor.IE_NAME;
+    return InfoExtractor.IE_NAME.startsWith("Known")
+      ? InfoExtractor.IE_NAME.slice("Known".length)
+      : InfoExtractor.IE_NAME;
   }
 
   static override get _VALID_URL(): string {

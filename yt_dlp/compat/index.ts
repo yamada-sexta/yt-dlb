@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 export class compat_HTMLParseError extends Error {}
 
 export function compatOrd(value: string | number): number {
-  return typeof value === "number" ? value : value.codePointAt(0) ?? 0;
+  return typeof value === "number" ? value : (value.codePointAt(0) ?? 0);
 }
 
 export function compatDatetimeFromTimestamp(timestamp: number): Date {
@@ -45,10 +45,22 @@ export const compat_etree_fromstring = compatEtreeFromstring;
 export const urllib_req_to_req = urllibReqToReq;
 
 function parseXml(text: string): XmlElement {
-  const cleaned = text.replaceAll(/<\?xml[\s\S]*?\?>|<!DOCTYPE[\s\S]*?>|<!--[\s\S]*?-->/g, "");
-  const root: XmlElement = { tag: "__root__", attrib: {}, text: null, children: [] };
-  const stack: Array<{ element: XmlElement; namespaces: Record<string, string> }> = [{ element: root, namespaces: {} }];
-  const tagPattern = /<(?<closing>\/)?(?<name>[^\s/>]+)(?<attrs>[^>]*?)(?<self>\/)?>/g;
+  const cleaned = text.replaceAll(
+    /<\?xml[\s\S]*?\?>|<!DOCTYPE[\s\S]*?>|<!--[\s\S]*?-->/g,
+    "",
+  );
+  const root: XmlElement = {
+    tag: "__root__",
+    attrib: {},
+    text: null,
+    children: [],
+  };
+  const stack: Array<{
+    element: XmlElement;
+    namespaces: Record<string, string>;
+  }> = [{ element: root, namespaces: {} }];
+  const tagPattern =
+    /<(?<closing>\/)?(?<name>[^\s/>]+)(?<attrs>[^>]*?)(?<self>\/)?>/g;
   let lastIndex = 0;
   for (const match of cleaned.matchAll(tagPattern)) {
     const current = stack.at(-1);
@@ -57,7 +69,8 @@ function parseXml(text: string): XmlElement {
     }
     const textChunk = cleaned.slice(lastIndex, match.index);
     if (textChunk.trim()) {
-      current.element.text = (current.element.text ?? "") + xmlUnescape(textChunk);
+      current.element.text =
+        (current.element.text ?? "") + xmlUnescape(textChunk);
     }
     lastIndex = (match.index ?? 0) + match[0].length;
     const name = match.groups?.name;
@@ -83,7 +96,12 @@ function parseXml(text: string): XmlElement {
         attrib[key] = value;
       }
     }
-    const element: XmlElement = { tag: qualifyName(name, namespaces), attrib, text: null, children: [] };
+    const element: XmlElement = {
+      tag: qualifyName(name, namespaces),
+      attrib,
+      text: null,
+      children: [],
+    };
     current.element.children.push(element);
     if (!match.groups?.self) {
       stack.push({ element, namespaces });
@@ -98,11 +116,14 @@ function parseXml(text: string): XmlElement {
 
 function parseXmlAttributes(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const pattern = /(?<key>[\w:-]+)\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)')/g;
+  const pattern =
+    /(?<key>[\w:-]+)\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)')/g;
   for (const match of text.matchAll(pattern)) {
     const key = match.groups?.key;
     if (key) {
-      out[key] = xmlUnescape(match.groups?.double ?? match.groups?.single ?? "");
+      out[key] = xmlUnescape(
+        match.groups?.double ?? match.groups?.single ?? "",
+      );
     }
   }
   return out;

@@ -47,7 +47,10 @@ export function getWebpoContentBinding(
     return [request.visitorData, ContentBindingType.VISITOR_DATA];
   }
 
-  if (request.context === PoTokenContext.PLAYER || request.context === PoTokenContext.SUBS) {
+  if (
+    request.context === PoTokenContext.PLAYER ||
+    request.context === PoTokenContext.SUBS
+  ) {
     return [request.videoId, ContentBindingType.VIDEO_ID];
   }
 
@@ -59,7 +62,10 @@ function extractVisitorId(visitorData: string | undefined): string | undefined {
     return undefined;
   }
   try {
-    const decoded = Buffer.from(decodeURIComponent(visitorData.replaceAll("+", " ")), "base64url");
+    const decoded = Buffer.from(
+      decodeURIComponent(visitorData.replaceAll("+", " ")),
+      "base64url",
+    );
     const visitorId = decoded.subarray(2, 13).toString();
     return /^[A-Za-z0-9_-]{11}$/.test(visitorId) ? visitorId : undefined;
   } catch {

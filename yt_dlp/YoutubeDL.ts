@@ -5,10 +5,17 @@
 import { basename } from "node:path";
 
 import { Cache } from "./cache.ts";
-import { extractCookiesFromBrowserForUrl, loadCookies, YoutubeDLCookieJar } from "./cookies.ts";
+import {
+  extractCookiesFromBrowserForUrl,
+  loadCookies,
+  YoutubeDLCookieJar,
+} from "./cookies.ts";
 import { getSuitableDownloader } from "./downloader/index.ts";
 import { NotImplementedError } from "./errors.ts";
-import { extractYoutubeVideo, isYoutubeWatchUrl } from "./extractor/youtube/video.ts";
+import {
+  extractYoutubeVideo,
+  isYoutubeWatchUrl,
+} from "./extractor/youtube/video.ts";
 
 export interface YoutubeDLOptions {
   outtmpl?: string | Record<string, string>;
@@ -58,7 +65,11 @@ export class YoutubeDL {
   }
 
   async init(): Promise<this> {
-    this.cookies = await loadCookies(this.params.cookiefile, this.params.cookiesfrombrowser, this);
+    this.cookies = await loadCookies(
+      this.params.cookiefile,
+      this.params.cookiesfrombrowser,
+      this,
+    );
     return this;
   }
 
@@ -115,7 +126,9 @@ export class YoutubeDL {
     }
     const response = await fetch(request, { headers });
     if (!response.ok) {
-      throw new DownloadError(`HTTP Error ${response.status}: ${response.statusText}`);
+      throw new DownloadError(
+        `HTTP Error ${response.status}: ${response.statusText}`,
+      );
     }
     return response;
   }
@@ -127,7 +140,9 @@ export class YoutubeDL {
       return await extractYoutubeVideo(url, this);
     }
     const parsed = new URL(url);
-    const title = decodeURIComponent(basename(parsed.pathname) || parsed.hostname);
+    const title = decodeURIComponent(
+      basename(parsed.pathname) || parsed.hostname,
+    );
     const ext = extensionFromPath(parsed.pathname) || "bin";
     return {
       id: createId(url),
@@ -140,9 +155,10 @@ export class YoutubeDL {
   }
 
   prepareFilename(info: { title: string; id: string; ext: string }): string {
-    const template = typeof this.params.outtmpl === "string"
-      ? this.params.outtmpl
-      : this.params.outtmpl?.default ?? "%(title)s-%(id)s.%(ext)s";
+    const template =
+      typeof this.params.outtmpl === "string"
+        ? this.params.outtmpl
+        : (this.params.outtmpl?.default ?? "%(title)s-%(id)s.%(ext)s");
     return template
       .replaceAll("%(title)s", sanitizeFilename(info.title))
       .replaceAll("%(id)s", sanitizeFilename(info.id))
@@ -164,14 +180,19 @@ export class YoutubeDL {
         }
         await this.downloadDirect(info);
       } catch (error) {
-        this.reportError(error instanceof Error ? error.message : String(error));
+        this.reportError(
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
     return this.downloadRetcode;
   }
 
   async downloadWithInfoFile(filename: string): Promise<number> {
-    const data = await Bun.file(filename).json() as { url?: string; webpage_url?: string };
+    const data = (await Bun.file(filename).json()) as {
+      url?: string;
+      webpage_url?: string;
+    };
     const url = data.url ?? data.webpage_url;
     if (!url) {
       throw new DownloadError(`No URL found in ${filename}`);
@@ -188,7 +209,10 @@ export class YoutubeDL {
   }
 
   private async downloadDirect(info: DirectInfo): Promise<void> {
-    const Downloader = getSuitableDownloader({ ...info, protocol: new URL(info.url).protocol.replace(/:$/, "") });
+    const Downloader = getSuitableDownloader({
+      ...info,
+      protocol: new URL(info.url).protocol.replace(/:$/, ""),
+    });
     const fd = new Downloader(this, this.params as Record<string, unknown>);
     const ok = await fd.download(info.filename, {
       ...info,
@@ -221,7 +245,9 @@ export class YoutubeDL {
         this.cookies.setCookie(cookie);
       }
     } catch (error) {
-      this.reportWarning(`failed to extract browser cookies for ${origin}: ${error instanceof Error ? error.message : String(error)}`);
+      this.reportWarning(
+        `failed to extract browser cookies for ${origin}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }
@@ -239,19 +265,29 @@ function sanitizeFilename(value: string): string {
   return value.replaceAll(/[\\/:*?"<>|]/g, "_").trim() || "_";
 }
 
-function renderSimpleOuttmpl(template: string, info: Record<string, unknown>, sanitize: boolean): string {
+function renderSimpleOuttmpl(
+  template: string,
+  info: Record<string, unknown>,
+  sanitize: boolean,
+): string {
   const tokenPattern = /%\((?<key>[^)]+)\)(?<type>[sl])/g;
-  const rendered = template.replaceAll(tokenPattern, (_match, key: string, type: string) => {
-    if (!/^\w+$/.test(key)) {
-      throw new NotImplementedError(`outtmpl field expression ${key}`);
-    }
-    const rawValue = info[key];
-    const value = type === "l" && Array.isArray(rawValue)
-      ? rawValue.map((item) => String(item)).join(", ")
-      : String(rawValue ?? "");
-    return sanitize ? sanitizeFilename(value) : value;
-  });
-  const unsupported = /%/.exec(template.replaceAll("%%", "").replaceAll(tokenPattern, ""));
+  const rendered = template.replaceAll(
+    tokenPattern,
+    (_match, key: string, type: string) => {
+      if (!/^\w+$/.test(key)) {
+        throw new NotImplementedError(`outtmpl field expression ${key}`);
+      }
+      const rawValue = info[key];
+      const value =
+        type === "l" && Array.isArray(rawValue)
+          ? rawValue.map((item) => String(item)).join(", ")
+          : String(rawValue ?? "");
+      return sanitize ? sanitizeFilename(value) : value;
+    },
+  );
+  const unsupported = /%/.exec(
+    template.replaceAll("%%", "").replaceAll(tokenPattern, ""),
+  );
   if (unsupported) {
     throw new NotImplementedError(`outtmpl syntax near ${unsupported[0]}`);
   }

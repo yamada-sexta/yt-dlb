@@ -9,7 +9,14 @@ export type TraverseKey =
   | number
   | null
   | typeof Ellipsis
-  | Set<((value: unknown) => unknown) | StringConstructor | NumberConstructor | BooleanConstructor | ObjectConstructor | ArrayConstructor>
+  | Set<
+      | ((value: unknown) => unknown)
+      | StringConstructor
+      | NumberConstructor
+      | BooleanConstructor
+      | ObjectConstructor
+      | ArrayConstructor
+    >
   | readonly unknown[]
   | ((key: string | number, value: unknown) => boolean)
   | Record<string, unknown>;
@@ -19,39 +26,68 @@ export type TraversePath = TraverseKey | readonly unknown[];
 export const Ellipsis = Symbol("Ellipsis");
 
 const RecordSchema = z.record(z.string(), z.unknown());
-const GroupsSchema = z.object({
-  groups: z.record(z.string(), z.string().optional()),
-}).passthrough();
+const GroupsSchema = z
+  .object({
+    groups: z.record(z.string(), z.string().optional()),
+  })
+  .passthrough();
 
 export function traverseObj<T = unknown>(
   obj: unknown,
-  ...pathsAndOptions: Array<TraversePath | {
-    default?: T;
-    expected_type?: (value: unknown) => value is T;
-    get_all?: boolean;
-  }>
+  ...pathsAndOptions: Array<
+    | TraversePath
+    | {
+        default?: T;
+        expected_type?: (value: unknown) => value is T;
+        get_all?: boolean;
+      }
+  >
 ): T | T[] | null {
   const maybeOptions = pathsAndOptions.at(-1);
   const hasOptions = isTraverseOptions(maybeOptions);
-  const options = hasOptions ? pathsAndOptions.pop() as { default?: T; expected_type?: (value: unknown) => value is T; get_all?: boolean } : {};
+  const options = hasOptions
+    ? (pathsAndOptions.pop() as {
+        default?: T;
+        expected_type?: (value: unknown) => value is T;
+        get_all?: boolean;
+      })
+    : {};
   const paths = pathsAndOptions as TraversePath[];
   for (const path of paths) {
-    const values = applyPath(obj, Array.isArray(path) ? path as readonly TraverseKey[] : [path as TraverseKey]);
-    const filtered = options.expected_type ? values.filter(options.expected_type) : values as T[];
+    const values = applyPath(
+      obj,
+      Array.isArray(path)
+        ? (path as readonly TraverseKey[])
+        : [path as TraverseKey],
+    );
+    const filtered = options.expected_type
+      ? values.filter(options.expected_type)
+      : (values as T[]);
     if (filtered.length) {
       const first = filtered[0];
       if (first === undefined) {
         continue;
       }
-      return options.get_all === false ? first : pathHasBranch(path) ? filtered : filtered.length === 1 ? first : filtered;
+      return options.get_all === false
+        ? first
+        : pathHasBranch(path)
+          ? filtered
+          : filtered.length === 1
+            ? first
+            : filtered;
     }
   }
-  return "default" in options ? options.default : null;
+  return "default" in options ? (options.default as T) : null;
 }
 
 export const traverse_obj = traverseObj;
 
-export function dictGet<T>(record: Record<string, T> | null | undefined, keyOrKeys: string | readonly string[], defaultValue: T | null = null, skipFalseValues = true): T | null {
+export function dictGet<T>(
+  record: Record<string, T> | null | undefined,
+  keyOrKeys: string | readonly string[],
+  defaultValue: T | null = null,
+  skipFalseValues = true,
+): T | null {
   if (!record) {
     return defaultValue;
   }
@@ -66,16 +102,30 @@ export function dictGet<T>(record: Record<string, T> | null | undefined, keyOrKe
 
 export const dict_get = dictGet;
 
-function isTraverseOptions(value: unknown): value is { default?: unknown; expected_type?: (value: unknown) => boolean; get_all?: boolean } {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value instanceof Set) {
+function isTraverseOptions(value: unknown): value is {
+  default?: unknown;
+  expected_type?: (value: unknown) => boolean;
+  get_all?: boolean;
+} {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value instanceof Set
+  ) {
     return false;
   }
   return "default" in value || "expected_type" in value || "get_all" in value;
 }
 
 function pathHasBranch(path: TraversePath): boolean {
-  const keys = Array.isArray(path) ? path as readonly TraverseKey[] : [path as TraverseKey];
-  return keys.some((key) => key === Ellipsis || typeof key === "function" || Array.isArray(key));
+  const keys = Array.isArray(path)
+    ? (path as readonly TraverseKey[])
+    : [path as TraverseKey];
+  return keys.some(
+    (key) =>
+      key === Ellipsis || typeof key === "function" || Array.isArray(key),
+  );
 }
 
 function applyPath(obj: unknown, path: readonly TraverseKey[]): unknown[] {
@@ -127,18 +177,29 @@ function applyKey(value: unknown, key: TraverseKey): unknown[] {
       return Array.isArray(value) ? [value] : [];
     }
     const transform = item as (input: unknown) => unknown;
-    return [transform(value)].filter((result) => result !== null && result !== undefined);
+    return [transform(value)].filter(
+      (result) => result !== null && result !== undefined,
+    );
   }
   if (typeof key === "function") {
     const entries = Array.isArray(value)
       ? value.map((item, index) => [index, item] as const)
-      : isRecord(value) ? Object.entries(value) : [];
-    return entries.filter(([entryKey, entryValue]) => key(entryKey, entryValue)).map(([, entryValue]) => entryValue);
+      : isRecord(value)
+        ? Object.entries(value)
+        : [];
+    return entries
+      .filter(([entryKey, entryValue]) => key(entryKey, entryValue))
+      .map(([, entryValue]) => entryValue);
   }
   if (isRecord(key)) {
     const out: Record<string, unknown> = {};
     for (const [outKey, outPath] of Object.entries(key)) {
-      const result = applyPath(value, Array.isArray(outPath) ? outPath as readonly TraverseKey[] : [outPath as TraverseKey])[0];
+      const result = applyPath(
+        value,
+        Array.isArray(outPath)
+          ? (outPath as readonly TraverseKey[])
+          : [outPath as TraverseKey],
+      )[0];
       if (result !== undefined && result !== null) {
         out[outKey] = result;
       }
@@ -163,6 +224,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return RecordSchema.safeParse(value).success;
 }
 
-function hasGroups(value: unknown): value is { groups: Record<string, string | undefined> } {
+function hasGroups(
+  value: unknown,
+): value is { groups: Record<string, string | undefined> } {
   return GroupsSchema.safeParse(value).success;
 }

@@ -8,7 +8,10 @@ import { PostProcessingError } from "../utils/utils.ts";
 import { PostProcessor, type PostProcessorInfo } from "./common.ts";
 
 export class MoveFilesAfterDownloadPP extends PostProcessor {
-  constructor(downloader: ConstructorParameters<typeof PostProcessor>[0] = null, readonly downloaded = true) {
+  constructor(
+    downloader: ConstructorParameters<typeof PostProcessor>[0] = null,
+    readonly downloaded = true,
+  ) {
     super(downloader);
   }
 
@@ -16,11 +19,18 @@ export class MoveFilesAfterDownloadPP extends PostProcessor {
     return "MoveFiles";
   }
 
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
     if (typeof info.filepath !== "string") {
-      throw new PostProcessingError("MoveFilesAfterDownloadPP requires info.filepath");
+      throw new PostProcessingError(
+        "MoveFilesAfterDownloadPP requires info.filepath",
+      );
     }
-    const finalDir = typeof info.__finaldir === "string" ? info.__finaldir : dirname(info.filepath);
+    const finalDir =
+      typeof info.__finaldir === "string"
+        ? info.__finaldir
+        : dirname(info.filepath);
     const finalPath = join(finalDir, basename(info.filepath));
     const filesToMove = filesToMoveRecord(info.__files_to_move);
     if (this.downloaded) {
@@ -31,7 +41,7 @@ export class MoveFilesAfterDownloadPP extends PostProcessor {
       if (resolve(oldFile) === resolve(newFile)) {
         continue;
       }
-      if (!await exists(oldFile)) {
+      if (!(await exists(oldFile))) {
         this.reportWarning(`File "${oldFile}" cannot be found`);
         continue;
       }
@@ -40,7 +50,9 @@ export class MoveFilesAfterDownloadPP extends PostProcessor {
           this.reportWarning(`Replacing existing file "${newFile}"`);
           await rm(newFile, { force: true });
         } else {
-          this.reportWarning(`Cannot move file "${oldFile}" out of temporary directory since "${newFile}" already exists.`);
+          this.reportWarning(
+            `Cannot move file "${oldFile}" out of temporary directory since "${newFile}" already exists.`,
+          );
           continue;
         }
       }
@@ -54,7 +66,9 @@ export class MoveFilesAfterDownloadPP extends PostProcessor {
 }
 
 function filesToMoveRecord(value: unknown): Record<string, string> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, string> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, string>)
+    : {};
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -70,7 +84,12 @@ async function moveFile(oldFile: string, newFile: string): Promise<void> {
   try {
     await rename(oldFile, newFile);
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "EXDEV") {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "EXDEV"
+    ) {
       await copyFile(oldFile, newFile);
       await rm(oldFile, { force: true });
       return;

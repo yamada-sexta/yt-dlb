@@ -47,7 +47,10 @@ export interface PoTokenRequest {
   videoId?: string;
   gvsBindToVideoId?: boolean;
   requestProxy?: string;
-  requestHeaders?: Headers | Record<string, string> | readonly [string, string][];
+  requestHeaders?:
+    | Headers
+    | Record<string, string>
+    | readonly [string, string][];
   requestTimeout?: number;
   requestSourceAddress?: string;
   requestVerifyTls?: boolean;
@@ -71,29 +74,47 @@ export type PoTokenProviderConstructor = {
   ): PoTokenProvider;
 };
 
-export type PoTokenPreference = (provider: PoTokenProvider, requests: readonly PoTokenRequest[]) => number;
+export type PoTokenPreference = (
+  provider: PoTokenProvider,
+  requests: readonly PoTokenRequest[],
+) => number;
 
 export abstract class PoTokenProvider extends IEContentProvider {
   protected supportedContexts: readonly PoTokenContext[] | null = [];
   protected supportedClients: readonly string[] | null = [];
-  protected supportedExternalRequestFeatures: readonly ExternalRequestFeature[] | null = [];
+  protected supportedExternalRequestFeatures:
+    | readonly ExternalRequestFeature[]
+    | null = [];
 
   async requestPot(request: PoTokenRequest): Promise<PoTokenResponse> {
     this.validateRequest(request);
     return await this.realRequestPot(request);
   }
 
-  protected abstract realRequestPot(request: PoTokenRequest): Promise<PoTokenResponse>;
+  protected abstract realRequestPot(
+    request: PoTokenRequest,
+  ): Promise<PoTokenResponse>;
 
   protected validateRequest(request: PoTokenRequest): void {
     if (!this.isAvailable()) {
-      throw new PoTokenProviderRejectedRequest(`${this.providerName} is not available`);
+      throw new PoTokenProviderRejectedRequest(
+        `${this.providerName} is not available`,
+      );
     }
-    if (this.supportedContexts !== null && !this.supportedContexts.includes(request.context)) {
-      throw new PoTokenProviderRejectedRequest(`PO Token Context "${request.context}" is not supported by ${this.providerName}`);
+    if (
+      this.supportedContexts !== null &&
+      !this.supportedContexts.includes(request.context)
+    ) {
+      throw new PoTokenProviderRejectedRequest(
+        `PO Token Context "${request.context}" is not supported by ${this.providerName}`,
+      );
     }
     const clientName = request.innertubeContext.client?.clientName;
-    if (this.supportedClients !== null && clientName && !this.supportedClients.includes(clientName)) {
+    if (
+      this.supportedClients !== null &&
+      clientName &&
+      !this.supportedClients.includes(clientName)
+    ) {
       throw new PoTokenProviderRejectedRequest(
         `Client "${clientName}" is not supported by ${this.providerName}. Supported clients: ${this.supportedClients.join(", ") || "none"}`,
       );
@@ -101,7 +122,10 @@ export abstract class PoTokenProvider extends IEContentProvider {
     this.validateExternalRequestFeatures(request);
   }
 
-  protected async requestWebpage(request: Request, note?: string | false): Promise<Response> {
+  protected async requestWebpage(
+    request: Request,
+    note?: string | false,
+  ): Promise<Response> {
     if (note !== false) {
       this.logger.info(note ?? "Requesting webpage");
     }
@@ -116,37 +140,68 @@ export abstract class PoTokenProvider extends IEContentProvider {
       return;
     }
     if (request.requestProxy) {
-      const scheme = URL.canParse(request.requestProxy) ? new URL(request.requestProxy).protocol.replace(/:$/, "") : "";
-      if (!this.supportedExternalRequestFeatures.includes(scheme as ExternalRequestFeature)) {
+      const scheme = URL.canParse(request.requestProxy)
+        ? new URL(request.requestProxy).protocol.replace(/:$/, "")
+        : "";
+      if (
+        !this.supportedExternalRequestFeatures.includes(
+          scheme as ExternalRequestFeature,
+        )
+      ) {
         throw new PoTokenProviderRejectedRequest(
           `External requests by "${this.providerName}" provider do not support proxy scheme "${scheme}"`,
         );
       }
     }
-    if (request.requestSourceAddress && !this.supportedExternalRequestFeatures.includes(ExternalRequestFeature.SOURCE_ADDRESS)) {
-      throw new PoTokenProviderRejectedRequest(`External requests by "${this.providerName}" provider do not support setting source address`);
+    if (
+      request.requestSourceAddress &&
+      !this.supportedExternalRequestFeatures.includes(
+        ExternalRequestFeature.SOURCE_ADDRESS,
+      )
+    ) {
+      throw new PoTokenProviderRejectedRequest(
+        `External requests by "${this.providerName}" provider do not support setting source address`,
+      );
     }
-    if (request.requestVerifyTls === false && !this.supportedExternalRequestFeatures.includes(ExternalRequestFeature.DISABLE_TLS_VERIFICATION)) {
-      throw new PoTokenProviderRejectedRequest(`External requests by "${this.providerName}" provider do not support ignoring TLS certificate failures`);
+    if (
+      request.requestVerifyTls === false &&
+      !this.supportedExternalRequestFeatures.includes(
+        ExternalRequestFeature.DISABLE_TLS_VERIFICATION,
+      )
+    ) {
+      throw new PoTokenProviderRejectedRequest(
+        `External requests by "${this.providerName}" provider do not support ignoring TLS certificate failures`,
+      );
     }
   }
 }
 
-export function registerProvider<T extends PoTokenProviderConstructor>(provider: T): T {
+export function registerProvider<T extends PoTokenProviderConstructor>(
+  provider: T,
+): T {
   if (potProviders.has(provider.providerName)) {
-    throw new Error(`PoTokenProvider ${provider.providerName} already registered`);
+    throw new Error(
+      `PoTokenProvider ${provider.providerName} already registered`,
+    );
   }
   potProviders.set(provider.providerName, provider);
   return provider;
 }
 
-export function registerPreference(preference: PoTokenPreference): PoTokenPreference {
+export function registerPreference(
+  preference: PoTokenPreference,
+): PoTokenPreference {
   ptpPreferences.add(preference);
   return preference;
 }
 
-export function providerBugReportMessage(provider: IEContentProvider, before = ";"): string {
+export function providerBugReportMessage(
+  provider: IEContentProvider,
+  before = ";",
+): string {
   const trimmed = before.trimEnd();
   const message = provider.bugReportMessage;
-  return trimmed ? `${trimmed} ${message}` : message[0]?.toUpperCase() + message.slice(1);
+  return trimmed
+    ? `${trimmed} ${message}`
+    : message[0]?.toUpperCase() + message.slice(1);
 }

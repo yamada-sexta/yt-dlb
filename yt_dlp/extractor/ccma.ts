@@ -25,7 +25,8 @@ interface CcmaMedia {
 }
 
 export class CCMAIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?3cat\.cat/(?:3cat|tv3/sx3)/[^/?#]+/(?<type>video|audio)/(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?3cat\.cat/(?:3cat|tv3/sx3)/[^/?#]+/(?<type>video|audio)/(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -35,13 +36,17 @@ export class CCMAIE extends InfoExtractor {
       throw new Error("Unable to extract CCMA media id");
     }
 
-    const media = await this.downloadJson<CcmaMedia>("http://api-media.3cat.cat/pvideo/media.jsp", mediaId, {
-      query: {
-        media: mediaType,
-        idint: mediaId,
-        format: "dm",
+    const media = await this.downloadJson<CcmaMedia>(
+      "http://api-media.3cat.cat/pvideo/media.jsp",
+      mediaId,
+      {
+        query: {
+          media: mediaType,
+          idint: mediaId,
+          format: "dm",
+        },
       },
-    });
+    );
     if (media === false) {
       throw new Error("Unable to download CCMA media metadata");
     }
@@ -55,7 +60,12 @@ export class CCMAIE extends InfoExtractor {
           continue;
         }
         if (determineExt(formatUrl) === "mpd") {
-          formats.push(...this.extractMpdFormats(formatUrl, mediaId, { mpdId: "dash", fatal: false }));
+          formats.push(
+            ...this.extractMpdFormats(formatUrl, mediaId, {
+              mpdId: "dash",
+              fatal: false,
+            }),
+          );
           continue;
         }
         formats.push({
@@ -74,12 +84,28 @@ export class CCMAIE extends InfoExtractor {
     const informacio = media.informacio ?? {};
     const title = String(informacio.titol ?? mediaId);
     const durationInfo = getRecord(informacio.durada);
-    const duration = intOrNone(durationInfo?.milisegons, 1000) ?? parseDuration(typeof durationInfo?.text === "string" ? durationInfo.text : null);
-    const tematica = tryGet(informacio, (value) => getRecord(getRecord(value).tematica).text);
-    const timestamp = unifiedTimestamp(tryGet(informacio, (value) => getRecord(getRecord(value).data_emissio).utc));
+    const duration =
+      intOrNone(durationInfo?.milisegons, 1000) ??
+      parseDuration(
+        typeof durationInfo?.text === "string" ? durationInfo.text : null,
+      );
+    const tematica = tryGet(
+      informacio,
+      (value) => getRecord(getRecord(value).tematica).text,
+    );
+    const timestamp = unifiedTimestamp(
+      tryGet(
+        informacio,
+        (value) => getRecord(getRecord(value).data_emissio).utc,
+      ),
+    );
 
     const subtitles: Record<string, Array<Record<string, unknown>>> = {};
-    const subtitleRows = Array.isArray(media.subtitols) ? media.subtitols : media.subtitols ? [media.subtitols] : [];
+    const subtitleRows = Array.isArray(media.subtitols)
+      ? media.subtitols
+      : media.subtitols
+        ? [media.subtitols]
+        : [];
     for (const subtitle of subtitleRows) {
       if (!subtitle.url) {
         continue;
@@ -90,37 +116,58 @@ export class CCMAIE extends InfoExtractor {
     }
 
     const thumbnails = media.imatges?.url
-      ? [{
-        url: media.imatges.url,
-        width: intOrNone(media.imatges.amplada) ?? undefined,
-        height: intOrNone(media.imatges.alcada) ?? undefined,
-      }]
+      ? [
+          {
+            url: media.imatges.url,
+            width: intOrNone(media.imatges.amplada) ?? undefined,
+            height: intOrNone(media.imatges.alcada) ?? undefined,
+          },
+        ]
       : [];
 
-    const codiEtic = tryGet(informacio, (value) => getRecord(getRecord(value).codi_etic).id);
+    const codiEtic = tryGet(
+      informacio,
+      (value) => getRecord(getRecord(value).codi_etic).id,
+    );
     const codiParts = typeof codiEtic === "string" ? codiEtic.split("_") : [];
-    const ageLimit = codiParts.length === 2
-      ? codiParts[1] === "TP" ? 0 : intOrNone(codiParts[1])
-      : null;
+    const ageLimit =
+      codiParts.length === 2
+        ? codiParts[1] === "TP"
+          ? 0
+          : intOrNone(codiParts[1])
+        : null;
 
     return {
       id: mediaId,
       title,
-      description: cleanHtml(typeof informacio.descripcio === "string" ? informacio.descripcio : null) ?? undefined,
+      description:
+        cleanHtml(
+          typeof informacio.descripcio === "string"
+            ? informacio.descripcio
+            : null,
+        ) ?? undefined,
       duration: duration ?? undefined,
       timestamp: timestamp ?? undefined,
       thumbnails,
       subtitles,
       formats,
       age_limit: ageLimit ?? undefined,
-      alt_title: typeof informacio.titol_complet === "string" ? informacio.titol_complet : undefined,
+      alt_title:
+        typeof informacio.titol_complet === "string"
+          ? informacio.titol_complet
+          : undefined,
       episode_number: intOrNone(informacio.capitol) ?? undefined,
       categories: typeof tematica === "string" ? [tematica] : undefined,
-      series: typeof informacio.programa === "string" ? informacio.programa : undefined,
+      series:
+        typeof informacio.programa === "string"
+          ? informacio.programa
+          : undefined,
     };
   }
 }
 
 function getRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

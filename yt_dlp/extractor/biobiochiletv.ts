@@ -4,7 +4,8 @@ import { ExtractorError, removeEnd } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class BioBioChileTVIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:tv|www)\.biobiochile\.cl/(?:notas|noticias)/(?:[^/]+/)+(?<id>[^/]+)\.shtml`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:tv|www)\.biobiochile\.cl/(?:notas|noticias)/(?:[^/]+/)+(?<id>[^/]+)\.shtml`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -34,7 +35,9 @@ export class BioBioChileTVIE extends InfoExtractor {
       _type: "url_transparent",
       url: rudoUrl,
       id: videoId,
-      title: removeEnd(this.ogSearchTitle(webpage), " - BioBioChile TV") ?? undefined,
+      title:
+        removeEnd(this.ogSearchTitle(webpage), " - BioBioChile TV") ??
+        undefined,
       thumbnail: this.ogSearchThumbnail(webpage) ?? undefined,
       uploader: typeof uploader === "string" ? uploader : undefined,
     };

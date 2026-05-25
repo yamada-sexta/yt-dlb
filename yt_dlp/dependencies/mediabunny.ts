@@ -28,7 +28,9 @@ registerMediabunnyServer();
 
 export type { AttachedImage, MetadataTags } from "mediabunny";
 
-export async function readMetadataTags(filepath: string): Promise<MetadataTags> {
+export async function readMetadataTags(
+  filepath: string,
+): Promise<MetadataTags> {
   const input = openInput(filepath);
   try {
     return await input.getMetadataTags();
@@ -37,7 +39,9 @@ export async function readMetadataTags(filepath: string): Promise<MetadataTags> 
   }
 }
 
-export async function getDurationFromMetadata(filepath: string): Promise<number | null> {
+export async function getDurationFromMetadata(
+  filepath: string,
+): Promise<number | null> {
   const input = openInput(filepath);
   try {
     return await input.getDurationFromMetadata([], { skipLiveWait: true });
@@ -50,7 +54,9 @@ export async function rewriteMetadataTags(
   filepath: string,
   outPath: string,
   ext: string,
-  updateTags: MetadataTags | ((inputTags: MetadataTags) => MetadataTags | Promise<MetadataTags>),
+  updateTags:
+    | MetadataTags
+    | ((inputTags: MetadataTags) => MetadataTags | Promise<MetadataTags>),
 ): Promise<void> {
   const input = openInput(filepath);
   const output = new Output({
@@ -65,8 +71,12 @@ export async function rewriteMetadataTags(
       showWarnings: false,
     });
     if (!conversion.isValid) {
-      const reasons = conversion.discardedTracks.map(({ reason }) => reason).join(", ");
-      throw new Error(`Mediabunny cannot rewrite this media without discarded tracks${reasons ? `: ${reasons}` : ""}`);
+      const reasons = conversion.discardedTracks
+        .map(({ reason }) => reason)
+        .join(", ");
+      throw new Error(
+        `Mediabunny cannot rewrite this media without discarded tracks${reasons ? `: ${reasons}` : ""}`,
+      );
     }
     await conversion.execute();
   } finally {
@@ -75,7 +85,9 @@ export async function rewriteMetadataTags(
 }
 
 export function writeTags(): never {
-  throw new NotImplementedError("Use rewriteMetadataTags() so Mediabunny can rewrite the media container with new tags");
+  throw new NotImplementedError(
+    "Use rewriteMetadataTags() so Mediabunny can rewrite the media container with new tags",
+  );
 }
 
 function openInput(filepath: string): Input {
@@ -111,6 +123,8 @@ function outputFormatForExtension(ext: string): OutputFormat {
     case "aac":
       return new AdtsOutputFormat();
     default:
-      throw new NotImplementedError(`Mediabunny metadata rewrite is not implemented for .${ext}`);
+      throw new NotImplementedError(
+        `Mediabunny metadata rewrite is not implemented for .${ext}`,
+      );
   }
 }

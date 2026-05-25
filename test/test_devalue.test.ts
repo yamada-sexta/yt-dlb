@@ -34,12 +34,16 @@ describe("devalue.parse", () => {
   });
 
   test("rich JS objects", () => {
-    expect(parse([["Date", "2001-09-09T01:46:40.000Z"]])).toEqual(new Date(1_000_000_000_000));
+    expect(parse([["Date", "2001-09-09T01:46:40.000Z"]])).toEqual(
+      new Date(1_000_000_000_000),
+    );
     expect(parse([["RegExp", "regexp", "gim"]])).toEqual(/regexp/gim);
     expect(parse([["Set", 1, 2, 3], 1, 2, 3])).toEqual(new Set([1, 2, 3]));
     expect(parse([["Map", 1, 2], "a", "b"])).toEqual(new Map([["a", "b"]]));
     expect(parse([["Uint8Array", "AQID"]])).toEqual(Uint8Array.from([1, 2, 3]));
-    expect(new Uint8Array(parse([["ArrayBuffer", "AQID"]]) as ArrayBuffer)).toEqual(Uint8Array.from([1, 2, 3]));
+    expect(
+      new Uint8Array(parse([["ArrayBuffer", "AQID"]]) as ArrayBuffer),
+    ).toEqual(Uint8Array.from([1, 2, 3]));
   });
 
   test.each([
@@ -51,7 +55,11 @@ describe("devalue.parse", () => {
     ["null", null, /expected int or list as input/],
     ["object", {}, /expected int or list as input/],
     ["empty array", [], /expected a non-empty list as input/],
-    ["negative index", [[1, 2, 3, 4, 5, 6, 7, -7], 1, 2, 3, 4, 5, 6, 7], /invalid index: -7/],
+    [
+      "negative index",
+      [[1, 2, 3, 4, 5, 6, 7, -7], 1, 2, 3, 4, 5, 6, 7],
+      /invalid index: -7/,
+    ],
   ] as const)("%s invalid", (_name, unparsed, pattern) => {
     expect(() => parse(unparsed)).toThrow(pattern);
   });
@@ -75,10 +83,20 @@ describe("devalue.parse", () => {
   });
 
   test("revivers", () => {
-    expect(parse([["indirect", 1], { a: 2 }, "b"], { revivers: { indirect: (value) => value } })).toEqual({ a: "b" });
-    expect(parse([["parse", 1], "{\"a\":0}"], { revivers: { parse: (value) => JSON.parse(String(value)) as unknown } })).toEqual({ a: 0 });
-    expect(parse([{ a: 1, b: 3 }, ["EmptyRef", 2], "false", ["EmptyRef", 2]], {
-      revivers: { EmptyRef: (value) => JSON.parse(String(value)) as unknown },
-    })).toEqual({ a: false, b: false });
+    expect(
+      parse([["indirect", 1], { a: 2 }, "b"], {
+        revivers: { indirect: (value) => value },
+      }),
+    ).toEqual({ a: "b" });
+    expect(
+      parse([["parse", 1], '{"a":0}'], {
+        revivers: { parse: (value) => JSON.parse(String(value)) as unknown },
+      }),
+    ).toEqual({ a: 0 });
+    expect(
+      parse([{ a: 1, b: 3 }, ["EmptyRef", 2], "false", ["EmptyRef", 2]], {
+        revivers: { EmptyRef: (value) => JSON.parse(String(value)) as unknown },
+      }),
+    ).toEqual({ a: false, b: false });
   });
 });

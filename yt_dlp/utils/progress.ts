@@ -28,7 +28,8 @@ export class ProgressCalculator {
   }
 
   set total(value: number | null) {
-    this.#total = value !== null && value < this.downloaded ? this.downloaded : value;
+    this.#total =
+      value !== null && value < this.downloaded ? this.downloaded : value;
   }
 
   threadReset(): void {
@@ -61,7 +62,11 @@ export class ProgressCalculator {
     this.#lastUpdate = currentTime;
     this.#times.push(currentTime);
     this.#downloadedSamples.push(this.downloaded);
-    while (this.#times.length && this.#times[0] !== undefined && this.#times[0] < currentTime - ProgressCalculator.SAMPLING_WINDOW) {
+    while (
+      this.#times.length &&
+      this.#times[0] !== undefined &&
+      this.#times[0] < currentTime - ProgressCalculator.SAMPLING_WINDOW
+    ) {
       this.#times.shift();
       this.#downloadedSamples.shift();
     }
@@ -80,7 +85,11 @@ export class ProgressCalculator {
       return;
     }
     this.speed.set((this.downloaded - firstSample) / downloadTime);
-    if (this.total && this.speed.value && this.elapsed > ProgressCalculator.GRACE_PERIOD) {
+    if (
+      this.total &&
+      this.speed.value &&
+      this.elapsed > ProgressCalculator.GRACE_PERIOD
+    ) {
       this.eta.set((this.total - this.downloaded) / this.speed.value);
     } else {
       this.eta.reset();
@@ -93,7 +102,10 @@ export class SmoothValue {
   smooth: number | null;
   readonly #initial: number | null;
 
-  constructor(initial: number | null, readonly smoothing: number) {
+  constructor(
+    initial: number | null,
+    readonly smoothing: number,
+  ) {
     this.value = initial;
     this.smooth = initial;
     this.#initial = initial;
@@ -101,7 +113,10 @@ export class SmoothValue {
 
   set(value: number): void {
     this.value = value;
-    this.smooth = this.smooth === null ? value : (1 - this.smoothing) * value + this.smoothing * this.smooth;
+    this.smooth =
+      this.smooth === null
+        ? value
+        : (1 - this.smoothing) * value + this.smoothing * this.smooth;
   }
 
   reset(): void {

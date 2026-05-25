@@ -7,7 +7,10 @@ import {
   registerPreference,
   registerProvider,
 } from "../cache.ts";
-import type { IEContentProviderHost, IEContentProviderLogger } from "../internal-provider.ts";
+import type {
+  IEContentProviderHost,
+  IEContentProviderLogger,
+} from "../internal-provider.ts";
 
 type CacheValue = [value: string, expiresAt: number];
 
@@ -25,7 +28,9 @@ export function initializeGlobalCache(maxSize: number): MemoryCacheState {
   }
   const state = existing as MemoryCacheState;
   if (state.maxSize !== maxSize) {
-    throw new Error("Cannot change max_size of initialized global memory cache");
+    throw new Error(
+      "Cannot change max_size of initialized global memory cache",
+    );
   }
   return state;
 }

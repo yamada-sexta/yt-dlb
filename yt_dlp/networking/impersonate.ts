@@ -20,7 +20,10 @@ export class ImpersonateTarget {
   }
 
   static fromString(target: string): ImpersonateTarget {
-    const match = /^(?:(?<client>[^:-]+)(?:-(?<version>[^:-]+))?)?(?::(?:(?<os>[^:-]+)(?:-(?<osVersion>[^:-]+))?)?)?$/.exec(target);
+    const match =
+      /^(?:(?<client>[^:-]+)(?:-(?<version>[^:-]+))?)?(?::(?:(?<os>[^:-]+)(?:-(?<osVersion>[^:-]+))?)?)?$/.exec(
+        target,
+      );
     if (!match?.groups) {
       throw new Error(`Invalid impersonate target "${target}"`);
     }
@@ -33,10 +36,18 @@ export class ImpersonateTarget {
   }
 
   contains(target: ImpersonateTarget): boolean {
-    return (this.client === null || target.client === null || this.client === target.client)
-      && (this.version === null || target.version === null || this.version === target.version)
-      && (this.os === null || target.os === null || this.os === target.os)
-      && (this.osVersion === null || target.osVersion === null || this.osVersion === target.osVersion);
+    return (
+      (this.client === null ||
+        target.client === null ||
+        this.client === target.client) &&
+      (this.version === null ||
+        target.version === null ||
+        this.version === target.version) &&
+      (this.os === null || target.os === null || this.os === target.os) &&
+      (this.osVersion === null ||
+        target.osVersion === null ||
+        this.osVersion === target.osVersion)
+    );
   }
 
   toString(): string {
@@ -47,9 +58,14 @@ export class ImpersonateTarget {
 }
 
 export abstract class ImpersonateRequestHandler extends RequestHandler {
-  static readonly SUPPORTED_IMPERSONATE_TARGETS: readonly ImpersonateTarget[] = [];
+  static readonly SUPPORTED_IMPERSONATE_TARGETS: readonly ImpersonateTarget[] =
+    [];
 
-  constructor(options: ConstructorParameters<typeof RequestHandler>[0] & { impersonate?: ImpersonateTarget | null } = {}) {
+  constructor(
+    options: ConstructorParameters<typeof RequestHandler>[0] & {
+      impersonate?: ImpersonateTarget | null;
+    } = {},
+  ) {
     super(options);
     this.impersonate = options.impersonate ?? null;
   }
@@ -58,20 +74,30 @@ export abstract class ImpersonateRequestHandler extends RequestHandler {
 
   override validate(request: Request): void {
     super.validate(request);
-    const target = request.extensions.impersonate instanceof ImpersonateTarget
-      ? request.extensions.impersonate
-      : this.impersonate;
+    const target =
+      request.extensions.impersonate instanceof ImpersonateTarget
+        ? request.extensions.impersonate
+        : this.impersonate;
     if (target && !this.isSupportedTarget(target)) {
-      throw new UnsupportedRequest(`Unsupported impersonate target: ${target}`, { handler: this });
+      throw new UnsupportedRequest(
+        `Unsupported impersonate target: ${target}`,
+        { handler: this },
+      );
     }
   }
 
   protected isSupportedTarget(target: ImpersonateTarget): boolean {
-    const supported = (this.constructor as typeof ImpersonateRequestHandler).SUPPORTED_IMPERSONATE_TARGETS;
+    const supported = (this.constructor as typeof ImpersonateRequestHandler)
+      .SUPPORTED_IMPERSONATE_TARGETS;
     return !supported.length || supported.some((item) => item.contains(target));
   }
 }
 
-export const impersonatePreference = registerPreference(ImpersonateRequestHandler)((handler, request) => (
-  request.extensions.impersonate || handler instanceof ImpersonateRequestHandler && handler.impersonate ? 1000 : 0
-));
+export const impersonatePreference = registerPreference(
+  ImpersonateRequestHandler,
+)((handler, request) =>
+  request.extensions.impersonate ||
+  (handler instanceof ImpersonateRequestHandler && handler.impersonate)
+    ? 1000
+    : 0,
+);

@@ -1,6 +1,11 @@
 // Source: yt_dlp/extractor/applepodcasts.py
 
-import { cleanHtml, cleanPodcastUrl, intOrNone, parseIso8601 } from "../utils/index.ts";
+import {
+  cleanHtml,
+  cleanPodcastUrl,
+  intOrNone,
+  parseIso8601,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 interface AppleEpisodeModel {
@@ -18,7 +23,8 @@ interface AppleServerItem {
 }
 
 export class ApplePodcastsIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://podcasts\.apple\.com/(?:[^/]+/)?podcast(?:/[^/]+){1,2}.*?\bi=(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://podcasts\.apple\.com/(?:[^/]+/)?podcast(?:/[^/]+){1,2}.*?\bi=(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const episodeId = this.matchId(url);
@@ -46,7 +52,9 @@ export class ApplePodcastsIE extends InfoExtractor {
       id: episodeId,
       title: model.title,
       description: cleanHtml(model.summary) ?? undefined,
-      url: model.playAction?.episodeOffer?.streamUrl ? cleanPodcastUrl(model.playAction.episodeOffer.streamUrl) : undefined,
+      url: model.playAction?.episodeOffer?.streamUrl
+        ? cleanPodcastUrl(model.playAction.episodeOffer.streamUrl)
+        : undefined,
       timestamp: parseIso8601(model.releaseDate) ?? undefined,
       duration: intOrNone(model.duration) ?? undefined,
       episode: model.title,
@@ -72,7 +80,12 @@ function findEpisodeModel(value: unknown): AppleEpisodeModel | null {
     return null;
   }
   const record = value as Record<string, unknown>;
-  if (record.$kind === "share" && record.modelType === "EpisodeLockup" && record.model && typeof record.model === "object") {
+  if (
+    record.$kind === "share" &&
+    record.modelType === "EpisodeLockup" &&
+    record.model &&
+    typeof record.model === "object"
+  ) {
     return record.model as AppleEpisodeModel;
   }
   for (const item of Object.values(record)) {

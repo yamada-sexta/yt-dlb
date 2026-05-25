@@ -1,22 +1,34 @@
 // Source: yt_dlp/extractor/bongacams.py
 
-import { ExtractorError, intOrNone, urlencodePostdata } from "../utils/index.ts";
+import {
+  ExtractorError,
+  intOrNone,
+  urlencodePostdata,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 import { z } from "zod";
 
-const BongaCamsResponseSchema = z.object({
-  localData: z.object({
-    videoServerUrl: z.string(),
-  }).passthrough(),
-  performerData: z.object({
-    username: z.string().optional(),
-    displayName: z.string().optional(),
-    loversCount: z.unknown().optional(),
-  }).passthrough().optional(),
-}).passthrough();
+const BongaCamsResponseSchema = z
+  .object({
+    localData: z
+      .object({
+        videoServerUrl: z.string(),
+      })
+      .passthrough(),
+    performerData: z
+      .object({
+        username: z.string().optional(),
+        displayName: z.string().optional(),
+        loversCount: z.unknown().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
 
 export class BongaCamsIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?<host>(?:[^/]+\.)?bongacams\d*\.(?:com|net))/(?<id>[^/?&#]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?<host>(?:[^/]+\.)?bongacams\d*\.(?:com|net))/(?<id>[^/?&#]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -39,7 +51,9 @@ export class BongaCamsIE extends InfoExtractor {
       },
     );
     if (rawAmf === false) {
-      throw new ExtractorError("Unable to download room data", { videoId: channelId });
+      throw new ExtractorError("Unable to download room data", {
+        videoId: channelId,
+      });
     }
     const amf = BongaCamsResponseSchema.parse(rawAmf);
     const performer = amf.performerData ?? {};

@@ -4,7 +4,11 @@ export class HTTPHeaderDict {
   readonly #values = new Map<string, string>();
   readonly #sensitive = new Map<string, string>();
 
-  constructor(...sources: Array<Record<string, string> | Headers | HTTPHeaderDict | null | undefined>) {
+  constructor(
+    ...sources: Array<
+      Record<string, string> | Headers | HTTPHeaderDict | null | undefined
+    >
+  ) {
     for (const source of sources) {
       if (source) {
         this.update(source);
@@ -43,7 +47,10 @@ export class HTTPHeaderDict {
   set(key: string, value: string | number | boolean | Uint8Array): void {
     const normalized = normalizeHeaderKey(key);
     this.#sensitive.set(normalized, key);
-    this.#values.set(normalized, value instanceof Uint8Array ? latin1Decode(value) : String(value).trim());
+    this.#values.set(
+      normalized,
+      value instanceof Uint8Array ? latin1Decode(value) : String(value).trim(),
+    );
   }
 
   delete(key: string): boolean {
@@ -103,7 +110,10 @@ export function randomUserAgent(): string {
 
 export const random_user_agent = randomUserAgent;
 
-export function cleanProxies(proxies: Record<string, string | null>, headers: HTTPHeaderDict): void {
+export function cleanProxies(
+  proxies: Record<string, string | null>,
+  headers: HTTPHeaderDict,
+): void {
   const requestProxy = headers.pop("Ytdl-Request-Proxy");
   if (requestProxy) {
     for (const key of Object.keys(proxies)) {
@@ -159,23 +169,32 @@ export function removeDotSegments(path: string): string {
 export const remove_dot_segments = removeDotSegments;
 
 export function escapeRfc3986(value: string): string {
-  return encodeURI(value).replaceAll(/[^\w%/;:@&=+$,!~*'()?#.[\]-]/g, (char) => encodeURIComponent(char));
+  return encodeURI(value).replaceAll(/[^\w%/;:@&=+$,!~*'()?#.[\]-]/g, (char) =>
+    encodeURIComponent(char),
+  );
 }
 
 export const escape_rfc3986 = escapeRfc3986;
 
 export function normalizeUrl(url: string): string {
   const parsed = new URL(url);
-  parsed.hostname = parsed.hostname ? new URL(`http://${parsed.hostname}`).hostname : parsed.hostname;
+  parsed.hostname = parsed.hostname
+    ? new URL(`http://${parsed.hostname}`).hostname
+    : parsed.hostname;
   parsed.pathname = escapeRfc3986(removeDotSegments(parsed.pathname));
-  parsed.search = parsed.search ? `?${escapeRfc3986(decodeURIComponent(parsed.search.slice(1)))}` : "";
+  parsed.search = parsed.search
+    ? `?${escapeRfc3986(decodeURIComponent(parsed.search.slice(1)))}`
+    : "";
   parsed.hash = parsed.hash ? `#${escapeRfc3986(parsed.hash.slice(1))}` : "";
   return parsed.toString();
 }
 
 export const normalize_url = normalizeUrl;
 
-export function selectProxy(url: string, proxies: Record<string, string | null | undefined>): string | null | undefined {
+export function selectProxy(
+  url: string,
+  proxies: Record<string, string | null | undefined>,
+): string | null | undefined {
   const parsed = new URL(url);
   return proxies[parsed.protocol.replace(/:$/, "") || "http"] ?? proxies.all;
 }
@@ -183,7 +202,9 @@ export function selectProxy(url: string, proxies: Record<string, string | null |
 export const select_proxy = selectProxy;
 
 function normalizeHeaderKey(key: string): string {
-  return key.toLowerCase().replaceAll(/(^|-)([a-z])/g, (match) => match.toUpperCase());
+  return key
+    .toLowerCase()
+    .replaceAll(/(^|-)([a-z])/g, (match) => match.toUpperCase());
 }
 
 function latin1Decode(value: Uint8Array): string {

@@ -1,6 +1,11 @@
 // Source: yt_dlp/extractor/acast.py
 
-import { cleanHtml, cleanPodcastUrl, intOrNone, parseIso8601 } from "../utils/index.ts";
+import {
+  cleanHtml,
+  cleanPodcastUrl,
+  intOrNone,
+  parseIso8601,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 interface AcastEpisode {
@@ -28,7 +33,10 @@ interface AcastShow {
 }
 
 abstract class ACastBaseIE extends InfoExtractor {
-  protected extractEpisode(episode: AcastEpisode, showInfo: Record<string, unknown>): ExtractorInfo {
+  protected extractEpisode(
+    episode: AcastEpisode,
+    showInfo: Record<string, unknown>,
+  ): ExtractorInfo {
     const title = episode.title ?? episode.id ?? "episode";
     return {
       ...showInfo,
@@ -54,8 +62,16 @@ abstract class ACastBaseIE extends InfoExtractor {
     };
   }
 
-  protected async callApi<T>(path: string, videoId: string, query?: Record<string, string>): Promise<T> {
-    const data = await this.downloadJson<T>(`https://feeder.acast.com/api/v1/shows/${path}`, videoId, { query });
+  protected async callApi<T>(
+    path: string,
+    videoId: string,
+    query?: Record<string, string>,
+  ): Promise<T> {
+    const data = await this.downloadJson<T>(
+      `https://feeder.acast.com/api/v1/shows/${path}`,
+      videoId,
+      { query },
+    );
     if (data === false) {
       throw new Error(`Unable to download Acast metadata for ${path}`);
     }
@@ -68,7 +84,8 @@ export class ACastIE extends ACastBaseIE {
     return "acast";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://(?:(?:(?:embed|www|shows)\.)?acast\.com/|play\.acast\.com/s/)(?<channel>[^/?#]+)/(?:episodes/)?(?<id>[^/#?"]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:(?:(?:embed|www|shows)\.)?acast\.com/|play\.acast\.com/s/)(?<channel>[^/?#]+)/(?:episodes/)?(?<id>[^/#?"]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -77,8 +94,15 @@ export class ACastIE extends ACastBaseIE {
     if (!channel || !displayId) {
       throw new Error("Unable to extract Acast episode id");
     }
-    const episode = await this.callApi<AcastEpisode>(`${channel}/episodes/${displayId}`, displayId, { showInfo: "true" });
-    return this.extractEpisode(episode, this.extractShowInfo(episode.show ?? {}));
+    const episode = await this.callApi<AcastEpisode>(
+      `${channel}/episodes/${displayId}`,
+      displayId,
+      { showInfo: "true" },
+    );
+    return this.extractEpisode(
+      episode,
+      this.extractShowInfo(episode.show ?? {}),
+    );
   }
 }
 
@@ -87,7 +111,8 @@ export class ACastChannelIE extends ACastBaseIE {
     return "acast:channel";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://(?:(?:(?:www|shows)\.)?acast\.com/|play\.acast\.com/s/)(?<id>[^/#?]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:(?:(?:www|shows)\.)?acast\.com/|play\.acast\.com/s/)(?<id>[^/#?]+)`;
 
   static override suitable(url: string): boolean {
     return ACastIE.suitable(url) ? false : ACastBaseIE.suitable(url);
@@ -97,7 +122,14 @@ export class ACastChannelIE extends ACastBaseIE {
     const showSlug = this.matchId(url);
     const show = await this.callApi<AcastShow>(showSlug, showSlug);
     const showInfo = this.extractShowInfo(show);
-    const entries = (show.episodes ?? []).map((episode) => this.extractEpisode(episode, showInfo));
-    return this.playlistResult(entries, show.id ?? null, show.title ?? null, show.description ?? null);
+    const entries = (show.episodes ?? []).map((episode) =>
+      this.extractEpisode(episode, showInfo),
+    );
+    return this.playlistResult(
+      entries,
+      show.id ?? null,
+      show.title ?? null,
+      show.description ?? null,
+    );
   }
 }

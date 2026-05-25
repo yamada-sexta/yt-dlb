@@ -12,18 +12,34 @@ interface ContinuationResult {
 }
 
 export class YoutubeLiveChatFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
-    const videoId = typeof info.video_id === "string" ? info.video_id : typeof info.id === "string" ? info.id : "unknown";
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
+    const videoId =
+      typeof info.video_id === "string"
+        ? info.video_id
+        : typeof info.id === "string"
+          ? info.id
+          : "unknown";
     this.toScreen(`[${this.fdName}] Downloading live chat`);
     if (!this.params.skip_download && info.protocol === "youtube_live_chat") {
-      this.ydl.reportWarning?.("Live chat download runs until the livestream ends. If you wish to download the video simultaneously, run a separate ytdlb instance");
+      this.ydl.reportWarning?.(
+        "Live chat download runs until the livestream ends. If you wish to download the video simultaneously, run a separate ytdlb instance",
+      );
     }
     const started = performance.now() / 1000;
     const tmpfilename = this.tempName(filename);
-    const writer = Bun.file(tmpfilename).writer({ highWaterMark: Number(this.params.buffersize ?? 64 * 1024) });
+    const writer = Bun.file(tmpfilename).writer({
+      highWaterMark: Number(this.params.buffersize ?? 64 * 1024),
+    });
     let downloaded = 0;
     try {
-      const firstPage = await (await this.ydl.urlopen(new Request(info.url, { headers: info.http_headers }))).text();
+      const firstPage = await (
+        await this.ydl.urlopen(
+          new Request(info.url, { headers: info.http_headers }),
+        )
+      ).text();
       const initialData = extractNamedJson(firstPage, "ytInitialData");
       const ytcfg = extractYtcfg(firstPage);
       let continuationId = getPathString(initialData, [
@@ -39,9 +55,14 @@ export class YoutubeLiveChatFD extends FileDownloader {
       const apiKey = getPathString(ytcfg, ["INNERTUBE_API_KEY"]);
       const innertubeContext = getPathRecord(ytcfg, ["INNERTUBE_CONTEXT"]);
       if (!continuationId || !apiKey || !innertubeContext) {
-        throw new Error(`Could not initialize YouTube live chat downloader for ${videoId}`);
+        throw new Error(
+          `Could not initialize YouTube live chat downloader for ${videoId}`,
+        );
       }
-      const visitorData = getPathString(innertubeContext, ["client", "visitorData"]);
+      const visitorData = getPathString(innertubeContext, [
+        "client",
+        "visitorData",
+      ]);
       const live = info.protocol === "youtube_live_chat";
       const endpoint = live
         ? `https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=${apiKey}`
@@ -56,28 +77,58 @@ export class YoutubeLiveChatFD extends FileDownloader {
       const startTime = Date.now();
       while (continuationId) {
         fragIndex += 1;
-        const fragment = fragIndex === 1
-          ? await (await this.ydl.urlopen(new Request(chatPageUrl, { headers: info.http_headers }))).text()
-          : await this.fetchContinuation(endpoint, innertubeContext, continuationId, offset, clickTrackingParams, visitorData, info.http_headers);
+        const fragment =
+          fragIndex === 1
+            ? await (
+                await this.ydl.urlopen(
+                  new Request(chatPageUrl, { headers: info.http_headers }),
+                )
+              ).text()
+            : await this.fetchContinuation(
+                endpoint,
+                innertubeContext,
+                continuationId,
+                offset,
+                clickTrackingParams,
+                visitorData,
+                info.http_headers,
+              );
         const parsed = parseFragmentData(fragment);
-        const liveChatContinuation = getPathRecord(parsed, ["continuationContents", "liveChatContinuation"]) ?? {};
+        const liveChatContinuation =
+          getPathRecord(parsed, [
+            "continuationContents",
+            "liveChatContinuation",
+          ]) ?? {};
         const result = live
-          ? await this.writeLiveActions(writer, liveChatContinuation, liveOffset, startTime)
-          : await this.writeReplayActions(writer, liveChatContinuation, fragIndex === 1);
+          ? await this.writeLiveActions(
+              writer,
+              liveChatContinuation,
+              liveOffset,
+              startTime,
+            )
+          : await this.writeReplayActions(
+              writer,
+              liveChatContinuation,
+              fragIndex === 1,
+            );
         liveOffset = result.offset;
         offset = result.offset;
         continuationId = result.continuationId;
         clickTrackingParams = result.clickTrackingParams;
         downloaded += await writer.flush();
         const now = performance.now() / 1000;
-        await this.hookProgress({
-          status: "downloading",
-          filename,
-          tmpfilename,
-          downloaded_bytes: downloaded,
-          elapsed: now - started,
-          speed: FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
-        }, info);
+        await this.hookProgress(
+          {
+            status: "downloading",
+            filename,
+            tmpfilename,
+            downloaded_bytes: downloaded,
+            elapsed: now - started,
+            speed:
+              FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
+          },
+          info,
+        );
         if (this.params.test) {
           break;
         }
@@ -88,13 +139,16 @@ export class YoutubeLiveChatFD extends FileDownloader {
       await writer.end();
       await this.tryRename(tmpfilename, filename);
       const size = await this.filesizeOrZero(filename);
-      await this.hookProgress({
-        status: "finished",
-        filename,
-        downloaded_bytes: size,
-        total_bytes: size,
-        elapsed: performance.now() / 1000 - started,
-      }, info);
+      await this.hookProgress(
+        {
+          status: "finished",
+          filename,
+          downloaded_bytes: size,
+          total_bytes: size,
+          elapsed: performance.now() / 1000 - started,
+        },
+        info,
+      );
       return true;
     } catch (error) {
       await writer.end();
@@ -119,31 +173,41 @@ export class YoutubeLiveChatFD extends FileDownloader {
     const body = {
       context,
       continuation: continuationId,
-      currentPlayerState: { playerOffsetMs: String(Math.max(offset - 5000, 0)) },
-    };
-    return await (await this.ydl.urlopen(new Request(endpoint, {
-      method: "POST",
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-        ...(visitorData ? { "X-Goog-Visitor-Id": visitorData } : {}),
+      currentPlayerState: {
+        playerOffsetMs: String(Math.max(offset - 5000, 0)),
       },
-      body: `${JSON.stringify(body)}\n`,
-    }))).text();
+    };
+    return await (
+      await this.ydl.urlopen(
+        new Request(endpoint, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            ...(visitorData ? { "X-Goog-Visitor-Id": visitorData } : {}),
+          },
+          body: `${JSON.stringify(body)}\n`,
+        }),
+      )
+    ).text();
   }
 
-  private async writeReplayActions(writer: Bun.FileSink, continuation: JsonRecord, firstFragment: boolean): Promise<ContinuationResult> {
+  private async writeReplayActions(
+    writer: Bun.FileSink,
+    continuation: JsonRecord,
+    firstFragment: boolean,
+  ): Promise<ContinuationResult> {
     const refresh = firstFragment
       ? getPathRecord(continuation, [
-        "header",
-        "liveChatHeaderRenderer",
-        "viewSelector",
-        "sortFilterSubMenuRenderer",
-        "subMenuItems",
-        1,
-        "continuation",
-        "reloadContinuationData",
-      ])
+          "header",
+          "liveChatHeaderRenderer",
+          "viewSelector",
+          "sortFilterSubMenuRenderer",
+          "subMenuItems",
+          1,
+          "continuation",
+          "reloadContinuationData",
+        ])
       : null;
     if (refresh) {
       return {
@@ -155,12 +219,20 @@ export class YoutubeLiveChatFD extends FileDownloader {
     let offset = 0;
     for (const action of getArray(continuation.actions)) {
       const replayAction = getRecord(action)?.replayChatItemAction;
-      if (replayAction && typeof replayAction === "object" && "videoOffsetTimeMsec" in replayAction) {
+      if (
+        replayAction &&
+        typeof replayAction === "object" &&
+        "videoOffsetTimeMsec" in replayAction
+      ) {
         offset = Number(replayAction.videoOffsetTimeMsec) || offset;
       }
       writer.write(`${JSON.stringify(action)}\n`);
     }
-    const data = getPathRecord(continuation, ["continuations", 0, "liveChatReplayContinuationData"]);
+    const data = getPathRecord(continuation, [
+      "continuations",
+      0,
+      "liveChatReplayContinuationData",
+    ]);
     return {
       continuationId: stringOrNull(data?.continuation),
       offset,
@@ -168,22 +240,41 @@ export class YoutubeLiveChatFD extends FileDownloader {
     };
   }
 
-  private async writeLiveActions(writer: Bun.FileSink, continuation: JsonRecord, liveOffset: number, startTime: number): Promise<ContinuationResult> {
+  private async writeLiveActions(
+    writer: Bun.FileSink,
+    continuation: JsonRecord,
+    liveOffset: number,
+    startTime: number,
+  ): Promise<ContinuationResult> {
     let offset = liveOffset;
     for (const action of getArray(continuation.actions)) {
       const timestamp = YoutubeLiveChatFD.parseLiveTimestamp(action);
       if (timestamp !== null) {
         offset = timestamp - startTime;
       }
-      writer.write(`${JSON.stringify({
-        replayChatItemAction: { actions: [action] },
-        videoOffsetTimeMsec: String(offset),
-        isLive: true,
-      })}\n`);
+      writer.write(
+        `${JSON.stringify({
+          replayChatItemAction: { actions: [action] },
+          videoOffsetTimeMsec: String(offset),
+          isLive: true,
+        })}\n`,
+      );
     }
-    const data = getPathRecord(continuation, ["continuations", 0, "invalidationContinuationData"])
-      ?? getPathRecord(continuation, ["continuations", 0, "timedContinuationData"]);
-    const timeoutMs = typeof data?.timeoutMs === "number" ? data.timeoutMs : Number(data?.timeoutMs);
+    const data =
+      getPathRecord(continuation, [
+        "continuations",
+        0,
+        "invalidationContinuationData",
+      ]) ??
+      getPathRecord(continuation, [
+        "continuations",
+        0,
+        "timedContinuationData",
+      ]);
+    const timeoutMs =
+      typeof data?.timeoutMs === "number"
+        ? data.timeoutMs
+        : Number(data?.timeoutMs);
     if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
       await sleep(timeoutMs);
     }
@@ -195,9 +286,21 @@ export class YoutubeLiveChatFD extends FileDownloader {
   }
 
   static parseLiveTimestamp(action: unknown): number | null {
-    const actionContent = pickRecord(getRecord(action), ["addChatItemAction", "addLiveChatTickerItemAction", "addBannerToLiveChatCommand"]);
-    const item = pickRecord(getRecord(actionContent?.item), ["liveChatTextMessageRenderer", "liveChatPaidMessageRenderer", "liveChatMembershipItemRenderer", "liveChatPaidStickerRenderer", "liveChatTickerPaidMessageItemRenderer", "liveChatTickerSponsorItemRenderer", "liveChatBannerRenderer"])
-      ?? getRecord(actionContent?.bannerRenderer);
+    const actionContent = pickRecord(getRecord(action), [
+      "addChatItemAction",
+      "addLiveChatTickerItemAction",
+      "addBannerToLiveChatCommand",
+    ]);
+    const item =
+      pickRecord(getRecord(actionContent?.item), [
+        "liveChatTextMessageRenderer",
+        "liveChatPaidMessageRenderer",
+        "liveChatMembershipItemRenderer",
+        "liveChatPaidStickerRenderer",
+        "liveChatTickerPaidMessageItemRenderer",
+        "liveChatTickerSponsorItemRenderer",
+        "liveChatBannerRenderer",
+      ]) ?? getRecord(actionContent?.bannerRenderer);
     let renderer = pickRecord(item, [
       "liveChatTextMessageRenderer",
       "liveChatPaidMessageRenderer",
@@ -207,13 +310,25 @@ export class YoutubeLiveChatFD extends FileDownloader {
       "liveChatTickerSponsorItemRenderer",
       "liveChatBannerRenderer",
     ]);
-    const parent = getPathRecord(renderer, ["showItemEndpoint", "showLiveChatItemEndpoint", "renderer"])
-      ?? getRecord(renderer?.contents);
+    const parent =
+      getPathRecord(renderer, [
+        "showItemEndpoint",
+        "showLiveChatItemEndpoint",
+        "renderer",
+      ]) ?? getRecord(renderer?.contents);
     if (parent) {
-      renderer = pickRecord(parent, ["liveChatTextMessageRenderer", "liveChatPaidMessageRenderer", "liveChatMembershipItemRenderer", "liveChatPaidStickerRenderer"]);
+      renderer = pickRecord(parent, [
+        "liveChatTextMessageRenderer",
+        "liveChatPaidMessageRenderer",
+        "liveChatMembershipItemRenderer",
+        "liveChatPaidStickerRenderer",
+      ]);
     }
     const timestampUsec = renderer?.timestampUsec;
-    if (typeof timestampUsec !== "string" && typeof timestampUsec !== "number") {
+    if (
+      typeof timestampUsec !== "string" &&
+      typeof timestampUsec !== "number"
+    ) {
       return null;
     }
     const parsed = Number(timestampUsec);
@@ -300,11 +415,17 @@ function readBalanced(source: string, startIndex: number): string {
   throw new Error("Could not find balanced JSON end");
 }
 
-function getPathRecord(root: unknown, path: readonly (string | number)[]): JsonRecord | null {
+function getPathRecord(
+  root: unknown,
+  path: readonly (string | number)[],
+): JsonRecord | null {
   return getRecord(getPath(root, path));
 }
 
-function getPathString(root: unknown, path: readonly (string | number)[]): string | null {
+function getPathString(
+  root: unknown,
+  path: readonly (string | number)[],
+): string | null {
   return stringOrNull(getPath(root, path));
 }
 
@@ -328,14 +449,19 @@ function getPath(root: unknown, path: readonly (string | number)[]): unknown {
 }
 
 function getRecord(value: unknown): JsonRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
 }
 
 function getArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function pickRecord(record: JsonRecord | null, keys: readonly string[]): JsonRecord | null {
+function pickRecord(
+  record: JsonRecord | null,
+  keys: readonly string[],
+): JsonRecord | null {
   if (!record) {
     return null;
   }

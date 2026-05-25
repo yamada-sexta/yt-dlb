@@ -3,7 +3,8 @@
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class BigflixIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?bigflix\.com/.+/(?<id>[0-9]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?bigflix\.com/.+/(?<id>[0-9]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -11,13 +12,19 @@ export class BigflixIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download Bigflix page");
     }
-    const title = this.htmlSearchRegex(/<div[^>]+class=["']pagetitle["'][^>]*>(.+?)<\/div>/, webpage, "title");
+    const title = this.htmlSearchRegex(
+      /<div[^>]+class=["']pagetitle["'][^>]*>(.+?)<\/div>/,
+      webpage,
+      "title",
+    );
     if (typeof title !== "string") {
       throw new Error("Unable to extract Bigflix title");
     }
 
     const formats: Array<Record<string, unknown>> = [];
-    for (const match of webpage.matchAll(/ContentURL_(\d{3,4})[pP][^=]+=([^&]+)/g)) {
+    for (const match of webpage.matchAll(
+      /ContentURL_(\d{3,4})[pP][^=]+=([^&]+)/g,
+    )) {
       const height = Number(match[1]);
       const videoUrl = decodeUrl(match[2] ?? "");
       formats.push({
@@ -28,7 +35,9 @@ export class BigflixIE extends InfoExtractor {
       });
     }
 
-    const fileUrl = this.searchRegex(/file=([^&]+)/, webpage, "video url", { defaultValue: null });
+    const fileUrl = this.searchRegex(/file=([^&]+)/, webpage, "video url", {
+      defaultValue: null,
+    });
     if (typeof fileUrl === "string") {
       const videoUrl = decodeUrl(fileUrl);
       if (!formats.some((format) => format.url === videoUrl)) {
@@ -46,5 +55,7 @@ export class BigflixIE extends InfoExtractor {
 }
 
 function decodeUrl(quotedBase64Url: string): string {
-  return Buffer.from(decodeURIComponent(quotedBase64Url), "base64").toString("utf8");
+  return Buffer.from(decodeURIComponent(quotedBase64Url), "base64").toString(
+    "utf8",
+  );
 }

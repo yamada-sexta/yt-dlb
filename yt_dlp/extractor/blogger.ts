@@ -1,43 +1,57 @@
 // Source: yt_dlp/extractor/blogger.py
 
-import { mimetype2ext, parseDuration, parseQs, strOrNone } from "../utils/index.ts";
+import {
+  mimetype2ext,
+  parseDuration,
+  parseQs,
+  strOrNone,
+} from "../utils/index.ts";
 import { ExtractorError } from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 import { z } from "zod";
 
-const BloggerStreamSchema = z.object({
-  play_url: z.string(),
-  format_id: z.unknown().optional(),
-}).passthrough();
+const BloggerStreamSchema = z
+  .object({
+    play_url: z.string(),
+    format_id: z.unknown().optional(),
+  })
+  .passthrough();
 
-const BloggerConfigSchema = z.object({
-  iframe_id: z.string().optional(),
-  thumbnail: z.string().optional(),
-  streams: z.array(BloggerStreamSchema),
-}).passthrough();
+const BloggerConfigSchema = z
+  .object({
+    iframe_id: z.string().optional(),
+    thumbnail: z.string().optional(),
+    streams: z.array(BloggerStreamSchema),
+  })
+  .passthrough();
 
 export class BloggerIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?blogger\.com/video\.g\?token=(?<id>.+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?blogger\.com/video\.g\?token=(?<id>.+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const tokenId = this.matchId(url);
     const webpage = await this.downloadWebpage(url, tokenId);
     if (webpage === false) {
-      throw new ExtractorError("Unable to download webpage", { videoId: tokenId });
+      throw new ExtractorError("Unable to download webpage", {
+        videoId: tokenId,
+      });
     }
-    const dataJson = this.searchRegex(/var\s+VIDEO_CONFIG\s*=\s*(\{.*)/, webpage, "JSON data");
-    if (typeof dataJson !== "string") {
-      throw new ExtractorError("Unable to extract JSON data", { videoId: tokenId });
-    }
-    const parsed = this.parseJson<unknown>(
-      dataJson,
-      tokenId,
-      {
-        // Logic note: Bun's JSON parser already resolves JSON unicode escapes; only trim the JS
-        // assignment terminator that yt-dlp stripped through Python's unicode_escape pass.
-        transform_source: (source) => source.trim().replace(/;\s*$/u, ""),
-      },
+    const dataJson = this.searchRegex(
+      /var\s+VIDEO_CONFIG\s*=\s*(\{.*)/,
+      webpage,
+      "JSON data",
     );
+    if (typeof dataJson !== "string") {
+      throw new ExtractorError("Unable to extract JSON data", {
+        videoId: tokenId,
+      });
+    }
+    const parsed = this.parseJson<unknown>(dataJson, tokenId, {
+      // Logic note: Bun's JSON parser already resolves JSON unicode escapes; only trim the JS
+      // assignment terminator that yt-dlp stripped through Python's unicode_escape pass.
+      transform_source: (source) => source.trim().replace(/;\s*$/u, ""),
+    });
     const data = BloggerConfigSchema.parse(parsed);
 
     const formats = data.streams.map((stream) => {

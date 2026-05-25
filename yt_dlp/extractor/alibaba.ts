@@ -8,7 +8,8 @@ import { z } from "zod";
 const RecordSchema = z.record(z.string(), z.unknown());
 
 export class AlibabaIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?alibaba\.com/product-detail/[\w-]+_(?<id>\d+)\.html`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?alibaba\.com/product-detail/[\w-]+_(?<id>\d+)\.html`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const displayId = this.matchId(url);
@@ -16,7 +17,11 @@ export class AlibabaIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download Alibaba product page");
     }
-    const json = this.searchRegex(/window\.detailData\s*=\s*({[\s\S]+?})\s*;/, webpage, "detail data");
+    const json = this.searchRegex(
+      /window\.detailData\s*=\s*({[\s\S]+?})\s*;/,
+      webpage,
+      "detail data",
+    );
     if (typeof json !== "string") {
       throw new Error("Unable to extract Alibaba detail data");
     }
@@ -24,7 +29,9 @@ export class AlibabaIE extends InfoExtractor {
     const product = getRecord(getRecord(data)?.globalData)?.product;
     const productData = getRecord(product);
     const mediaItems = getArray(productData?.mediaItems).filter(isRecord);
-    const video = mediaItems.find((item) => item.type === "video" && item.videoId);
+    const video = mediaItems.find(
+      (item) => item.type === "video" && item.videoId,
+    );
     const formats = getFormats(video?.videoUrl);
 
     return {
@@ -39,15 +46,22 @@ export class AlibabaIE extends InfoExtractor {
 }
 
 function getFormats(value: unknown): Array<Record<string, unknown>> {
-  const rows = Array.isArray(value) ? value : isRecord(value) ? Object.values(value) : [];
-  return rows.filter(isRecord).map((row) => ({
-    url: urlOrNone(row.videoUrl) ?? urlOrNone(row.url),
-    format_id: strOrNone(row.definition) ?? undefined,
-    tbr: intOrNone(row.bitrate) ?? undefined,
-    width: intOrNone(row.width) ?? undefined,
-    height: intOrNone(row.height) ?? undefined,
-    filesize: intOrNone(row.length) ?? undefined,
-  })).filter((format) => format.url);
+  const rows = Array.isArray(value)
+    ? value
+    : isRecord(value)
+      ? Object.values(value)
+      : [];
+  return rows
+    .filter(isRecord)
+    .map((row) => ({
+      url: urlOrNone(row.videoUrl) ?? urlOrNone(row.url),
+      format_id: strOrNone(row.definition) ?? undefined,
+      tbr: intOrNone(row.bitrate) ?? undefined,
+      width: intOrNone(row.width) ?? undefined,
+      height: intOrNone(row.height) ?? undefined,
+      filesize: intOrNone(row.length) ?? undefined,
+    }))
+    .filter((format) => format.url);
 }
 
 function getRecord(value: unknown): Record<string, unknown> | null {

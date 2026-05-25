@@ -22,7 +22,9 @@ export interface PostProcessorProgress {
   [key: string]: unknown;
 }
 
-export type PostProcessorHook = (status: PostProcessorProgress) => void | Promise<void>;
+export type PostProcessorHook = (
+  status: PostProcessorProgress,
+) => void | Promise<void>;
 
 export class PostProcessor {
   protected progressHooks: PostProcessorHook[] = [];
@@ -36,8 +38,12 @@ export class PostProcessor {
   }
 
   static ppKey(): string {
-    const name = PostProcessor.name.endsWith("PP") ? PostProcessor.name.slice(0, -2) : PostProcessor.name;
-    return name.toLowerCase().startsWith("ffmpeg") ? name.slice("ffmpeg".length) : name;
+    const name = PostProcessor.name.endsWith("PP")
+      ? PostProcessor.name.slice(0, -2)
+      : PostProcessor.name;
+    return name.toLowerCase().startsWith("ffmpeg")
+      ? name.slice("ffmpeg".length)
+      : name;
   }
 
   ppKey(): string {
@@ -66,14 +72,21 @@ export class PostProcessor {
 
   getParam<T>(name: string, defaultValue: T): T {
     const value = this.downloader?.params?.[name];
-    return value === undefined ? defaultValue : value as T;
+    return value === undefined ? defaultValue : (value as T);
   }
 
-  async run(information: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
+  async run(
+    information: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
     return [[], information];
   }
 
-  async tryUtime(path: string, atime: number, mtime: number, errnote = "Cannot update utime of file"): Promise<void> {
+  async tryUtime(
+    path: string,
+    atime: number,
+    mtime: number,
+    errnote = "Cannot update utime of file",
+  ): Promise<void> {
     try {
       await utimes(path, atime, mtime);
     } catch {
@@ -81,23 +94,40 @@ export class PostProcessor {
     }
   }
 
-  async deleteDownloadedFiles(...filesToDelete: Array<string | null | undefined>): Promise<void> {
+  async deleteDownloadedFiles(
+    ...filesToDelete: Array<string | null | undefined>
+  ): Promise<void> {
     const filenames = filesToDelete.flatMap((item) => {
       const parsed = StringSchema.safeParse(item);
       return parsed.success ? [parsed.data] : [];
     });
-    await Promise.all([...new Set(filenames)].map((filename) => rm(filename, { force: true })));
+    await Promise.all(
+      [...new Set(filenames)].map((filename) => rm(filename, { force: true })),
+    );
   }
 
-  configurationArgs(exe: string, keys?: readonly string[], defaultValue: readonly string[] = []): string[] {
-    return configurationArgs(this.ppKey(), this.getParam("postprocessor_args", null), exe, keys, defaultValue);
+  configurationArgs(
+    exe: string,
+    keys?: readonly string[],
+    defaultValue: readonly string[] = [],
+  ): string[] {
+    return configurationArgs(
+      this.ppKey(),
+      this.getParam("postprocessor_args", null),
+      exe,
+      keys,
+      defaultValue,
+    );
   }
 
   addProgressHook(hook: PostProcessorHook): void {
     this.progressHooks.push(hook);
   }
 
-  protected async hookProgress(status: PostProcessorProgress, info: PostProcessorInfo): Promise<void> {
+  protected async hookProgress(
+    status: PostProcessorProgress,
+    info: PostProcessorInfo,
+  ): Promise<void> {
     const data = { ...status, info_dict: info, postprocessor: this.ppKey() };
     for (const hook of this.progressHooks) {
       await hook(data);

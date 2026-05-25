@@ -17,7 +17,8 @@ describe("compat helpers", () => {
     expect(namespacedGetproxies).toBe(getproxies);
   });
 
-  test.todo("test_compat_passthrough compat_pycrypto_AES once PyCrypto compatibility is ported", () => undefined);
+  test.todo("test_compat_passthrough compat_pycrypto_AES once PyCrypto compatibility is ported", () =>
+    undefined);
 
   test("compatExpanduser uses HOME", () => {
     const oldHome = process.env.HOME;
@@ -46,13 +47,21 @@ describe("compat helpers", () => {
 
     expect(doc.attrib.foo).toBe("bar");
     expect(doc.attrib.spam).toBe("中文");
-    expect(doc.children.find((child) => child.tag === "normal")?.text).toBe("foo");
-    expect(doc.children.find((child) => child.tag === "chinese")?.text).toBe("中文");
-    expect(doc.children.find((child) => child.tag === "foo")?.children[0]?.text).toBe("spam");
+    expect(doc.children.find((child) => child.tag === "normal")?.text).toBe(
+      "foo",
+    );
+    expect(doc.children.find((child) => child.tag === "chinese")?.text).toBe(
+      "中文",
+    );
+    expect(
+      doc.children.find((child) => child.tag === "foo")?.children[0]?.text,
+    ).toBe("spam");
 
-    expect(compatEtreeFromstring(`<?xml version="1.0"?>
+    expect(
+      compatEtreeFromstring(`<?xml version="1.0"?>
 <!DOCTYPE smil PUBLIC "-//W3C//DTD SMIL 2.0//EN" "http://www.w3.org/2001/SMIL20/SMIL20.dtd">
-<smil xmlns="http://www.w3.org/2001/SMIL20/Language"></smil>`).tag).toBe("{http://www.w3.org/2001/SMIL20/Language}smil");
+<smil xmlns="http://www.w3.org/2001/SMIL20/Language"></smil>`).tag,
+    ).toBe("{http://www.w3.org/2001/SMIL20/Language}smil");
   });
 
   test.each([

@@ -10,9 +10,12 @@ import {
 } from "../utils/index.ts";
 
 export class AluraIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:cursos\.)?alura\.com\.br/course/(?<course_name>[^/]+)/task/(?<id>\d+)`;
-  static readonly _LOGIN_URL = "https://cursos.alura.com.br/loginForm?urlAfterLogin=/loginForm";
-  static readonly _VIDEO_URL = "https://cursos.alura.com.br/course/%s/task/%s/video";
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:cursos\.)?alura\.com\.br/course/(?<course_name>[^/]+)/task/(?<id>\d+)`;
+  static readonly _LOGIN_URL =
+    "https://cursos.alura.com.br/loginForm?urlAfterLogin=/loginForm";
+  static readonly _VIDEO_URL =
+    "https://cursos.alura.com.br/course/%s/task/%s/video";
   static override readonly _NETRC_MACHINE: string = "alura";
 
   static override get IE_NAME(): string {
@@ -27,12 +30,13 @@ export class AluraIE extends InfoExtractor {
     }
   }
 
-  protected async performLogin(username: string, password: string): Promise<void> {
-    const loginPage = await this.downloadWebpage(
-      AluraIE._LOGIN_URL,
-      "alura",
-      { note: "Downloading login popup" }
-    );
+  protected async performLogin(
+    username: string,
+    password: string,
+  ): Promise<void> {
+    const loginPage = await this.downloadWebpage(AluraIE._LOGIN_URL, "alura", {
+      note: "Downloading login popup",
+    });
     if (loginPage === false) {
       throw new ExtractorError("Unable to download login page");
     }
@@ -56,7 +60,7 @@ export class AluraIE extends InfoExtractor {
               loginForm[name] = el.getAttribute("value") ?? "";
             }
           }
-        }
+        },
       })
       .transform(loginPage);
 
@@ -67,32 +71,30 @@ export class AluraIE extends InfoExtractor {
       String.raw`<form[^>]+class=["']signin-form["']\s+action=["'](?<url>.+?)["']`,
       loginPage,
       "post url",
-      { defaultValue: AluraIE._LOGIN_URL, group: "url" }
+      { defaultValue: AluraIE._LOGIN_URL, group: "url" },
     ) as string;
 
     if (!postUrl.startsWith("http")) {
       postUrl = urljoin(AluraIE._LOGIN_URL, postUrl) ?? postUrl;
     }
 
-    const response = await this.downloadWebpage(
-      postUrl,
-      "alura",
-      {
-        note: "Logging in",
-        data: urlencodePostdata(loginForm),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      }
-    );
+    const response = await this.downloadWebpage(postUrl, "alura", {
+      note: "Logging in",
+      data: urlencodePostdata(loginForm),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
 
     if (response === false || !isLogged(response)) {
       const error = this.htmlSearchRegex(
         String.raw`<p[^>]+class="alert-message[^"]*">(?<error>.+?)</p>`,
         response || "",
         "error message",
-        { defaultValue: null, group: "error" }
+        { defaultValue: null, group: "error" },
       );
       if (error) {
-        throw new ExtractorError(`Unable to login: ${error}`, { expected: true });
+        throw new ExtractorError(`Unable to login: ${error}`, {
+          expected: true,
+        });
       }
       throw new ExtractorError("Unable to log in");
     }
@@ -110,11 +112,13 @@ export class AluraIE extends InfoExtractor {
     const videoDict = await this.downloadJson<any[] | false>(
       videoUrl,
       videoId,
-      { note: "Searching for videos" }
+      { note: "Searching for videos" },
     );
 
     if (videoDict === false || !videoDict.length) {
-      throw new ExtractorError("No video found for this task", { expected: true });
+      throw new ExtractorError("No video found for this task", {
+        expected: true,
+      });
     }
 
     const webpage = await this.downloadWebpage(url, videoId);
@@ -126,7 +130,7 @@ export class AluraIE extends InfoExtractor {
       String.raw`<span[^>]+class=(["'])task-body-header-title-text\1[^>]*>(?<title>[^<]+)`,
       webpage,
       "title",
-      { group: "title" }
+      { group: "title" },
     ) as string;
     const videoTitle = cleanHtml(rawTitle) ?? rawTitle;
 
@@ -140,7 +144,7 @@ export class AluraIE extends InfoExtractor {
         videoUrlM3u8,
         videoId,
         "mp4",
-        { entryProtocol: "m3u8_native", m3u8Id: "hls" }
+        { entryProtocol: "m3u8_native", m3u8Id: "hls" },
       ) as any[];
 
       for (const f of videoFormat) {
@@ -163,8 +167,10 @@ export class AluraIE extends InfoExtractor {
 }
 
 export class AluraCourseIE extends AluraIE {
-  static override readonly _VALID_URL = String.raw`https?://(?:cursos\.)?alura\.com\.br/course/(?<id>[^/]+)`;
-  static override readonly _LOGIN_URL = "https://cursos.alura.com.br/loginForm?urlAfterLogin=/loginForm";
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:cursos\.)?alura\.com\.br/course/(?<id>[^/]+)`;
+  static override readonly _LOGIN_URL =
+    "https://cursos.alura.com.br/loginForm?urlAfterLogin=/loginForm";
   static override readonly _NETRC_MACHINE = "aluracourse";
 
   static override get IE_NAME(): string {
@@ -186,7 +192,7 @@ export class AluraCourseIE extends AluraIE {
       String.raw`<h1.*?>(.*?)<strong>(?<course_title>.*?)</strong></h[0-9]>`,
       webpage,
       "course title",
-      { defaultValue: coursePath, group: "course_title" }
+      { defaultValue: coursePath, group: "course_title" },
     ) as string;
 
     const sectionPaths: string[] = [];
@@ -200,7 +206,7 @@ export class AluraCourseIE extends AluraIE {
               sectionPaths.push(href);
             }
           }
-        }
+        },
       })
       .transform(webpage);
 
@@ -219,7 +225,11 @@ export class AluraCourseIE extends AluraIE {
       let chapterTitle = "";
       let chapterNumberText = "";
 
-      const videoPaths: Array<{ href: string; chapter: string; chapterNumber: number | null }> = [];
+      const videoPaths: Array<{
+        href: string;
+        chapter: string;
+        chapterNumber: number | null;
+      }> = [];
 
       new HTMLRewriter()
         .on("h3.task-menu-section-title-text", {
@@ -229,7 +239,7 @@ export class AluraCourseIE extends AluraIE {
           },
           text(text) {
             chapterTitle += text.text;
-          }
+          },
         })
         .on("span.task-menu-section-title-number", {
           element(el) {
@@ -238,7 +248,7 @@ export class AluraCourseIE extends AluraIE {
           },
           text(text) {
             chapterNumberText += text.text;
-          }
+          },
         })
         .on("a", {
           element(el) {
@@ -249,11 +259,11 @@ export class AluraCourseIE extends AluraIE {
                 videoPaths.push({
                   href,
                   chapter: chapterTitle.trim(),
-                  chapterNumber: intOrNone(chapterNumberText.trim())
+                  chapterNumber: intOrNone(chapterNumberText.trim()),
                 });
               }
             }
-          }
+          },
         })
         .transform(sectionPathHtml);
 

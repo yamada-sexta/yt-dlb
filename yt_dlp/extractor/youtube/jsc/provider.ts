@@ -44,7 +44,11 @@ export class JsChallengeProviderRejectedRequest extends Error {
   readonly expected: boolean;
   readonly skippedComponents?: readonly SkippedComponent[];
 
-  constructor(message = "JS challenge provider rejected request", expected = false, skippedComponents?: readonly SkippedComponent[]) {
+  constructor(
+    message = "JS challenge provider rejected request",
+    expected = false,
+    skippedComponents?: readonly SkippedComponent[],
+  ) {
     super(message);
     this.expected = expected;
     this.skippedComponents = skippedComponents;
@@ -63,8 +67,18 @@ export class JsChallengeProviderError extends Error {
 export interface JsChallengeProviderHost {
   loadPlayer(videoId: string | undefined, playerUrl: string): Promise<string>;
   cache?: {
-    load(section: string, key: string, dtype?: string, defaultValue?: unknown): Promise<unknown>;
-    store(section: string, key: string, data: unknown, dtype?: string): Promise<void>;
+    load(
+      section: string,
+      key: string,
+      dtype?: string,
+      defaultValue?: unknown,
+    ): Promise<unknown>;
+    store(
+      section: string,
+      key: string,
+      data: unknown,
+      dtype?: string,
+    ): Promise<void>;
   };
   settings?: Record<string, readonly string[] | undefined>;
   remoteComponents?: readonly string[];
@@ -90,7 +104,9 @@ export abstract class JsChallengeProvider {
 
   abstract isAvailable(): boolean;
 
-  async bulkSolve(requests: readonly JsChallengeRequest[]): Promise<JsChallengeProviderResponse[]> {
+  async bulkSolve(
+    requests: readonly JsChallengeRequest[],
+  ): Promise<JsChallengeProviderResponse[]> {
     const validated: JsChallengeRequest[] = [];
     const rejected: JsChallengeProviderResponse[] = [];
     for (const request of requests) {
@@ -98,28 +114,45 @@ export abstract class JsChallengeProvider {
         this.validateRequest(request);
         validated.push(request);
       } catch (error) {
-        rejected.push({ request, error: error instanceof Error ? error : new Error(String(error)) });
+        rejected.push({
+          request,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
       }
     }
     return [...rejected, ...(await this.realBulkSolve(validated))];
   }
 
-  protected abstract realBulkSolve(requests: readonly JsChallengeRequest[]): Promise<JsChallengeProviderResponse[]>;
+  protected abstract realBulkSolve(
+    requests: readonly JsChallengeRequest[],
+  ): Promise<JsChallengeProviderResponse[]>;
 
   protected validateRequest(request: JsChallengeRequest): void {
     if (!this.isAvailable()) {
-      throw new JsChallengeProviderRejectedRequest(`${this.providerName} is not available`);
+      throw new JsChallengeProviderRejectedRequest(
+        `${this.providerName} is not available`,
+      );
     }
-    if (this.supportedTypes !== null && !this.supportedTypes.includes(request.type)) {
-      throw new JsChallengeProviderRejectedRequest(`JS Challenge type "${request.type}" is not supported by ${this.providerName}`);
+    if (
+      this.supportedTypes !== null &&
+      !this.supportedTypes.includes(request.type)
+    ) {
+      throw new JsChallengeProviderRejectedRequest(
+        `JS Challenge type "${request.type}" is not supported by ${this.providerName}`,
+      );
     }
   }
 
-  protected async getPlayer(videoId: string | undefined, playerUrl: string): Promise<string> {
+  protected async getPlayer(
+    videoId: string | undefined,
+    playerUrl: string,
+  ): Promise<string> {
     try {
       return await this.host.loadPlayer(videoId, playerUrl);
     } catch (error) {
-      throw new JsChallengeProviderError(`Failed to load player for JS challenge: ${error}`);
+      throw new JsChallengeProviderError(
+        `Failed to load player for JS challenge: ${error}`,
+      );
     }
   }
 }
@@ -137,7 +170,9 @@ export type JsChallengeProviderConstructor = {
 export const jscProviders = new Map<string, JsChallengeProviderConstructor>();
 export const jscPreferences = new Set<JsChallengePreference>();
 
-export function registerProvider<T extends JsChallengeProviderConstructor>(provider: T): T {
+export function registerProvider<T extends JsChallengeProviderConstructor>(
+  provider: T,
+): T {
   const name = provider.providerName;
   if (jscProviders.has(name)) {
     throw new Error(`JsChallengeProvider ${name} already registered`);
@@ -146,7 +181,9 @@ export function registerProvider<T extends JsChallengeProviderConstructor>(provi
   return provider;
 }
 
-export function registerPreference(preference: JsChallengePreference): JsChallengePreference {
+export function registerPreference(
+  preference: JsChallengePreference,
+): JsChallengePreference {
   jscPreferences.add(preference);
   return preference;
 }

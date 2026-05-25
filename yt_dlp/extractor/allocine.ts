@@ -30,7 +30,7 @@ export class AllocineIE extends InfoExtractor {
       String.raw`data-model="([^"]+)"`,
       webpage,
       "data model",
-      { defaultValue: null }
+      { defaultValue: null },
     ) as string | null;
 
     let videoId = displayId;
@@ -62,14 +62,14 @@ export class AllocineIE extends InfoExtractor {
       duration = intOrNone(video.duration);
       viewCount = intOrNone(video.view_count);
       timestamp = unifiedTimestamp(
-        tryGet<string>(video, (x: any) => x?.added_at?.date)
+        tryGet<string>(video, (x: any) => x?.added_at?.date),
       );
     } else {
       videoId = displayId;
-      const mediaData = await this.downloadJson(
+      const mediaData = (await this.downloadJson(
         `http://www.allocine.fr/ws/AcVisiondataV5.ashx?media=${videoId}`,
-        displayId
-      ) as any;
+        displayId,
+      )) as any;
       const extractedTitle = this.htmlExtractTitle(webpage);
       title = removeEnd(stripOrNone(extractedTitle) || "", " - AlloCiné") || "";
       const videoObj = (mediaData?.video || {}) as Record<string, unknown>;

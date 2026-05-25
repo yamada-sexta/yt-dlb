@@ -2,28 +2,55 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { bytesToIntlist, intlistToBytes, jwtEncodeHs256 } from "../yt_dlp/utils/deprecated.ts";
-import { decodeBase, decodeFilename, decodeOption, encodeFilename, errorToCompatStr, handleYoutubedlHeaders, requestToUrl } from "../yt_dlp/utils/legacy.ts";
 import {
+  bytesToIntlist,
+  intlistToBytes,
+  jwtEncodeHs256,
+} from "../yt_dlp/utils/deprecated.ts";
+import {
+  decodeBase,
+  decodeFilename,
+  decodeOption,
+  encodeFilename,
+  errorToCompatStr,
+  handleYoutubedlHeaders,
+  requestToUrl,
+} from "../yt_dlp/utils/legacy.ts";
+import {
+  ageRestricted,
+  argsToStr,
+  baseUrl,
+  caesar,
   cleanHtml,
   cleanPodcastUrl,
   cliBoolOption,
   cliOption,
   cliValuelessOption,
+  encodeBaseN,
   determineExt,
   escapeHTML,
+  extractBasicAuth,
   extractAttributes,
   filterDict,
   floatOrNone,
+  formatBytes,
   formatSeconds,
+  getCompatibleExt,
   getElementByClass,
   getElementById,
   intOrNone,
+  iriToUri,
+  isHtml,
   isOutdatedVersion,
   joinNonempty,
+  limitLength,
+  lowercaseEscape,
   mergeDicts,
   mimetype2ext,
+  monthByName,
   orderedSet,
+  parseBitrate,
+  parseCodecs,
   parseDuration,
   parseFilesize,
   parseIso8601,
@@ -33,22 +60,29 @@ import {
   prependExtension,
   qualities,
   removeEnd,
+  removeQuotes,
   removeStart,
   replaceExtension,
+  rot47,
+  sanitizeUrl,
   shellQuote,
   strOrNone,
   strToInt,
   stripOrNone,
+  subtitlesFilename,
   truncateString,
   unescapeHTML,
   unifiedStrdate,
   unifiedTimestamp,
   updateUrlQuery,
+  uppercaseEscape,
   urlBasename,
   urlencodePostdata,
   urljoin,
   urlOrNone,
+  urshift,
   variadic,
+  versionTuple,
 } from "../yt_dlp/utils/utils.ts";
 
 describe("deprecated utility compatibility", () => {
@@ -58,7 +92,9 @@ describe("deprecated utility compatibility", () => {
   });
 
   test("jwtEncodeHs256 returns three base64 parts", () => {
-    const token = new TextDecoder().decode(jwtEncodeHs256({ sub: "1" }, "secret"));
+    const token = new TextDecoder().decode(
+      jwtEncodeHs256({ sub: "1" }, "secret"),
+    );
     expect(token.split(".")).toHaveLength(3);
     expect(token).toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
   });
@@ -71,11 +107,13 @@ describe("legacy utility compatibility", () => {
   });
 
   test("handleYoutubedlHeaders strips no-compression marker", () => {
-    expect(handleYoutubedlHeaders({
-      "Accept-Encoding": "gzip",
-      "Youtubedl-No-Compression": "1",
-      Other: "ok",
-    })).toEqual({ Other: "ok" });
+    expect(
+      handleYoutubedlHeaders({
+        "Accept-Encoding": "gzip",
+        "Youtubedl-No-Compression": "1",
+        Other: "ok",
+      }),
+    ).toEqual({ Other: "ok" });
   });
 
   test("filename and option shims are identity transforms", () => {
@@ -87,20 +125,33 @@ describe("legacy utility compatibility", () => {
 
   test("requestToUrl", () => {
     expect(requestToUrl("https://example.com/")).toBe("https://example.com/");
-    expect(requestToUrl(new URL("https://example.com/path"))).toBe("https://example.com/path");
-    expect(requestToUrl(new Request("https://example.com/request"))).toBe("https://example.com/request");
+    expect(requestToUrl(new URL("https://example.com/path"))).toBe(
+      "https://example.com/path",
+    );
+    expect(requestToUrl(new Request("https://example.com/request"))).toBe(
+      "https://example.com/request",
+    );
   });
 
   test("joinNonempty", () => {
-    expect(joinNonempty("title", null, "section", { delim: " - " })).toBe("title - section");
-    expect(joinNonempty("title", "missing", { from_dict: { title: "Name" }, delim: ":" })).toBe("Name");
+    expect(joinNonempty("title", null, "section", { delim: " - " })).toBe(
+      "title - section",
+    );
+    expect(
+      joinNonempty("title", "missing", {
+        from_dict: { title: "Name" },
+        delim: ":",
+      }),
+    ).toBe("Name");
   });
 });
 
 describe("general utility helpers", () => {
   test("determineExt and mime mapping", () => {
     expect(determineExt("https://example.com/video.mp4?x=1")).toBe("mp4");
-    expect(determineExt("https://example.com/no-extension", "unknown")).toBe("unknown");
+    expect(determineExt("https://example.com/no-extension", "unknown")).toBe(
+      "unknown",
+    );
     expect(mimetype2ext("video/mp4; codecs=avc1")).toBe("mp4");
   });
 
@@ -109,24 +160,61 @@ describe("general utility helpers", () => {
     expect(removeStart("foobar", "bar")).toBe("foobar");
     expect(removeEnd("foobar", "bar")).toBe("foo");
     expect(removeEnd("foobar", "foo")).toBe("foobar");
+    expect(removeQuotes('"value"')).toBe("value");
+    expect(removeQuotes("'value'")).toBe("value");
+    expect(removeQuotes("'value\"")).toBe("'value\"");
   });
 
   test("URL helpers", () => {
-    expect(urljoin("https://example.com/a/b", "../c")).toBe("https://example.com/c");
-    expect(urlOrNone("https://example.com/path")).toBe("https://example.com/path");
+    expect(urljoin("https://example.com/a/b", "../c")).toBe(
+      "https://example.com/c",
+    );
+    expect(urlOrNone("https://example.com/path")).toBe(
+      "https://example.com/path",
+    );
+    expect(urlOrNone("//example.com/path")).toBe("//example.com/path");
+    expect(urlOrNone("rtmpte://example.com/live")).toBe(
+      "rtmpte://example.com/live",
+    );
     expect(urlOrNone("not a url")).toBeNull();
-    expect(updateUrlQuery("https://example.com/path?a=1", { a: "2", b: ["x", "y"] })).toBe("https://example.com/path?a=2&b=x&b=y");
-    expect(parseQs("https://example.com/path?a=1&a=2&b=x")).toEqual({ a: ["1", "2"], b: ["x"] });
+    expect(
+      updateUrlQuery("https://example.com/path?a=1", { a: "2", b: ["x", "y"] }),
+    ).toBe("https://example.com/path?a=2&b=x&b=y");
+    expect(parseQs("https://example.com/path?a=1&a=2&b=x")).toEqual({
+      a: ["1", "2"],
+      b: ["x"],
+    });
     expect(parseQs("a=1")).toEqual({});
-    expect(urlBasename("https://example.com/a/video.mp4?x=1")).toBe("video.mp4");
+    expect(urlBasename("https://example.com/a/video.mp4?x=1")).toBe(
+      "video.mp4",
+    );
+    expect(urlBasename("https://example.com/a/video.mp4/")).toBe("video.mp4");
+    expect(baseUrl("http://foo.de/bar/baz?x=z/x/c")).toBe("http://foo.de/bar/");
+    expect(sanitizeUrl("//example.com/video")).toBe("http://example.com/video");
+    expect(sanitizeUrl("example.com/video", { scheme: "https" })).toBe(
+      "https://example.com/video",
+    );
+    expect(extractBasicAuth("https://user:pass@example.com/path")).toEqual([
+      "https://example.com/path",
+      { Authorization: "Basic dXNlcjpwYXNz" },
+    ]);
+    expect(iriToUri("http://тест.рф/фрагмент")).toBe(
+      "http://xn--e1aybc.xn--p1ai/%D1%84%D1%80%D0%B0%D0%B3%D0%BC%D0%B5%D0%BD%D1%82",
+    );
   });
 
   test("urlencodePostdata", () => {
-    expect(urlencodePostdata({ a: 1, b: true, c: null }).toString()).toBe("a=1&b=true");
+    expect(urlencodePostdata({ a: 1, b: true, c: null }).toString()).toBe(
+      "a=1&b=true",
+    );
   });
 
   test("parseM3u8Attributes", () => {
-    expect(parseM3u8Attributes('BANDWIDTH=1280000,RESOLUTION="1920x1080",CODECS="avc1,mp4a"')).toEqual({
+    expect(
+      parseM3u8Attributes(
+        'BANDWIDTH=1280000,RESOLUTION="1920x1080",CODECS="avc1,mp4a"',
+      ),
+    ).toEqual({
       BANDWIDTH: "1280000",
       RESOLUTION: "1920x1080",
       CODECS: "avc1,mp4a",
@@ -152,7 +240,11 @@ describe("general utility helpers", () => {
 
   test("dict helpers", () => {
     expect(filterDict({ a: 1, b: null, c: 0 })).toEqual({ a: 1, c: 0 });
-    expect(mergeDicts({ a: 1, b: null }, { b: 2, c: 3 })).toEqual({ b: 2, c: 3, a: 1 });
+    expect(mergeDicts({ a: 1, b: null }, { b: 2, c: 3 })).toEqual({
+      b: 2,
+      c: 3,
+      a: 1,
+    });
     expect(variadic("x")).toEqual(["x"]);
     expect(variadic(["x", "y"])).toEqual(["x", "y"]);
   });
@@ -160,7 +252,9 @@ describe("general utility helpers", () => {
   test("format and truncate helpers", () => {
     expect(formatSeconds(65)).toBe("1:05");
     expect(formatSeconds(3661.25, ":", true)).toBe("1:01:01.250");
-    expect(truncateString("abcdefghijklmnopqrstuvwxyz", 5, 5)).toBe("ab...vwxyz");
+    expect(truncateString("abcdefghijklmnopqrstuvwxyz", 5, 5)).toBe(
+      "ab...vwxyz",
+    );
   });
 
   test("HTML helpers", () => {
@@ -184,37 +278,104 @@ describe("general utility helpers", () => {
     expect(parseDuration("1 hour 2 minutes 3 seconds")).toBe(3723);
     expect(parseDuration("PT0H12M23S")).toBe(743);
     expect(parseDuration("PT34M39.23S")).toBe(2079.23);
+    expect(parseDuration("3 hours, 11 mins, 53 secs")).toBe(11513);
+    expect(parseDuration("87 Min.")).toBe(5220);
   });
 
   test("media parsers", () => {
     expect(parseFilesize("1.5MiB")).toBe(1572864);
     expect(parseResolution("1920x1080")).toEqual({ width: 1920, height: 1080 });
     expect(parseResolution("720p")).toEqual({ height: 720 });
+    expect(parseResolution("4k")).toEqual({ height: 2160 });
+    expect(parseBitrate("video 4500 kbps")).toBe(4500);
+    expect(mimetype2ext(null)).toBeNull();
+    expect(mimetype2ext("application/x-mpegURL")).toBe("m3u8");
+    expect(parseCodecs("avc1.77.30, mp4a.40.2")).toEqual({
+      vcodec: "avc1.77.30",
+      acodec: "mp4a.40.2",
+      dynamic_range: null,
+    });
+    expect(parseCodecs("vp9.2")).toEqual({
+      vcodec: "vp9.2",
+      acodec: "none",
+      dynamic_range: "HDR10",
+    });
+    expect(
+      getCompatibleExt({
+        vcodecs: [null],
+        acodecs: [null],
+        vexts: ["mp4"],
+        aexts: ["m4a"],
+      }),
+    ).toBe("mp4");
+    expect(
+      getCompatibleExt({
+        vcodecs: [null],
+        acodecs: [null],
+        vexts: ["mp4"],
+        aexts: ["webm"],
+      }),
+    ).toBe("mkv");
     const q = qualities(["small", "medium", "large"]);
     expect(q("medium")).toBe(1);
     expect(q("missing")).toBe(-1);
   });
 
   test("CLI option helpers", () => {
-    expect(cliOption({ path: "file" }, "--path", "path")).toEqual(["--path", "file"]);
-    expect(cliOption({ path: "file" }, "--path", "path", "=")).toEqual(["--path=file"]);
-    expect(cliBoolOption({ enabled: false }, "--enabled", "enabled")).toEqual(["--enabled", "false"]);
-    expect(cliValuelessOption({ verbose: true }, "--verbose", "verbose")).toEqual(["--verbose"]);
+    expect(cliOption({ path: "file" }, "--path", "path")).toEqual([
+      "--path",
+      "file",
+    ]);
+    expect(cliOption({ path: "file" }, "--path", "path", "=")).toEqual([
+      "--path=file",
+    ]);
+    expect(cliBoolOption({ enabled: false }, "--enabled", "enabled")).toEqual([
+      "--enabled",
+      "false",
+    ]);
+    expect(
+      cliValuelessOption({ verbose: true }, "--verbose", "verbose"),
+    ).toEqual(["--verbose"]);
   });
 
   test("path and shell helpers", () => {
     expect(replaceExtension("file.webm", "mp4")).toBe("file.mp4");
     expect(prependExtension("file.webm", "temp")).toBe("file.temp.webm");
+    expect(subtitlesFilename("file.webm", "en", "vtt")).toBe(
+      "file.en.vtt.webm",
+    );
     expect(shellQuote(["echo", "hello world"])).toBe("echo 'hello world'");
+    expect(argsToStr(["echo", "hello world"])).toBe("echo 'hello world'");
     expect(orderedSet(["a", "b", "a"])).toEqual(["a", "b"]);
   });
 
   test("version helper", () => {
     expect(isOutdatedVersion("1.2.0", "1.3.0")).toBe(true);
     expect(isOutdatedVersion("1.3.0", "1.2.0")).toBe(false);
+    expect(versionTuple("1.2-3")).toEqual([1, 2, 3]);
+    expect(limitLength("foo bar baz asd", 12)).toBe("foo bar b...");
   });
 
   test("podcast URL cleaner", () => {
-    expect(cleanPodcastUrl("https://chtbl.com/track/123/https://example.com/audio.mp3")).toBe("https://example.com/audio.mp3");
+    expect(
+      cleanPodcastUrl(
+        "https://chtbl.com/track/123/https://example.com/audio.mp3",
+      ),
+    ).toBe("https://example.com/audio.mp3");
+  });
+
+  test("misc parity helpers", () => {
+    expect(monthByName("December")).toBe(12);
+    expect(monthByName("décembre", "fr")).toBe(12);
+    expect(uppercaseEscape("\\U0001d550")).toBe("𝕐");
+    expect(lowercaseEscape("\\u0026")).toBe("&");
+    expect(formatBytes(1024)).toBe("1.00kB");
+    expect(ageRestricted(18, 17)).toBe(true);
+    expect(ageRestricted(18, 18)).toBe(false);
+    expect(isHtml("<!DOCTYPE html><html></html>")).toBe(true);
+    expect(encodeBaseN(255, 16, "0123456789abcdef")).toBe("ff");
+    expect(caesar("abc", "abc", 1)).toBe("bca");
+    expect(rot47("youtube-dl")).toBe("J@FEF36\\5=");
+    expect(urshift(-1, 1)).toBe(2147483647);
   });
 });

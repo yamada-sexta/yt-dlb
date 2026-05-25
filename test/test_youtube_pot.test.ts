@@ -15,8 +15,15 @@ import {
   validateCacheSpec,
   validateResponse,
 } from "../yt_dlp/extractor/youtube/pot/index.ts";
-import { ConsoleIEContentProviderLogger, LogLevel, type IEContentProviderHost } from "../yt_dlp/extractor/youtube/pot/internal-provider.ts";
-import type { PoTokenRequest, PoTokenResponse } from "../yt_dlp/extractor/youtube/pot/provider.ts";
+import {
+  ConsoleIEContentProviderLogger,
+  LogLevel,
+  type IEContentProviderHost,
+} from "../yt_dlp/extractor/youtube/pot/internal-provider.ts";
+import type {
+  PoTokenRequest,
+  PoTokenResponse,
+} from "../yt_dlp/extractor/youtube/pot/provider.ts";
 
 class TestCacheProvider extends PoTokenCacheProvider {
   static override readonly providerName = "test-cache";
@@ -95,27 +102,37 @@ describe("YouTube PO-token director dependencies", () => {
   test("validates responses and cache specs", () => {
     expect(validateResponse({ poToken: token("abc") })).toBe(true);
     expect(validateResponse({ poToken: "" })).toBe(false);
-    expect(validateCacheSpec({
-      keyBindings: { visitor: "VISITOR" },
-      defaultTtl: 60,
-      writePolicy: CacheProviderWritePolicy.WRITE_ALL,
-    })).toBe(true);
-    expect(validateCacheSpec({
-      keyBindings: { visitor: null },
-      defaultTtl: 60,
-      writePolicy: CacheProviderWritePolicy.WRITE_ALL,
-    })).toBe(false);
+    expect(
+      validateCacheSpec({
+        keyBindings: { visitor: "VISITOR" },
+        defaultTtl: 60,
+        writePolicy: CacheProviderWritePolicy.WRITE_ALL,
+      }),
+    ).toBe(true);
+    expect(
+      validateCacheSpec({
+        keyBindings: { visitor: null },
+        defaultTtl: 60,
+        writePolicy: CacheProviderWritePolicy.WRITE_ALL,
+      }),
+    ).toBe(false);
   });
 
   test("uses providers in preference order and caches successful responses", async () => {
     const cacheProvider = new TestCacheProvider(host, logger);
-    const cache = new PoTokenCache(logger, [cacheProvider], [new TestSpecProvider(host, logger)]);
+    const cache = new PoTokenCache(
+      logger,
+      [cacheProvider],
+      [new TestSpecProvider(host, logger)],
+    );
     const director = new PoTokenRequestDirector(logger, cache);
     const rejecting = new RejectingProvider(host, logger);
     const working = new WorkingProvider(host, logger);
     director.registerProvider(rejecting);
     director.registerProvider(working);
-    director.registerPreference((provider) => provider.providerName === "rejecting" ? 10 : 0);
+    director.registerPreference((provider) =>
+      provider.providerName === "rejecting" ? 10 : 0,
+    );
 
     const request = {
       context: PoTokenContext.GVS,

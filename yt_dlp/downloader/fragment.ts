@@ -47,7 +47,11 @@ export class FragmentFD extends FileDownloader {
     return new Request(url, { headers: info.http_headers });
   }
 
-  protected async decryptFragment(fragment: FragmentInfo, data: Uint8Array, info: DownloadInfo): Promise<Uint8Array> {
+  protected async decryptFragment(
+    fragment: FragmentInfo,
+    data: Uint8Array,
+    info: DownloadInfo,
+  ): Promise<Uint8Array> {
     if (fragment.transformData) {
       return fragment.transformData(data);
     }
@@ -55,8 +59,11 @@ export class FragmentFD extends FileDownloader {
     if (!decryptInfo || decryptInfo.METHOD !== "AES-128") {
       return data;
     }
-    const key = decryptInfo.KEY ?? await this.fetchFragmentKey(decryptInfo, info);
-    const iv = parseFragmentIv(decryptInfo.IV) ?? sequenceIv(Number(fragment.media_sequence ?? 0));
+    const key =
+      decryptInfo.KEY ?? (await this.fetchFragmentKey(decryptInfo, info));
+    const iv =
+      parseFragmentIv(decryptInfo.IV) ??
+      sequenceIv(Number(fragment.media_sequence ?? 0));
     // Tests may intentionally truncate fragment data, which cannot be PKCS#7 unpadded.
     if (this.params.test) {
       return data;
@@ -65,7 +72,13 @@ export class FragmentFD extends FileDownloader {
   }
 
   async downloadAndAppendFragmentsMultiple(
-    ...downloads: Array<[FragmentDownloadContext, Iterable<FragmentInfo> | AsyncIterable<FragmentInfo>, DownloadInfo]>
+    ...downloads: Array<
+      [
+        FragmentDownloadContext,
+        Iterable<FragmentInfo> | AsyncIterable<FragmentInfo>,
+        DownloadInfo,
+      ]
+    >
   ): Promise<boolean> {
     if (downloads.length === 1) {
       const firstDownload = downloads[0];
@@ -75,7 +88,10 @@ export class FragmentFD extends FileDownloader {
       const [ctx, fragments, info] = firstDownload;
       return await this.downloadAndAppendFragments(ctx, fragments, info);
     }
-    const maxWorkers = Math.max(1, Number(this.params.concurrent_fragment_downloads ?? 1));
+    const maxWorkers = Math.max(
+      1,
+      Number(this.params.concurrent_fragment_downloads ?? 1),
+    );
     let cursor = 0;
     let result = true;
     const worker = async (): Promise<void> => {
@@ -89,10 +105,16 @@ export class FragmentFD extends FileDownloader {
         const [ctx, fragments, info] = download;
         ctx.max_progress = downloads.length;
         ctx.progress_idx = position;
-        result = await this.downloadAndAppendFragments(ctx, fragments, info) && result;
+        result =
+          (await this.downloadAndAppendFragments(ctx, fragments, info)) &&
+          result;
       }
     };
-    await Promise.all(Array.from({ length: Math.min(maxWorkers, downloads.length) }, () => worker()));
+    await Promise.all(
+      Array.from({ length: Math.min(maxWorkers, downloads.length) }, () =>
+        worker(),
+      ),
+    );
     return result;
   }
 
@@ -107,10 +129,15 @@ export class FragmentFD extends FileDownloader {
       throw new Error("Fragment download context is missing filename");
     }
     const wrapped = wrapFragments(fragments, options.packFunc);
-    const ok = await this.downloadFragments(filename, { ...info, is_live: ctx.live ?? info.is_live }, wrapped, {
-      isFatal: options.isFatal,
-      finishFunc: options.finishFunc,
-    });
+    const ok = await this.downloadFragments(
+      filename,
+      { ...info, is_live: ctx.live ?? info.is_live },
+      wrapped,
+      {
+        isFatal: options.isFatal,
+        finishFunc: options.finishFunc,
+      },
+    );
     return ok;
   }
 
@@ -121,7 +148,12 @@ export class FragmentFD extends FileDownloader {
     options: FragmentAppendOptions = {},
   ): Promise<boolean> {
     if (isAsyncIterable(fragments)) {
-      return await this.downloadFragmentsStream(filename, info, fragments, options);
+      return await this.downloadFragmentsStream(
+        filename,
+        info,
+        fragments,
+        options,
+      );
     }
     const tmpfilename = this.tempName(filename);
     const stateFile = this.ytdlFilename(filename);
@@ -130,7 +162,10 @@ export class FragmentFD extends FileDownloader {
     const resumeState = useYtdlFile
       ? await this.readFragmentState(stateFile, list.length)
       : { fragmentIndex: 0, corrupt: false };
-    let resumeLen = this.params.continuedl === false ? 0 : await this.filesizeOrZero(tmpfilename);
+    let resumeLen =
+      this.params.continuedl === false
+        ? 0
+        : await this.filesizeOrZero(tmpfilename);
     let startFragmentIndex = resumeState.fragmentIndex;
     if (this.params.continuedl === false) {
       startFragmentIndex = 0;
@@ -139,16 +174,23 @@ export class FragmentFD extends FileDownloader {
       if (useYtdlFile) {
         await this.removeFile(stateFile);
       }
-    } else if (useYtdlFile && (resumeState.corrupt || (startFragmentIndex > 0 && resumeLen === 0))) {
+    } else if (
+      useYtdlFile &&
+      (resumeState.corrupt || (startFragmentIndex > 0 && resumeLen === 0))
+    ) {
       // Logic change: Python warns and restarts corrupt/inconsistent fragment resumes; this Bun port does the same.
-      this.ydl.reportWarning?.(`${resumeState.corrupt ? ".ytdl file is corrupt" : "Inconsistent state of incomplete fragment download"}. Restarting from the beginning ...`);
+      this.ydl.reportWarning?.(
+        `${resumeState.corrupt ? ".ytdl file is corrupt" : "Inconsistent state of incomplete fragment download"}. Restarting from the beginning ...`,
+      );
       startFragmentIndex = 0;
       resumeLen = 0;
       await this.removeFile(tmpfilename);
       await this.removeFile(stateFile);
     } else if (!useYtdlFile && resumeLen > 0) {
       // Logic change: appending without per-fragment state can duplicate media, so restart instead of guessing.
-      this.ydl.reportWarning?.(`Cannot safely resume fragmented download without ${stateFile}. Restarting from the beginning ...`);
+      this.ydl.reportWarning?.(
+        `Cannot safely resume fragmented download without ${stateFile}. Restarting from the beginning ...`,
+      );
       resumeLen = 0;
       await this.removeFile(tmpfilename);
     }
@@ -156,20 +198,35 @@ export class FragmentFD extends FileDownloader {
       await this.writeFragmentState(stateFile, 0, list.length);
     }
     await mkdir(dirname(tmpfilename), { recursive: true });
-    const writer = resumeLen > 0
-      ? createWriteStream(tmpfilename, { flags: "a" })
-      : Bun.file(tmpfilename).writer({ highWaterMark: Number(this.params.buffersize ?? 64 * 1024) });
+    const writer =
+      resumeLen > 0
+        ? createWriteStream(tmpfilename, { flags: "a" })
+        : Bun.file(tmpfilename).writer({
+            highWaterMark: Number(this.params.buffersize ?? 64 * 1024),
+          });
     const started = performance.now() / 1000;
     let downloaded = resumeLen;
     const remaining = list
       .slice(startFragmentIndex)
-      .map((fragment, offset) => ({ fragment, index: startFragmentIndex + offset + 1, isFatal: options.isFatal }))
+      .map((fragment, offset) => ({
+        fragment,
+        index: startFragmentIndex + offset + 1,
+        isFatal: options.isFatal,
+      }))
       .slice(0, this.params.test ? 1 : undefined);
     try {
-      const maxWorkers = Math.max(1, Number(this.params.concurrent_fragment_downloads ?? 1));
-      const downloadedFragments = maxWorkers > 1 && remaining.length > 1
-        ? await this.downloadFragmentItemsConcurrently(remaining, info, maxWorkers)
-        : await this.downloadFragmentItemsSequentially(remaining, info);
+      const maxWorkers = Math.max(
+        1,
+        Number(this.params.concurrent_fragment_downloads ?? 1),
+      );
+      const downloadedFragments =
+        maxWorkers > 1 && remaining.length > 1
+          ? await this.downloadFragmentItemsConcurrently(
+              remaining,
+              info,
+              maxWorkers,
+            )
+          : await this.downloadFragmentItemsSequentially(remaining, info);
       for (const result of downloadedFragments) {
         if (!result.data) {
           continue;
@@ -181,15 +238,19 @@ export class FragmentFD extends FileDownloader {
           await this.writeFragmentState(stateFile, result.index, list.length);
         }
         const now = performance.now() / 1000;
-        await this.hookProgress({
-          status: "downloading",
-          filename,
-          tmpfilename,
-          downloaded_bytes: downloaded,
-          total_bytes: undefined,
-          elapsed: now - started,
-          speed: FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
-        }, info);
+        await this.hookProgress(
+          {
+            status: "downloading",
+            filename,
+            tmpfilename,
+            downloaded_bytes: downloaded,
+            total_bytes: undefined,
+            elapsed: now - started,
+            speed:
+              FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
+          },
+          info,
+        );
       }
       const finishData = encodeFinishData(options.finishFunc?.());
       if (finishData) {
@@ -201,17 +262,28 @@ export class FragmentFD extends FileDownloader {
       if (useYtdlFile) {
         await this.removeFile(stateFile);
       }
-      await this.hookProgress({
-        status: "finished",
-        filename,
-        downloaded_bytes: downloaded,
-        total_bytes: downloaded,
-        elapsed: performance.now() / 1000 - started,
-      }, info);
+      await this.hookProgress(
+        {
+          status: "finished",
+          filename,
+          downloaded_bytes: downloaded,
+          total_bytes: downloaded,
+          elapsed: performance.now() / 1000 - started,
+        },
+        info,
+      );
       return true;
     } catch (error) {
       await endWriter(writer);
-      await this.hookProgress({ status: "error", filename, tmpfilename, downloaded_bytes: downloaded }, info);
+      await this.hookProgress(
+        {
+          status: "error",
+          filename,
+          tmpfilename,
+          downloaded_bytes: downloaded,
+        },
+        info,
+      );
       throw error;
     }
   }
@@ -224,7 +296,9 @@ export class FragmentFD extends FileDownloader {
   ): Promise<boolean> {
     const tmpfilename = this.tempName(filename);
     await mkdir(dirname(tmpfilename), { recursive: true });
-    const writer = Bun.file(tmpfilename).writer({ highWaterMark: Number(this.params.buffersize ?? 64 * 1024) });
+    const writer = Bun.file(tmpfilename).writer({
+      highWaterMark: Number(this.params.buffersize ?? 64 * 1024),
+    });
     const started = performance.now() / 1000;
     let downloaded = 0;
     let index = 0;
@@ -240,14 +314,18 @@ export class FragmentFD extends FileDownloader {
         downloaded += data.byteLength;
         await writeChunk(writer, data);
         const now = performance.now() / 1000;
-        await this.hookProgress({
-          status: "downloading",
-          filename,
-          tmpfilename,
-          downloaded_bytes: downloaded,
-          elapsed: now - started,
-          speed: FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
-        }, info);
+        await this.hookProgress(
+          {
+            status: "downloading",
+            filename,
+            tmpfilename,
+            downloaded_bytes: downloaded,
+            elapsed: now - started,
+            speed:
+              FileDownloader.calcSpeed(started, now, downloaded) ?? undefined,
+          },
+          info,
+        );
         if (this.params.test) {
           break;
         }
@@ -259,22 +337,36 @@ export class FragmentFD extends FileDownloader {
       }
       await endWriter(writer);
       await this.tryRename(tmpfilename, filename);
-      await this.hookProgress({
-        status: "finished",
-        filename,
-        downloaded_bytes: downloaded,
-        total_bytes: downloaded,
-        elapsed: performance.now() / 1000 - started,
-      }, info);
+      await this.hookProgress(
+        {
+          status: "finished",
+          filename,
+          downloaded_bytes: downloaded,
+          total_bytes: downloaded,
+          elapsed: performance.now() / 1000 - started,
+        },
+        info,
+      );
       return true;
     } catch (error) {
       await endWriter(writer);
-      await this.hookProgress({ status: "error", filename, tmpfilename, downloaded_bytes: downloaded }, info);
+      await this.hookProgress(
+        {
+          status: "error",
+          filename,
+          tmpfilename,
+          downloaded_bytes: downloaded,
+        },
+        info,
+      );
       throw error;
     }
   }
 
-  private async downloadFragmentItemsSequentially(items: readonly FragmentDownloadItem[], info: DownloadInfo): Promise<DownloadedFragment[]> {
+  private async downloadFragmentItemsSequentially(
+    items: readonly FragmentDownloadItem[],
+    info: DownloadInfo,
+  ): Promise<DownloadedFragment[]> {
     const out: DownloadedFragment[] = [];
     for (const item of items) {
       out.push(await this.downloadFragmentItem(item, info));
@@ -282,7 +374,11 @@ export class FragmentFD extends FileDownloader {
     return out;
   }
 
-  private async downloadFragmentItemsConcurrently(items: readonly FragmentDownloadItem[], info: DownloadInfo, maxWorkers: number): Promise<DownloadedFragment[]> {
+  private async downloadFragmentItemsConcurrently(
+    items: readonly FragmentDownloadItem[],
+    info: DownloadInfo,
+    maxWorkers: number,
+  ): Promise<DownloadedFragment[]> {
     const out = new Array<DownloadedFragment>(items.length);
     let cursor = 0;
     const worker = async (): Promise<void> => {
@@ -296,11 +392,18 @@ export class FragmentFD extends FileDownloader {
         out[position] = await this.downloadFragmentItem(item, info);
       }
     };
-    await Promise.all(Array.from({ length: Math.min(maxWorkers, items.length) }, () => worker()));
+    await Promise.all(
+      Array.from({ length: Math.min(maxWorkers, items.length) }, () =>
+        worker(),
+      ),
+    );
     return out;
   }
 
-  private async downloadFragmentItem(item: FragmentDownloadItem, info: DownloadInfo): Promise<DownloadedFragment> {
+  private async downloadFragmentItem(
+    item: FragmentDownloadItem,
+    info: DownloadInfo,
+  ): Promise<DownloadedFragment> {
     const url = item.fragment.url;
     if (!url) {
       throw new Error(`Fragment ${item.index} has no URL`);
@@ -308,10 +411,21 @@ export class FragmentFD extends FileDownloader {
     try {
       return {
         index: item.index,
-        data: await this.decryptFragment(item.fragment, await this.downloadFragmentWithRetries(url, info, item.fragment, item.index), info),
+        data: await this.decryptFragment(
+          item.fragment,
+          await this.downloadFragmentWithRetries(
+            url,
+            info,
+            item.fragment,
+            item.index,
+          ),
+          info,
+        ),
       };
     } catch (error) {
-      const fatal = item.isFatal?.(item.fragment.index ?? item.index - 1) ?? item.index <= 1;
+      const fatal =
+        item.isFatal?.(item.fragment.index ?? item.index - 1) ??
+        item.index <= 1;
       if (!fatal && this.params.skip_unavailable_fragments !== false) {
         this.reportSkipFragment(item.index, error);
         return { index: item.index, data: null };
@@ -320,17 +434,24 @@ export class FragmentFD extends FileDownloader {
     }
   }
 
-  private async downloadFragmentWithRetries(url: string, info: DownloadInfo, fragment: FragmentInfo, index: number): Promise<Uint8Array> {
+  private async downloadFragmentWithRetries(
+    url: string,
+    info: DownloadInfo,
+    fragment: FragmentInfo,
+    index: number,
+  ): Promise<Uint8Array> {
     const retries = Number(this.params.fragment_retries ?? 0);
     let attempt = 0;
     let lastError: unknown;
     while (attempt <= retries) {
       try {
-        const response = await this.ydl.urlopen(new Request(url, {
-          headers: fragment.http_headers ?? info.http_headers,
-          body: fragment.request_data ?? undefined,
-          method: fragment.request_data ? "POST" : "GET",
-        }));
+        const response = await this.ydl.urlopen(
+          new Request(url, {
+            headers: fragment.http_headers ?? info.http_headers,
+            body: fragment.request_data ?? undefined,
+            method: fragment.request_data ? "POST" : "GET",
+          }),
+        );
         if (!response.body) {
           throw new Error(`Fragment ${index} response has no body`);
         }
@@ -345,29 +466,45 @@ export class FragmentFD extends FileDownloader {
         if (attempt > retries) {
           break;
         }
-        this.toScreen(`[download] Got error: ${error instanceof Error ? error.message : String(error)}. Retrying fragment ${index} (${attempt}/${retries}) ...`);
+        this.toScreen(
+          `[download] Got error: ${error instanceof Error ? error.message : String(error)}. Retrying fragment ${index} (${attempt}/${retries}) ...`,
+        );
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   private shouldUseYtdlFile(filename: string, info: DownloadInfo): boolean {
-    return filename !== "-" && info.is_live !== true && this.params._no_ytdl_file !== true;
+    return (
+      filename !== "-" &&
+      info.is_live !== true &&
+      this.params._no_ytdl_file !== true
+    );
   }
 
   private ytdlFilename(filename: string): string {
     return `${filename}.ytdl`;
   }
 
-  private async readFragmentState(filename: string, totalFragments: number): Promise<{ fragmentIndex: number; corrupt: boolean }> {
-    if (this.params.continuedl === false || !await Bun.file(filename).exists()) {
+  private async readFragmentState(
+    filename: string,
+    totalFragments: number,
+  ): Promise<{ fragmentIndex: number; corrupt: boolean }> {
+    if (
+      this.params.continuedl === false ||
+      !(await Bun.file(filename).exists())
+    ) {
       return { fragmentIndex: 0, corrupt: false };
     }
     try {
-      const data = await Bun.file(filename).json() as FragmentStateFile;
+      const data = (await Bun.file(filename).json()) as FragmentStateFile;
       const index = data.downloader.current_fragment.index;
       const expectedTotal = data.downloader.fragment_count;
-      if (!Number.isSafeInteger(index) || index < 0 || (expectedTotal != null && expectedTotal !== totalFragments)) {
+      if (
+        !Number.isSafeInteger(index) ||
+        index < 0 ||
+        (expectedTotal != null && expectedTotal !== totalFragments)
+      ) {
         return { fragmentIndex: 0, corrupt: true };
       }
       return { fragmentIndex: Math.min(index, totalFragments), corrupt: false };
@@ -376,26 +513,38 @@ export class FragmentFD extends FileDownloader {
     }
   }
 
-  private async writeFragmentState(filename: string, fragmentIndex: number, fragmentCount: number): Promise<void> {
-    await Bun.write(filename, JSON.stringify({
-      downloader: {
-        current_fragment: { index: fragmentIndex },
-        fragment_count: fragmentCount,
-      },
-    }));
+  private async writeFragmentState(
+    filename: string,
+    fragmentIndex: number,
+    fragmentCount: number,
+  ): Promise<void> {
+    await Bun.write(
+      filename,
+      JSON.stringify({
+        downloader: {
+          current_fragment: { index: fragmentIndex },
+          fragment_count: fragmentCount,
+        },
+      }),
+    );
   }
 
   private async removeFile(filename: string): Promise<void> {
     await rm(filename, { force: true });
   }
 
-  private async fetchFragmentKey(decryptInfo: FragmentDecryptInfo, info: DownloadInfo): Promise<Uint8Array> {
+  private async fetchFragmentKey(
+    decryptInfo: FragmentDecryptInfo,
+    info: DownloadInfo,
+  ): Promise<Uint8Array> {
     const uri = decryptInfo.URI;
     if (!uri) {
       throw new Error("AES-128 fragment key is missing URI");
     }
     const url = new URL(uri, info.url).toString();
-    const key = new Uint8Array(await (await this.ydl.urlopen(this.prepareUrl(info, url))).arrayBuffer());
+    const key = new Uint8Array(
+      await (await this.ydl.urlopen(this.prepareUrl(info, url))).arrayBuffer(),
+    );
     decryptInfo.KEY = key;
     return key;
   }
@@ -438,7 +587,9 @@ interface DownloadedFragment {
 }
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<FragmentInfo> {
-  return Boolean(value && typeof value === "object" && Symbol.asyncIterator in value);
+  return Boolean(
+    value && typeof value === "object" && Symbol.asyncIterator in value,
+  );
 }
 
 function wrapFragments(
@@ -453,7 +604,8 @@ function wrapFragments(
     const fragmentIndex = fragment.frag_index ?? 0;
     return {
       ...fragment,
-      transformData: (data) => packFunc(previous ? previous(data) : data, fragmentIndex),
+      transformData: (data) =>
+        packFunc(previous ? previous(data) : data, fragmentIndex),
     };
   };
   if (isAsyncIterable(fragments)) {
@@ -466,7 +618,9 @@ function wrapFragments(
   return Array.from(fragments, wrap);
 }
 
-function encodeFinishData(value: Uint8Array | string | null | undefined): Uint8Array | null {
+function encodeFinishData(
+  value: Uint8Array | string | null | undefined,
+): Uint8Array | null {
   if (value == null) {
     return null;
   }
@@ -474,7 +628,9 @@ function encodeFinishData(value: Uint8Array | string | null | undefined): Uint8A
 }
 
 function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
-  const out = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
+  const out = new Uint8Array(
+    chunks.reduce((total, chunk) => total + chunk.byteLength, 0),
+  );
   let offset = 0;
   for (const chunk of chunks) {
     out.set(chunk, offset);
@@ -483,7 +639,9 @@ function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
-function parseFragmentIv(iv: string | Uint8Array | undefined): Uint8Array | null {
+function parseFragmentIv(
+  iv: string | Uint8Array | undefined,
+): Uint8Array | null {
   if (iv instanceof Uint8Array) {
     return iv;
   }
@@ -508,10 +666,14 @@ function sequenceIv(sequence: number): Uint8Array {
   return out;
 }
 
-type ChunkWriter = ReturnType<typeof Bun.file> extends { writer(): infer T } ? T : never;
+type ChunkWriter =
+  ReturnType<typeof Bun.file> extends { writer(): infer T } ? T : never;
 type NodeWriter = ReturnType<typeof createWriteStream>;
 
-async function writeChunk(writer: ChunkWriter | NodeWriter, chunk: Uint8Array): Promise<void> {
+async function writeChunk(
+  writer: ChunkWriter | NodeWriter,
+  chunk: Uint8Array,
+): Promise<void> {
   if ("once" in writer) {
     if (!writer.write(chunk)) {
       await new Promise<void>((resolve, reject) => {

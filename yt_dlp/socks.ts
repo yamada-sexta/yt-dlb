@@ -56,14 +56,25 @@ export class ProxyError extends Error {
   static readonly ERR_SUCCESS: number = 0x00;
   static readonly CODES = new Map<number, string>();
 
-  constructor(readonly code?: number, message?: string) {
-    super(message ?? (code === undefined ? "unknown error" : ProxyError.CODES.get(code) ?? "unknown error"));
+  constructor(
+    readonly code?: number,
+    message?: string,
+  ) {
+    super(
+      message ??
+        (code === undefined
+          ? "unknown error"
+          : (ProxyError.CODES.get(code) ?? "unknown error")),
+    );
   }
 }
 
 export class InvalidVersionError extends ProxyError {
   constructor(expectedVersion: number, gotVersion: number) {
-    super(0, `Invalid response version from server. Expected ${expectedVersion.toString(16).padStart(2, "0")} got ${gotVersion.toString(16).padStart(2, "0")}`);
+    super(
+      0,
+      `Invalid response version from server. Expected ${expectedVersion.toString(16).padStart(2, "0")} got ${gotVersion.toString(16).padStart(2, "0")}`,
+    );
   }
 }
 
@@ -71,12 +82,21 @@ export class Socks4Error extends ProxyError {
   static override readonly ERR_SUCCESS: number = 90;
   static override readonly CODES = new Map([
     [91, "request rejected or failed"],
-    [92, "request rejected because SOCKS server cannot connect to identd on the client"],
-    [93, "request rejected because the client program and identd report different user-ids"],
+    [
+      92,
+      "request rejected because SOCKS server cannot connect to identd on the client",
+    ],
+    [
+      93,
+      "request rejected because the client program and identd report different user-ids",
+    ],
   ]);
 
   constructor(code?: number, message?: string) {
-    super(code, message ?? (code === undefined ? undefined : Socks4Error.CODES.get(code)));
+    super(
+      code,
+      message ?? (code === undefined ? undefined : Socks4Error.CODES.get(code)),
+    );
   }
 }
 
@@ -96,7 +116,10 @@ export class Socks5Error extends ProxyError {
   ]);
 
   constructor(code?: number, message?: string) {
-    super(code, message ?? (code === undefined ? undefined : Socks5Error.CODES.get(code)));
+    super(
+      code,
+      message ?? (code === undefined ? undefined : Socks5Error.CODES.get(code)),
+    );
   }
 }
 
@@ -119,11 +142,29 @@ export class SocksSocket {
     this.socket.on("error", () => this.#flushWaiters());
   }
 
-  setProxy(proxyType: ProxyType, host: string, port: number, remoteDns = true, username?: string, password?: string): void {
-    if (![ProxyType.SOCKS4, ProxyType.SOCKS4A, ProxyType.SOCKS5].includes(proxyType)) {
+  setProxy(
+    proxyType: ProxyType,
+    host: string,
+    port: number,
+    remoteDns = true,
+    username?: string,
+    password?: string,
+  ): void {
+    if (
+      ![ProxyType.SOCKS4, ProxyType.SOCKS4A, ProxyType.SOCKS5].includes(
+        proxyType,
+      )
+    ) {
       throw new Error(`Invalid proxy type: ${proxyType}`);
     }
-    this.#proxy = { type: proxyType, host, port, username, password, remoteDns };
+    this.#proxy = {
+      type: proxyType,
+      host,
+      port,
+      username,
+      password,
+      remoteDns,
+    };
   }
 
   async connect(address: Address): Promise<void> {
@@ -193,10 +234,23 @@ export class SocksSocket {
     });
   }
 
-  private async setupSocks4([destHost, port]: Address, is4a: boolean): Promise<[number, number]> {
-    const ipaddr = await this.resolveAddress(destHost, SOCKS4_DEFAULT_DSTIP, is4a, 4);
+  private async setupSocks4(
+    [destHost, port]: Address,
+    is4a: boolean,
+  ): Promise<[number, number]> {
+    const ipaddr = await this.resolveAddress(
+      destHost,
+      SOCKS4_DEFAULT_DSTIP,
+      is4a,
+      4,
+    );
     const packetParts = [
-      Buffer.from([SOCKS4_VERSION, Socks4Command.CMD_CONNECT, (port >> 8) & 0xff, port & 0xff]),
+      Buffer.from([
+        SOCKS4_VERSION,
+        Socks4Command.CMD_CONNECT,
+        (port >> 8) & 0xff,
+        port & 0xff,
+      ]),
       ipaddr,
       Buffer.from(this.#proxy?.username ?? "", "utf8"),
       Buffer.from([0]),
@@ -224,14 +278,20 @@ export class SocksSocket {
     if (this.#proxy?.username && this.#proxy.password) {
       authMethods.push(Socks5Auth.AUTH_USER_PASS);
     }
-    this.socket.write(Buffer.from([SOCKS5_VERSION, authMethods.length, ...authMethods]));
+    this.socket.write(
+      Buffer.from([SOCKS5_VERSION, authMethods.length, ...authMethods]),
+    );
 
     const response = await this.recvAll(2);
     const version = response[0] ?? 0;
     const method = response[1] ?? Socks5Auth.AUTH_NO_ACCEPTABLE;
     this.checkResponseVersion(SOCKS5_VERSION, version);
 
-    if (method === Socks5Auth.AUTH_NO_ACCEPTABLE || (method === Socks5Auth.AUTH_USER_PASS && (!this.#proxy?.username || !this.#proxy.password))) {
+    if (
+      method === Socks5Auth.AUTH_NO_ACCEPTABLE ||
+      (method === Socks5Auth.AUTH_USER_PASS &&
+        (!this.#proxy?.username || !this.#proxy.password))
+    ) {
       this.socket.destroy();
       throw new Socks5Error(Socks5Auth.AUTH_NO_ACCEPTABLE);
     }
@@ -239,11 +299,13 @@ export class SocksSocket {
     if (method === Socks5Auth.AUTH_USER_PASS) {
       const username = Buffer.from(this.#proxy?.username ?? "", "utf8");
       const password = Buffer.from(this.#proxy?.password ?? "", "utf8");
-      this.socket.write(Buffer.concat([
-        Buffer.from([SOCKS5_USER_AUTH_VERSION]),
-        lenAndData(username),
-        lenAndData(password),
-      ]));
+      this.socket.write(
+        Buffer.concat([
+          Buffer.from([SOCKS5_USER_AUTH_VERSION]),
+          lenAndData(username),
+          lenAndData(password),
+        ]),
+      );
       const authResponse = await this.recvAll(2);
       this.checkResponseVersion(SOCKS5_USER_AUTH_VERSION, authResponse[0] ?? 0);
       if ((authResponse[1] ?? 0xff) !== SOCKS5_USER_AUTH_SUCCESS) {
@@ -253,13 +315,20 @@ export class SocksSocket {
     }
   }
 
-  private async setupSocks5([destHost, port]: Address): Promise<[Buffer, number]> {
+  private async setupSocks5([destHost, port]: Address): Promise<
+    [Buffer, number]
+  > {
     const { family, ipaddr } = await this.resolveSocks5Address(destHost);
     await this.socks5Auth();
 
-    const packetParts: Buffer[] = [Buffer.from([SOCKS5_VERSION, Socks5Command.CMD_CONNECT, 0])];
+    const packetParts: Buffer[] = [
+      Buffer.from([SOCKS5_VERSION, Socks5Command.CMD_CONNECT, 0]),
+    ];
     if (!ipaddr) {
-      packetParts.push(Buffer.from([Socks5AddressType.ATYP_DOMAINNAME]), lenAndData(Buffer.from(destHost, "utf8")));
+      packetParts.push(
+        Buffer.from([Socks5AddressType.ATYP_DOMAINNAME]),
+        lenAndData(Buffer.from(destHost, "utf8")),
+      );
     } else if (family === 4) {
       packetParts.push(Buffer.from([Socks5AddressType.ATYP_IPV4]), ipaddr);
     } else {
@@ -287,13 +356,21 @@ export class SocksSocket {
     } else if (addressType === Socks5AddressType.ATYP_IPV6) {
       boundAddress = await this.recvAll(16);
     } else {
-      throw new Socks5Error(Socks5Error.ERR_GENERAL_FAILURE, `unknown address type ${addressType}`);
+      throw new Socks5Error(
+        Socks5Error.ERR_GENERAL_FAILURE,
+        `unknown address type ${addressType}`,
+      );
     }
     const boundPort = (await this.recvAll(2)).readUInt16BE(0);
     return [boundAddress, boundPort];
   }
 
-  private async resolveAddress(destHost: string, remoteDefault: Buffer, useRemoteDns: boolean, family: 4 | 6): Promise<Buffer> {
+  private async resolveAddress(
+    destHost: string,
+    remoteDefault: Buffer,
+    useRemoteDns: boolean,
+    family: 4 | 6,
+  ): Promise<Buffer> {
     const literal = ipToBuffer(destHost, family);
     if (literal) {
       return literal;
@@ -309,10 +386,15 @@ export class SocksSocket {
     return resolved;
   }
 
-  private async resolveSocks5Address(destHost: string): Promise<{ family: 4 | 6 | 0; ipaddr: Buffer | null }> {
+  private async resolveSocks5Address(
+    destHost: string,
+  ): Promise<{ family: 4 | 6 | 0; ipaddr: Buffer | null }> {
     const literalFamily = isIP(destHost);
     if (literalFamily === 4 || literalFamily === 6) {
-      return { family: literalFamily, ipaddr: ipToBuffer(destHost, literalFamily) };
+      return {
+        family: literalFamily,
+        ipaddr: ipToBuffer(destHost, literalFamily),
+      };
     }
     if (this.#proxy?.remoteDns) {
       return { family: 0, ipaddr: null };
@@ -322,7 +404,10 @@ export class SocksSocket {
     return { family, ipaddr: ipToBuffer(result.address, family) };
   }
 
-  private checkResponseVersion(expectedVersion: number, gotVersion: number): void {
+  private checkResponseVersion(
+    expectedVersion: number,
+    gotVersion: number,
+  ): void {
     if (gotVersion !== expectedVersion) {
       this.socket.destroy();
       throw new InvalidVersionError(expectedVersion, gotVersion);
@@ -350,11 +435,15 @@ function lenAndData(data: Buffer): Buffer {
 
 function ipToBuffer(address: string, family: 4 | 6): Buffer | null {
   if (family === 4 && isIP(address) === 4) {
-    return Buffer.from(address.split(".").map((part) => Number.parseInt(part, 10)));
+    return Buffer.from(
+      address.split(".").map((part) => Number.parseInt(part, 10)),
+    );
   }
   if (family === 6 && isIP(address) === 6) {
     const sections = expandIpv6(address);
-    return Buffer.from(sections.flatMap((section) => [(section >> 8) & 0xff, section & 0xff]));
+    return Buffer.from(
+      sections.flatMap((section) => [(section >> 8) & 0xff, section & 0xff]),
+    );
   }
   return null;
 }

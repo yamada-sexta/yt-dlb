@@ -17,8 +17,10 @@ describe("Bun CLI execution", () => {
     expect(await runQuietly(["ä", "--version"])).toBe(0);
   });
 
-  test.todo("TestExecution.test_module_exec once package module execution is defined for Bun", () => undefined);
-  test.todo("TestExecution.test_lazy_extractors once lazy extractor generation has a TypeScript equivalent", () => undefined);
+  test.todo("TestExecution.test_module_exec once package module execution is defined for Bun", () =>
+    undefined);
+  test.todo("TestExecution.test_lazy_extractors once lazy extractor generation has a TypeScript equivalent", () =>
+    undefined);
 });
 
 async function runQuietly(argv: readonly string[]): Promise<number> {

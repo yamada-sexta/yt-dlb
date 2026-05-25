@@ -3,7 +3,8 @@
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 export class AdobeConnectIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://\w+\.adobeconnect\.com/(?<id>[\w-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://\w+\.adobeconnect\.com/(?<id>[\w-]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -12,7 +13,11 @@ export class AdobeConnectIE extends InfoExtractor {
       throw new Error("Unable to download Adobe Connect page");
     }
     const title = this.htmlExtractTitle(webpage) ?? videoId;
-    const swfUrl = this.searchRegex(/swfUrl\s*=\s*'([^']+)'/, webpage, "swf url");
+    const swfUrl = this.searchRegex(
+      /swfUrl\s*=\s*'([^']+)'/,
+      webpage,
+      "swf url",
+    );
     if (typeof swfUrl !== "string") {
       throw new Error("Unable to extract Adobe Connect swf URL");
     }
@@ -26,7 +31,9 @@ export class AdobeConnectIE extends InfoExtractor {
       const connectionQuery = connection.split("?", 2)[1] ?? "";
       return {
         format_id: connection.split("://", 1)[0],
-        app: encodeURIComponent(`?${connectionQuery}flvplayerapp/${appInstance}`),
+        app: encodeURIComponent(
+          `?${connectionQuery}flvplayerapp/${appInstance}`,
+        ),
         ext: "flv",
         play_path: `mp4:${streamName}`,
         rtmp_conn: `S:${ticket}`,

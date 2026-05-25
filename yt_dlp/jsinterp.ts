@@ -27,8 +27,15 @@ export class JSThrow extends Error {
 }
 
 export class JSInterpreterError extends Error {
-  constructor(message: string, readonly expr?: string) {
-    super(expr ? `${message.trimEnd()} in: ${truncateString(expr, 50, 50)}` : message);
+  constructor(
+    message: string,
+    readonly expr?: string,
+  ) {
+    super(
+      expr
+        ? `${message.trimEnd()} in: ${truncateString(expr, 50, 50)}`
+        : message,
+    );
   }
 }
 
@@ -48,7 +55,9 @@ export function jsNumberToString(value: number, radix = 10): string {
     return value < 0 ? "-Infinity" : "Infinity";
   }
   if (radix < 2 || radix > 36) {
-    throw new Error("radix must be an integer at least 2 and no greater than 36");
+    throw new Error(
+      "radix must be an integer at least 2 and no greater than 36",
+    );
   }
   return value.toString(radix);
 }
@@ -97,12 +106,18 @@ export class Debugger {
 
   static write(...args: unknown[]): void {
     if (Debugger.ENABLED) {
-      process.stderr.write(`[debug] JS: ${args.map((arg) => truncateString(String(arg), 50, 50)).join(" ")}\n`);
+      process.stderr.write(
+        `[debug] JS: ${args.map((arg) => truncateString(String(arg), 50, 50)).join(" ")}\n`,
+      );
     }
   }
 }
 
-type JsCallable = (args: readonly unknown[], kwargs?: Record<string, unknown>, allowRecursion?: number) => unknown;
+type JsCallable = (
+  args: readonly unknown[],
+  kwargs?: Record<string, unknown>,
+  allowRecursion?: number,
+) => unknown;
 
 export class JSInterpreter {
   static #namedObjectCounter = 0;
@@ -110,16 +125,28 @@ export class JSInterpreter {
   readonly #functions = new Map<string, JsCallable>();
   readonly #objects: Record<string, unknown>;
 
-  constructor(readonly code: string, objects: Record<string, unknown> = {}) {
+  constructor(
+    readonly code: string,
+    objects: Record<string, unknown> = {},
+  ) {
     this.#objects = objects;
   }
 
-  interpretExpression(expression: string, localVars: LocalNameSpace | Record<string, unknown> = {}, _allowRecursion = 100): unknown {
-    const scope = localVars instanceof LocalNameSpace ? localVars.toObject() : localVars;
+  interpretExpression(
+    expression: string,
+    localVars: LocalNameSpace | Record<string, unknown> = {},
+    _allowRecursion = 100,
+  ): unknown {
+    const scope =
+      localVars instanceof LocalNameSpace ? localVars.toObject() : localVars;
     return evaluateInScope(expression, scope, this.#objects);
   }
 
-  interpretStatement(statement: string, localVars: LocalNameSpace | Record<string, unknown> = {}, allowRecursion = 100): [unknown, boolean] {
+  interpretStatement(
+    statement: string,
+    localVars: LocalNameSpace | Record<string, unknown> = {},
+    allowRecursion = 100,
+  ): [unknown, boolean] {
     const trimmed = statement.trim();
     if (!trimmed) {
       return [undefined, false];
@@ -131,20 +158,37 @@ export class JSInterpreter {
       throw new JSContinue();
     }
     if (trimmed.startsWith("throw ")) {
-      throw new JSThrow(this.interpretExpression(trimmed.slice(6), localVars, allowRecursion));
+      throw new JSThrow(
+        this.interpretExpression(trimmed.slice(6), localVars, allowRecursion),
+      );
     }
     if (trimmed.startsWith("return")) {
-      return [this.interpretExpression(trimmed.slice(6), localVars, allowRecursion), true];
+      return [
+        this.interpretExpression(trimmed.slice(6), localVars, allowRecursion),
+        true,
+      ];
     }
-    return [this.interpretExpression(trimmed, localVars, allowRecursion), false];
+    return [
+      this.interpretExpression(trimmed, localVars, allowRecursion),
+      false,
+    ];
   }
 
   extractFunctionCode(functionName: string): [string[], string] {
     const escaped = RegExp.escape(functionName);
     const patterns = [
-      new RegExp(`function\\s+${escaped}\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`, "s"),
-      new RegExp(`[{;,]\\s*${escaped}\\s*=\\s*function\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`, "s"),
-      new RegExp(`(?:var|const|let)\\s+${escaped}\\s*=\\s*function\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`, "s"),
+      new RegExp(
+        `function\\s+${escaped}\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`,
+        "s",
+      ),
+      new RegExp(
+        `[{;,]\\s*${escaped}\\s*=\\s*function\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`,
+        "s",
+      ),
+      new RegExp(
+        `(?:var|const|let)\\s+${escaped}\\s*=\\s*function\\s*\\((?<args>[^)]*)\\)\\s*(?<body>\\{)`,
+        "s",
+      ),
     ];
     for (const pattern of patterns) {
       const match = pattern.exec(this.code);
@@ -153,23 +197,38 @@ export class JSInterpreter {
       }
       const bodyStart = match.index + match[0].length - 1;
       const [body] = separateAtParen(this.code.slice(bodyStart));
-      const args = (match.groups.args ?? "").split(",").map((arg) => arg.trim()).filter(Boolean);
+      const args = (match.groups.args ?? "")
+        .split(",")
+        .map((arg) => arg.trim())
+        .filter(Boolean);
       return [args, body];
     }
-    throw new JSInterpreterError(`Could not find JS function "${functionName}"`);
+    throw new JSInterpreterError(
+      `Could not find JS function "${functionName}"`,
+    );
   }
 
-  extractFunction(functionName: string, ...globalStack: Array<Record<string, unknown>>): JsCallable {
+  extractFunction(
+    functionName: string,
+    ...globalStack: Array<Record<string, unknown>>
+  ): JsCallable {
     const existing = this.#functions.get(functionName);
     if (existing) {
       return existing;
     }
-    const fn = this.extractFunctionFromCode(...this.extractFunctionCode(functionName), ...globalStack);
+    const fn = this.extractFunctionFromCode(
+      ...this.extractFunctionCode(functionName),
+      ...globalStack,
+    );
     this.#functions.set(functionName, fn);
     return fn;
   }
 
-  extractFunctionFromCode(argNames: readonly string[], code: string, ...globalStack: Array<Record<string, unknown>>): JsCallable {
+  extractFunctionFromCode(
+    argNames: readonly string[],
+    code: string,
+    ...globalStack: Array<Record<string, unknown>>
+  ): JsCallable {
     return this.buildFunction(argNames, code, ...globalStack);
   }
 
@@ -177,7 +236,11 @@ export class JSInterpreter {
     return this.extractFunction(functionName)(args);
   }
 
-  buildFunction(argNames: readonly string[], code: string, ...globalStack: Array<Record<string, unknown>>): JsCallable {
+  buildFunction(
+    argNames: readonly string[],
+    code: string,
+    ...globalStack: Array<Record<string, unknown>>
+  ): JsCallable {
     const globals = Object.assign({}, ...globalStack, this.#objects);
     const compiled = new Function(
       ...Object.keys(globals),
@@ -190,23 +253,34 @@ export class JSInterpreter {
     };
   }
 
-  extractObject(objectName: string, ...globalStack: Array<Record<string, unknown>>): Record<string, JsCallable> {
+  extractObject(
+    objectName: string,
+    ...globalStack: Array<Record<string, unknown>>
+  ): Record<string, JsCallable> {
     const escaped = RegExp.escape(objectName);
-    const objectMatch = new RegExp(`(?<![a-zA-Z$0-9.])${escaped}\\s*=\\s*\\{\\s*(?<fields>[\\s\\S]*?)\\}\\s*;`).exec(this.code);
+    const objectMatch = new RegExp(
+      `(?<![a-zA-Z$0-9.])${escaped}\\s*=\\s*\\{\\s*(?<fields>[\\s\\S]*?)\\}\\s*;`,
+    ).exec(this.code);
     if (!objectMatch?.groups?.fields) {
       throw new JSInterpreterError(`Could not find object ${objectName}`);
     }
 
     const object: Record<string, JsCallable> = {};
-    const fieldPattern = /(?<key>[a-zA-Z$0-9]+|"[a-zA-Z$0-9]+"|'[a-zA-Z$0-9]+')\s*:\s*function\s*\((?<args>[^)]*)\)\s*(?<body>\{)/g;
+    const fieldPattern =
+      /(?<key>[a-zA-Z$0-9]+|"[a-zA-Z$0-9]+"|'[a-zA-Z$0-9]+')\s*:\s*function\s*\((?<args>[^)]*)\)\s*(?<body>\{)/g;
     for (const match of objectMatch.groups.fields.matchAll(fieldPattern)) {
       if (!match.groups) {
         continue;
       }
       const bodyStart = (match.index ?? 0) + match[0].length - 1;
-      const [body] = separateAtParen(objectMatch.groups.fields.slice(bodyStart));
+      const [body] = separateAtParen(
+        objectMatch.groups.fields.slice(bodyStart),
+      );
       const name = removeQuotes(match.groups.key ?? "");
-      const args = (match.groups.args ?? "").split(",").map((arg) => arg.trim()).filter(Boolean);
+      const args = (match.groups.args ?? "")
+        .split(",")
+        .map((arg) => arg.trim())
+        .filter(Boolean);
       object[name] = this.buildFunction(args, body, ...globalStack);
     }
     return object;
@@ -222,13 +296,23 @@ export class JSInterpreter {
 
 export const Exception = JSInterpreterError;
 
-function evaluateInScope(expression: string, scope: Record<string, unknown>, objects: Record<string, unknown>): unknown {
+function evaluateInScope(
+  expression: string,
+  scope: Record<string, unknown>,
+  objects: Record<string, unknown>,
+): unknown {
   const globals = { ...objects, ...scope };
-  const compiled = new Function(...Object.keys(globals), `"use strict"; return (${expression});`);
+  const compiled = new Function(
+    ...Object.keys(globals),
+    `"use strict"; return (${expression});`,
+  );
   return compiled(...Object.values(globals));
 }
 
-function separateAtParen(expression: string, delimiter?: string): [string, string] {
+function separateAtParen(
+  expression: string,
+  delimiter?: string,
+): [string, string] {
   const open = expression[0];
   const close = delimiter ?? matchingParen(open);
   let depth = 0;
@@ -247,7 +331,7 @@ function separateAtParen(expression: string, delimiter?: string): [string, strin
       }
       continue;
     }
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char;
       continue;
     }
@@ -256,7 +340,10 @@ function separateAtParen(expression: string, delimiter?: string): [string, strin
     } else if (char === close) {
       depth -= 1;
       if (depth === 0) {
-        return [expression.slice(1, index).trim(), expression.slice(index + 1).trim()];
+        return [
+          expression.slice(1, index).trim(),
+          expression.slice(index + 1).trim(),
+        ];
       }
     }
   }
@@ -277,7 +364,10 @@ function matchingParen(open: string | undefined): string {
 }
 
 function removeQuotes(value: string): string {
-  if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
     return value.slice(1, -1);
   }
   return value;

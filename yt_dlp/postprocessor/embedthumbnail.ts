@@ -6,30 +6,56 @@ import { extname } from "node:path";
 import { z } from "zod";
 
 import { what as detectImageType } from "../compat/imghdr.ts";
-import { rewriteMetadataTags, type AttachedImage } from "../dependencies/mediabunny.ts";
+import {
+  rewriteMetadataTags,
+  type AttachedImage,
+} from "../dependencies/mediabunny.ts";
 import { PostProcessingError } from "../utils/utils.ts";
 import { FFmpegPostProcessor, FFmpegThumbnailsConvertorPP } from "./ffmpeg.ts";
 import type { PostProcessorInfo } from "./common.ts";
 
 const RecordSchema = z.record(z.string(), z.unknown());
-const MEDIABUNNY_THUMBNAIL_EXTS = new Set(["mp3", "m4a", "mp4", "m4v", "mov", "mkv", "mka", "webm", "weba", "flac", "ogg", "opus"]);
+const MEDIABUNNY_THUMBNAIL_EXTS = new Set([
+  "mp3",
+  "m4a",
+  "mp4",
+  "m4v",
+  "mov",
+  "mkv",
+  "mka",
+  "webm",
+  "weba",
+  "flac",
+  "ogg",
+  "opus",
+]);
 
 export class EmbedThumbnailPPError extends PostProcessingError {}
 
 export class EmbedThumbnailPP extends FFmpegPostProcessor {
   private readonly alreadyHaveThumbnail: boolean;
 
-  constructor(downloader: ConstructorParameters<typeof FFmpegPostProcessor>[0] = null, already_have_thumbnail = false) {
+  constructor(
+    downloader: ConstructorParameters<typeof FFmpegPostProcessor>[0] = null,
+    already_have_thumbnail = false,
+  ) {
     super(downloader);
     this.alreadyHaveThumbnail = already_have_thumbnail;
   }
 
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
-    const filename = requireString(info.filepath, "EmbedThumbnailPP requires info.filepath");
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
+    const filename = requireString(
+      info.filepath,
+      "EmbedThumbnailPP requires info.filepath",
+    );
     const ext = requireString(info.ext, "EmbedThumbnailPP requires info.ext");
     const tempFilename = `${filename.slice(0, -extname(filename).length)}.temp${extname(filename)}`;
 
-    const thumbnails = Array.isArray(info.thumbnails) ? info.thumbnails.filter(isRecord) : [];
+    const thumbnails = Array.isArray(info.thumbnails)
+      ? info.thumbnails.filter(isRecord)
+      : [];
     if (!thumbnails.length) {
       this.toScreen("There aren't any thumbnails to embed");
       return [[], info];
@@ -39,58 +65,99 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
       this.toScreen("There are no thumbnails on disk");
       return [[], info];
     }
-    let thumbnailFilename = requireString(thumbnails[thumbnailIndex]?.filepath, "thumbnail filepath is missing");
-    if (!await pathExists(thumbnailFilename)) {
-      this.reportWarning("Skipping embedding the thumbnail because the file is missing.");
+    let thumbnailFilename = requireString(
+      thumbnails[thumbnailIndex]?.filepath,
+      "thumbnail filepath is missing",
+    );
+    if (!(await pathExists(thumbnailFilename))) {
+      this.reportWarning(
+        "Skipping embedding the thumbnail because the file is missing.",
+      );
       return [[], info];
     }
 
     const converter = new FFmpegThumbnailsConvertorPP(this.downloader);
     await converter.fixupWebp(info, thumbnailIndex);
-    thumbnailFilename = requireString(thumbnails[thumbnailIndex]?.filepath, "thumbnail filepath is missing");
+    thumbnailFilename = requireString(
+      thumbnails[thumbnailIndex]?.filepath,
+      "thumbnail filepath is missing",
+    );
     const originalThumbnail = thumbnailFilename;
 
     let thumbnailExt = extname(thumbnailFilename).slice(1).toLowerCase();
-    if (!["mkv", "mka"].includes(ext) && !["jpg", "jpeg", "png"].includes(thumbnailExt)) {
+    if (
+      !["mkv", "mka"].includes(ext) &&
+      !["jpg", "jpeg", "png"].includes(thumbnailExt)
+    ) {
       // Logic note: Python prefers PNG for unsupported thumbnails; this keeps that behavior through ffmpeg.
-      thumbnailFilename = await converter.convertThumbnail(thumbnailFilename, "png");
+      thumbnailFilename = await converter.convertThumbnail(
+        thumbnailFilename,
+        "png",
+      );
       thumbnailExt = "png";
     }
 
     const mtime = (await stat(filename)).mtimeMs / 1000;
-    const embeddedWithMediabunny = await this.tryEmbedThumbnailWithMediabunny(filename, tempFilename, ext, thumbnailFilename);
+    const embeddedWithMediabunny = await this.tryEmbedThumbnailWithMediabunny(
+      filename,
+      tempFilename,
+      ext,
+      thumbnailFilename,
+    );
     if (embeddedWithMediabunny) {
       // Logic change: Mediabunny is the Bun-native metadata writer and mirrors the role Python mutagen filled.
     } else if (ext === "mp3") {
       this.reportRun("ffmpeg", filename);
-      await this.runFfmpegMultipleFiles([filename, thumbnailFilename], tempFilename, [
-        "-c", "copy",
-        "-map", "0:0",
-        "-map", "1:0",
-        "-write_id3v1", "1",
-        "-id3v2_version", "3",
-        "-metadata:s:v", "title=Album cover",
-        "-metadata:s:v", "comment=Cover (front)",
-      ]);
+      await this.runFfmpegMultipleFiles(
+        [filename, thumbnailFilename],
+        tempFilename,
+        [
+          "-c",
+          "copy",
+          "-map",
+          "0:0",
+          "-map",
+          "1:0",
+          "-write_id3v1",
+          "1",
+          "-id3v2_version",
+          "3",
+          "-metadata:s:v",
+          "title=Album cover",
+          "-metadata:s:v",
+          "comment=Cover (front)",
+        ],
+      );
     } else if (["mkv", "mka"].includes(ext)) {
       const options = [...FFmpegPostProcessor.streamCopyOpts()];
       const mimetype = `image/${thumbnailExt.replace("jpg", "jpeg")}`;
-      const [oldStream, newStreamInitial] = await this.getStreamNumber(filename, ["tags", "mimetype"], mimetype);
+      const [oldStream, newStreamInitial] = await this.getStreamNumber(
+        filename,
+        ["tags", "mimetype"],
+        mimetype,
+      );
       let newStream = newStreamInitial;
       if (oldStream !== null) {
         options.push("-map", `-0:${oldStream}`);
         newStream -= 1;
       }
       options.push(
-        "-attach", FFmpegPostProcessor.ffmpegFilenameArgument(thumbnailFilename),
-        `-metadata:s:${newStream}`, `mimetype=${mimetype}`,
-        `-metadata:s:${newStream}`, `filename=cover.${thumbnailExt}`,
+        "-attach",
+        FFmpegPostProcessor.ffmpegFilenameArgument(thumbnailFilename),
+        `-metadata:s:${newStream}`,
+        `mimetype=${mimetype}`,
+        `-metadata:s:${newStream}`,
+        `filename=cover.${thumbnailExt}`,
       );
       this.reportRun("ffmpeg", filename);
       await this.runFfmpeg(filename, tempFilename, options);
     } else if (["m4a", "mp4", "m4v", "mov"].includes(ext)) {
       const options = [...FFmpegPostProcessor.streamCopyOpts(), "-map", "1"];
-      const [oldStream, newStreamInitial] = await this.getStreamNumber(filename, ["disposition", "attached_pic"], "1");
+      const [oldStream, newStreamInitial] = await this.getStreamNumber(
+        filename,
+        ["disposition", "attached_pic"],
+        "1",
+      );
       let newStream = newStreamInitial;
       if (oldStream !== null) {
         options.push("-map", `-0:${oldStream}`);
@@ -98,16 +165,29 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
       }
       options.push(`-disposition:${newStream}`, "attached_pic");
       this.reportRun("ffmpeg", filename);
-      await this.runFfmpegMultipleFiles([filename, thumbnailFilename], tempFilename, options);
+      await this.runFfmpegMultipleFiles(
+        [filename, thumbnailFilename],
+        tempFilename,
+        options,
+      );
     } else if (ext === "flac") {
       this.reportRun("ffmpeg", filename);
-      await this.runFfmpegMultipleFiles([filename, thumbnailFilename], tempFilename, [
-        ...FFmpegPostProcessor.streamCopyOpts(),
-        "-map", "1",
-        "-disposition:v", "attached_pic",
-      ]);
+      await this.runFfmpegMultipleFiles(
+        [filename, thumbnailFilename],
+        tempFilename,
+        [
+          ...FFmpegPostProcessor.streamCopyOpts(),
+          "-map",
+          "1",
+          "-disposition:v",
+          "attached_pic",
+        ],
+      );
     } else if (["ogg", "opus"].includes(ext)) {
-      const picture = await metadataBlockPicture(thumbnailFilename, thumbnails[thumbnailIndex] ?? {});
+      const picture = await metadataBlockPicture(
+        thumbnailFilename,
+        thumbnails[thumbnailIndex] ?? {},
+      );
       this.reportRun("ffmpeg", filename);
       await this.runFfmpeg(filename, tempFilename, [
         ...FFmpegPostProcessor.streamCopyOpts(),
@@ -115,7 +195,9 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
         `METADATA_BLOCK_PICTURE=${picture}`,
       ]);
     } else {
-      throw new EmbedThumbnailPPError("Supported filetypes for thumbnail embedding are: mp3, mkv/mka, flac, ogg/opus, m4a/mp4/m4v/mov");
+      throw new EmbedThumbnailPPError(
+        "Supported filetypes for thumbnail embedding are: mp3, mkv/mka, flac, ogg/opus, m4a/mp4/m4v/mov",
+      );
     }
 
     if (tempFilename !== filename) {
@@ -134,7 +216,12 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
     this.toScreen(`${exe}: Adding thumbnail to "${filename}"`);
   }
 
-  private async tryEmbedThumbnailWithMediabunny(filename: string, tempFilename: string, ext: string, thumbnailFilename: string): Promise<boolean> {
+  private async tryEmbedThumbnailWithMediabunny(
+    filename: string,
+    tempFilename: string,
+    ext: string,
+    thumbnailFilename: string,
+  ): Promise<boolean> {
     if (!MEDIABUNNY_THUMBNAIL_EXTS.has(ext)) {
       return false;
     }
@@ -145,19 +232,25 @@ export class EmbedThumbnailPP extends FFmpegPostProcessor {
         ...tags,
         images: [
           image,
-          ...(tags.images ?? []).filter((existing) => existing.kind !== "coverFront"),
+          ...(tags.images ?? []).filter(
+            (existing) => existing.kind !== "coverFront",
+          ),
         ],
       }));
       return true;
     } catch (error) {
       await unlink(tempFilename).catch(() => undefined);
-      this.reportWarning(`unable to embed using mediabunny; ${error instanceof Error ? error.message : String(error)}. Falling back to ffmpeg`);
+      this.reportWarning(
+        `unable to embed using mediabunny; ${error instanceof Error ? error.message : String(error)}. Falling back to ffmpeg`,
+      );
       return false;
     }
   }
 }
 
-function findLastThumbnailIndex(thumbnails: Array<Record<string, unknown>>): number {
+function findLastThumbnailIndex(
+  thumbnails: Array<Record<string, unknown>>,
+): number {
   for (let index = thumbnails.length - 1; index >= 0; index -= 1) {
     if (typeof thumbnails[index]?.filepath === "string") {
       return index;
@@ -173,7 +266,10 @@ function requireString(value: unknown, message: string): string {
   return value;
 }
 
-async function metadataBlockPicture(thumbnailFilename: string, thumbnail: Record<string, unknown>): Promise<string> {
+async function metadataBlockPicture(
+  thumbnailFilename: string,
+  thumbnail: Record<string, unknown>,
+): Promise<string> {
   const data = await Bun.file(thumbnailFilename).bytes();
   const imageType = await detectImageType(null, data.subarray(0, 12));
   const mimeType = `image/${(imageType ?? extname(thumbnailFilename).slice(1).toLowerCase()).replace("jpg", "jpeg")}`;
@@ -204,7 +300,9 @@ async function metadataBlockPicture(thumbnailFilename: string, thumbnail: Record
   return Buffer.from(out).toString("base64");
 }
 
-async function attachedThumbnailImage(thumbnailFilename: string): Promise<AttachedImage> {
+async function attachedThumbnailImage(
+  thumbnailFilename: string,
+): Promise<AttachedImage> {
   const data = await Bun.file(thumbnailFilename).bytes();
   const imageType = await detectImageType(null, data.subarray(0, 12));
   const mimeType = `image/${(imageType ?? extname(thumbnailFilename).slice(1).toLowerCase()).replace("jpg", "jpeg")}`;

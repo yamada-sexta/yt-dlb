@@ -6,7 +6,9 @@ import { PostProcessor, type PostProcessorInfo } from "./common.ts";
 import { z } from "zod";
 
 type MetadataActionKind = "interpret" | "replace";
-type MetadataActionSpec = readonly [MetadataActionKind, string, string] | readonly [MetadataActionKind, string, string, string];
+type MetadataActionSpec =
+  | readonly [MetadataActionKind, string, string]
+  | readonly [MetadataActionKind, string, string, string];
 type MetadataAction = (info: PostProcessorInfo) => void;
 
 const RecordSchema = z.record(z.string(), z.unknown());
@@ -19,12 +21,18 @@ export class MetadataParserPP extends PostProcessor {
 
   private readonly actions: MetadataAction[];
 
-  constructor(downloader: ConstructorParameters<typeof PostProcessor>[0] = null, actions: readonly MetadataActionSpec[] = []) {
+  constructor(
+    downloader: ConstructorParameters<typeof PostProcessor>[0] = null,
+    actions: readonly MetadataActionSpec[] = [],
+  ) {
     super(downloader);
     this.actions = actions.map((action) => this.buildAction(action));
   }
 
-  static validateAction(action: MetadataActionKind, ...data: readonly string[]): void {
+  static validateAction(
+    action: MetadataActionKind,
+    ...data: readonly string[]
+  ): void {
     if (!Object.values(MetadataParserPP.Actions).includes(action)) {
       throw new Error(`${action} is not a valid action`);
     }
@@ -32,7 +40,9 @@ export class MetadataParserPP extends PostProcessor {
       throw new Error("interpret metadata action requires FROM and TO");
     }
     if (action === MetadataParserPP.Actions.REPLACE && data.length !== 3) {
-      throw new Error("replace metadata action requires FIELD, SEARCH, and REPLACE");
+      throw new Error(
+        "replace metadata action requires FIELD, SEARCH, and REPLACE",
+      );
     }
   }
 
@@ -60,7 +70,9 @@ export class MetadataParserPP extends PostProcessor {
     return regex;
   }
 
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
     for (const action of this.actions) {
       action(info);
     }
@@ -96,7 +108,11 @@ export class MetadataParserPP extends PostProcessor {
     };
   }
 
-  protected replacer(field: string, search: string, replace: string): MetadataAction {
+  protected replacer(
+    field: string,
+    search: string,
+    replace: string,
+  ): MetadataAction {
     const searchRegex = new RegExp(search, "g");
     const replacement = pythonRegexReplacementToJs(replace);
     return (info) => {
@@ -106,29 +122,40 @@ export class MetadataParserPP extends PostProcessor {
         return;
       }
       if (typeof value !== "string") {
-        this.reportWarning(`Cannot replace in field ${field} since it is a ${typeof value}`);
+        this.reportWarning(
+          `Cannot replace in field ${field} since it is a ${typeof value}`,
+        );
         return;
       }
       this.writeDebug(`Replacing all ${search} in ${field} with ${replace}`);
       const matches = [...value.matchAll(searchRegex)].length;
       info[field] = value.replace(searchRegex, replacement);
-      this.toScreen(matches ? `Changed ${field} to: ${info[field]}` : `Did not find ${search} in ${field}`);
+      this.toScreen(
+        matches
+          ? `Changed ${field} to: ${info[field]}`
+          : `Did not find ${search} in ${field}`,
+      );
     };
   }
 
   private evaluateOuttmpl(template: string, info: PostProcessorInfo): string {
     const downloader = this.downloader as unknown;
     if (isRecord(downloader)) {
-      const evaluator = downloader.evaluateOuttmpl ?? downloader.evaluate_outtmpl;
+      const evaluator =
+        downloader.evaluateOuttmpl ?? downloader.evaluate_outtmpl;
       if (typeof evaluator === "function") {
         const evaluated: unknown = evaluator.call(downloader, template, info);
         if (typeof evaluated === "string") {
           return evaluated;
         }
-        throw new NotImplementedError("metadata outtmpl evaluator returning non-string values");
+        throw new NotImplementedError(
+          "metadata outtmpl evaluator returning non-string values",
+        );
       }
     }
-    throw new NotImplementedError("metadata outtmpl evaluation without downloader.evaluateOuttmpl");
+    throw new NotImplementedError(
+      "metadata outtmpl evaluation without downloader.evaluateOuttmpl",
+    );
   }
 }
 
@@ -150,15 +177,28 @@ export class MetadataFromFieldPP extends MetadataParserPP {
     ];
   }
 
-  constructor(downloader: ConstructorParameters<typeof PostProcessor>[0] = null, formats: readonly string[] = []) {
-    super(downloader, formats.map((format) => MetadataFromFieldPP.toAction(format)));
+  constructor(
+    downloader: ConstructorParameters<typeof PostProcessor>[0] = null,
+    formats: readonly string[] = [],
+  ) {
+    super(
+      downloader,
+      formats.map((format) => MetadataFromFieldPP.toAction(format)),
+    );
   }
 }
 
 export class MetadataFromTitlePP extends MetadataParserPP {
-  constructor(downloader: ConstructorParameters<typeof PostProcessor>[0] = null, titleformat = "%(title)s") {
-    super(downloader, [[MetadataParserPP.Actions.INTERPRET, "title", titleformat]]);
-    this.reportWarning("yt_dlp.postprocessor.MetadataFromTitlePP is deprecated and may be removed in a future version. Use yt_dlp.postprocessor.MetadataFromFieldPP instead");
+  constructor(
+    downloader: ConstructorParameters<typeof PostProcessor>[0] = null,
+    titleformat = "%(title)s",
+  ) {
+    super(downloader, [
+      [MetadataParserPP.Actions.INTERPRET, "title", titleformat],
+    ]);
+    this.reportWarning(
+      "yt_dlp.postprocessor.MetadataFromTitlePP is deprecated and may be removed in a future version. Use yt_dlp.postprocessor.MetadataFromFieldPP instead",
+    );
   }
 }
 

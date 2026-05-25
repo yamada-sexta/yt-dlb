@@ -10,10 +10,15 @@ export function rtmpdumpVersion(): string | null {
 }
 
 export class RtmpFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const exe = Bun.which("rtmpdump");
     if (!exe) {
-      throw new Error('RTMP download detected but "rtmpdump" could not be run. Please install rtmpdump');
+      throw new Error(
+        'RTMP download detected but "rtmpdump" could not be run. Please install rtmpdump',
+      );
     }
     const tmpfilename = this.tempName(filename);
     const args = this.makeArgs(tmpfilename, info);
@@ -28,13 +33,16 @@ export class RtmpFD extends FileDownloader {
     }
     await this.tryRename(tmpfilename, filename);
     const size = await this.filesizeOrZero(filename);
-    await this.hookProgress({
-      status: "finished",
-      filename,
-      downloaded_bytes: size,
-      total_bytes: size,
-      elapsed: performance.now() / 1000 - started,
-    }, info);
+    await this.hookProgress(
+      {
+        status: "finished",
+        filename,
+        downloaded_bytes: size,
+        total_bytes: size,
+        elapsed: performance.now() / 1000 - started,
+      },
+      info,
+    );
     return true;
   }
 
@@ -64,7 +72,11 @@ export class RtmpFD extends FileDownloader {
     } else {
       appendArg(args, "--conn", conn);
     }
-    if (!info.no_resume && this.params.continuedl !== false && !info.rtmp_live) {
+    if (
+      !info.no_resume &&
+      this.params.continuedl !== false &&
+      !info.rtmp_live
+    ) {
       args.push("--resume", "--skip", "1");
     }
     return args;
@@ -79,7 +91,9 @@ function appendArg(args: string[], flag: string, value: unknown): void {
   }
 }
 
-async function runShellCommand(cmd: readonly string[]): Promise<{ stderr: string; exitCode: number }> {
+async function runShellCommand(
+  cmd: readonly string[],
+): Promise<{ stderr: string; exitCode: number }> {
   const output = await $`${[...cmd]}`.nothrow().quiet();
   return {
     stderr: output.stderr.toString(),

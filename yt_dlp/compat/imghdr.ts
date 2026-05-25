@@ -4,7 +4,10 @@
 export type ImageType = "webp" | "png" | "jpeg" | "gif";
 
 export function detectImageType(header: Uint8Array): ImageType | null {
-  if (startsWith(header, [0x52, 0x49, 0x46, 0x46]) && startsWith(header.subarray(8), [0x57, 0x45, 0x42, 0x50])) {
+  if (
+    startsWith(header, [0x52, 0x49, 0x46, 0x46]) &&
+    startsWith(header.subarray(8), [0x57, 0x45, 0x42, 0x50])
+  ) {
     return "webp";
   }
   if (startsWith(header, [0x89, 0x50, 0x4e, 0x47])) {
@@ -19,8 +22,17 @@ export function detectImageType(header: Uint8Array): ImageType | null {
   return null;
 }
 
-export async function what(file?: string | null, header?: Uint8Array): Promise<ImageType | null> {
-  const bytes = header ?? new Uint8Array(await Bun.file(file ?? "").slice(0, 12).arrayBuffer());
+export async function what(
+  file?: string | null,
+  header?: Uint8Array,
+): Promise<ImageType | null> {
+  const bytes =
+    header ??
+    new Uint8Array(
+      await Bun.file(file ?? "")
+        .slice(0, 12)
+        .arrayBuffer(),
+    );
   return detectImageType(bytes);
 }
 

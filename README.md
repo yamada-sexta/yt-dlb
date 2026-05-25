@@ -33,12 +33,6 @@ Repository: https://github.com/yamada-sexta/yt-dlb
 
 See [YTDLB_MIGRATION_TODO.md](YTDLB_MIGRATION_TODO.md) for the migration inventory and current status.
 
-## Current Check Status
-
-- Focused YouTube validation currently passes: `bun test test/test_downloader_external.test.ts test/test_all_urls.test.ts test/test_youtube_misc.test.ts test/test_youtube_pot.test.ts`.
-- `bun run typecheck` is currently blocked by unrelated in-progress extractor ports under `yt_dlp/extractor/yandex*`, `yapfiles.ts`, `yappy.ts`, `yle-areena.ts`, `youjizz.ts`, `youku.ts`, `younow.ts`, plus one `yt_dlp/utils/traversal.ts` typing issue.
-- `bun run test:bun` has 357 expected passing tests after the YouTube notification coverage addition, but the current full run did not emit a final summary in this sandbox session.
-
 ## Requirements
 
 - [Bun](https://bun.sh/)

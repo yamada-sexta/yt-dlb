@@ -95,7 +95,10 @@ export class OptionParser {
 
 export class OptionParseError extends Error {}
 
-export function parseOpts(overrideArguments?: readonly string[] | null, _ignoreConfigFiles: "if_override" | boolean = "if_override"): [OptionParser, ParsedOptions, string[]] {
+export function parseOpts(
+  overrideArguments?: readonly string[] | null,
+  _ignoreConfigFiles: "if_override" | boolean = "if_override",
+): [OptionParser, ParsedOptions, string[]] {
   const parser = new OptionParser();
   const args = [...(overrideArguments ?? Bun.argv.slice(2))];
   const parsed = parseArgs({
@@ -141,11 +144,15 @@ export function parseOpts(overrideArguments?: readonly string[] | null, _ignoreC
     updateSelf: updateValue === "" ? true : updateValue,
     rmCacheDir: Boolean(values["rm-cache-dir"]),
     cookiefile: asString(values.cookies),
-    cookiesfrombrowser: asString(values["cookies-from-browser"]) ? parseBrowserSpec(asString(values["cookies-from-browser"])!) : undefined,
+    cookiesfrombrowser: asString(values["cookies-from-browser"])
+      ? parseBrowserSpec(asString(values["cookies-from-browser"])!)
+      : undefined,
     paths: {},
     headers: parseHeaders(asStringArray(values["add-header"])),
     proxy: asString(values.proxy),
-    socketTimeout: asString(values["socket-timeout"]) ? Number(asString(values["socket-timeout"])) : undefined,
+    socketTimeout: asString(values["socket-timeout"])
+      ? Number(asString(values["socket-timeout"]))
+      : undefined,
     noCheckCertificate: Boolean(values["no-check-certificates"]),
     extractorArgs: parseExtractorArgs(asStringArray(values["extractor-args"])),
     remoteComponents: splitList(asString(values["remote-components"])),
@@ -164,24 +171,32 @@ export function parseOpts(overrideArguments?: readonly string[] | null, _ignoreC
 
 export const parse_options = parseOpts;
 
-function asString(value: string | boolean | (string | boolean)[] | undefined): string | undefined {
+function asString(
+  value: string | boolean | (string | boolean)[] | undefined,
+): string | undefined {
   if (typeof value === "string") {
     return value;
   }
   return undefined;
 }
 
-function asStringArray(value: string | boolean | (string | boolean)[] | undefined): string[] | undefined {
+function asStringArray(
+  value: string | boolean | (string | boolean)[] | undefined,
+): string[] | undefined {
   if (typeof value === "string") {
     return [value];
   }
   if (Array.isArray(value)) {
-    return value.filter((item) => StringSchema.safeParse(item).success) as string[];
+    return value.filter(
+      (item) => StringSchema.safeParse(item).success,
+    ) as string[];
   }
   return undefined;
 }
 
-function parseBrowserSpec(spec: string): readonly [string, string?, string?, string?] {
+function parseBrowserSpec(
+  spec: string,
+): readonly [string, string?, string?, string?] {
   const parts = spec.split(":");
   return [parts[0] ?? "", parts[1], parts[2], parts[3]];
 }
@@ -198,7 +213,9 @@ function parseHeaders(headers: string[] | undefined): Record<string, string> {
   return out;
 }
 
-function parseExtractorArgs(args: string[] | undefined): Record<string, readonly string[]> {
+function parseExtractorArgs(
+  args: string[] | undefined,
+): Record<string, readonly string[]> {
   const out: Record<string, readonly string[]> = {};
   for (const arg of args ?? []) {
     const [key, values = ""] = arg.split(":", 2);
@@ -209,6 +226,14 @@ function parseExtractorArgs(args: string[] | undefined): Record<string, readonly
   return out;
 }
 
-function splitList(value: string | undefined, defaultValue: string[] = []): string[] {
-  return value ? value.split(",").map((part) => part.trim()).filter(Boolean) : defaultValue;
+function splitList(
+  value: string | undefined,
+  defaultValue: string[] = [],
+): string[] {
+  return value
+    ? value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+    : defaultValue;
 }

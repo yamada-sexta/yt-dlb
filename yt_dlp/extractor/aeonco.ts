@@ -1,14 +1,11 @@
 // Source: yt_dlp/extractor/aeonco.py
 
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
-import {
-  ExtractorError,
-  urlOrNone,
-  smuggleUrl,
-} from "../utils/index.ts";
+import { ExtractorError, urlOrNone, smuggleUrl } from "../utils/index.ts";
 
 export class AeonCoIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?aeon\.co/videos/(?<id>[^/?]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?aeon\.co/videos/(?<id>[^/?]+)`;
 
   static override get IE_NAME(): string {
     return "aeonco";

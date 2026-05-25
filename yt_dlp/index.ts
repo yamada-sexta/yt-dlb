@@ -1,6 +1,11 @@
 // Source: yt_dlp/__init__.py
 
-import { IN_CLI, pluginDirs, supportedJsRuntimes, supportedRemoteComponents } from "./globals.ts";
+import {
+  IN_CLI,
+  pluginDirs,
+  supportedJsRuntimes,
+  supportedRemoteComponents,
+} from "./globals.ts";
 import { parseOpts, type ParsedOptions } from "./options.ts";
 import { loadAllPlugins } from "./plugins.ts";
 import { Updater } from "./update.ts";
@@ -27,7 +32,9 @@ export function getPostprocessors(_opts: ParsedOptions): unknown[] {
   throw new NotImplementedError("postprocessor construction");
 }
 
-export async function realMain(argv: readonly string[] = Bun.argv.slice(2)): Promise<number | undefined> {
+export async function realMain(
+  argv: readonly string[] = Bun.argv.slice(2),
+): Promise<number | undefined> {
   const [parser, opts, urls] = parseOpts(argv);
   if (opts.printHelp || opts.version) {
     return 0;
@@ -58,23 +65,30 @@ export async function realMain(argv: readonly string[] = Bun.argv.slice(2)): Pro
     await ydl.cache.remove();
   }
   if (opts.updateSelf) {
-    const updated = await new Updater(ydl, opts.updateSelf === true ? null : opts.updateSelf).update();
+    const updated = await new Updater(
+      ydl,
+      opts.updateSelf === true ? null : opts.updateSelf,
+    ).update();
     if (updated && urls.length) {
-      return await new Updater(ydl).restart() ?? undefined;
+      return (await new Updater(ydl).restart()) ?? undefined;
     }
   }
 
   const allUrls = getUrls(urls);
   if (!allUrls.length) {
-    parser.error("You must provide at least one URL.\nType ytdlb --help to see a list of options.");
+    parser.error(
+      "You must provide at least one URL.\nType ytdlb --help to see a list of options.",
+    );
   }
   return await ydl.download(allUrls);
 }
 
-export async function main(argv: readonly string[] = Bun.argv.slice(2)): Promise<number> {
+export async function main(
+  argv: readonly string[] = Bun.argv.slice(2),
+): Promise<number> {
   IN_CLI.value = true;
   try {
-    return await realMain(argv) ?? 0;
+    return (await realMain(argv)) ?? 0;
   } catch (error) {
     if (error instanceof DownloadCancelled) {
       console.error("Aborting remaining downloads");

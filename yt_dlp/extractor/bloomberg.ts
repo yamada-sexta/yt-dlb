@@ -7,7 +7,8 @@ interface BloombergEmbedInfo {
 }
 
 export class BloombergIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?bloomberg\.com/(?:[^/]+/)*(?<id>[^/?#]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?bloomberg\.com/(?:[^/]+/)*(?<id>[^/?#]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const name = this.matchId(url);
@@ -15,14 +16,23 @@ export class BloombergIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download Bloomberg page");
     }
-    let videoId = this.searchRegex([
-      /["']bmmrId["']\s*:\s*(["'])(?<id>(?:(?!\1).)+)\1/,
-      /videoId\s*:\s*(["'])(?<id>(?:(?!\1).)+)\1/,
-      /data-bmmrid=(["'])(?<id>(?:(?!\1).)+)\1/,
-    ], webpage, "id", { group: "id", defaultValue: null });
+    let videoId = this.searchRegex(
+      [
+        /["']bmmrId["']\s*:\s*(["'])(?<id>(?:(?!\1).)+)\1/,
+        /videoId\s*:\s*(["'])(?<id>(?:(?!\1).)+)\1/,
+        /data-bmmrid=(["'])(?<id>(?:(?!\1).)+)\1/,
+      ],
+      webpage,
+      "id",
+      { group: "id", defaultValue: null },
+    );
 
     if (!videoId) {
-      const bplayerJson = this.searchRegex(/BPlayer\(null,\s*({[^;]+})\);/, webpage, "id");
+      const bplayerJson = this.searchRegex(
+        /BPlayer\(null,\s*({[^;]+})\);/,
+        webpage,
+        "id",
+      );
       if (typeof bplayerJson !== "string") {
         throw new Error("Unable to extract Bloomberg player data");
       }
@@ -33,7 +43,10 @@ export class BloombergIE extends InfoExtractor {
     }
 
     const title = (this.ogSearchTitle(webpage) ?? name).replace(/: Video$/, "");
-    const embedInfo = await this.downloadJson<BloombergEmbedInfo>(`http://www.bloomberg.com/multimedia/api/embed?id=${encodeURIComponent(videoId)}`, videoId);
+    const embedInfo = await this.downloadJson<BloombergEmbedInfo>(
+      `http://www.bloomberg.com/multimedia/api/embed?id=${encodeURIComponent(videoId)}`,
+      videoId,
+    );
     if (embedInfo === false) {
       throw new Error("Unable to download Bloomberg embed metadata");
     }
@@ -44,9 +57,18 @@ export class BloombergIE extends InfoExtractor {
         continue;
       }
       if (stream.muxing_format === "TS") {
-        formats.push(...this.extractM3u8Formats(stream.url, videoId, "mp4", { m3u8Id: "hls" }));
+        formats.push(
+          ...this.extractM3u8Formats(stream.url, videoId, "mp4", {
+            m3u8Id: "hls",
+          }),
+        );
       } else {
-        formats.push(...this.extractF4mFormats(`${stream.url}?hdcore=2.11.3`, videoId, { f4mId: "hds", fatal: false }));
+        formats.push(
+          ...this.extractF4mFormats(`${stream.url}?hdcore=2.11.3`, videoId, {
+            f4mId: "hds",
+            fatal: false,
+          }),
+        );
       }
     }
 

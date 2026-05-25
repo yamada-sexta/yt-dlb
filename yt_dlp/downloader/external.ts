@@ -8,10 +8,22 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { z } from "zod";
 
 import { NotImplementedError } from "../errors.ts";
-import { FileDownloader, type DownloadInfo, type DownloaderHost } from "./common.ts";
+import {
+  FileDownloader,
+  type DownloadInfo,
+  type DownloaderHost,
+} from "./common.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
-import { EXT_TO_OUT_FORMATS, FFmpegPostProcessor } from "../postprocessor/ffmpeg.ts";
-import { cliBoolOption, cliOption, cliValuelessOption, configurationArgs } from "../utils/utils.ts";
+import {
+  EXT_TO_OUT_FORMATS,
+  FFmpegPostProcessor,
+} from "../postprocessor/ffmpeg.ts";
+import {
+  cliBoolOption,
+  cliOption,
+  cliValuelessOption,
+  configurationArgs,
+} from "../utils/utils.ts";
 
 interface CookieHost {
   cookies?: {
@@ -29,13 +41,17 @@ interface ExternalCookie {
   domain: string;
 }
 
-const DownloadInfoSchema = z.object({
-  url: z.string(),
-}).passthrough();
+const DownloadInfoSchema = z
+  .object({
+    url: z.string(),
+  })
+  .passthrough();
 
-const ExternalFragmentSchema = z.object({
-  url: z.string(),
-}).passthrough();
+const ExternalFragmentSchema = z
+  .object({
+    url: z.string(),
+  })
+  .passthrough();
 
 type ExternalFeature = "to_stdout" | "multiple_formats";
 
@@ -49,7 +65,12 @@ export type ExternalDownloaderConstructor = {
 export class ExternalFD extends FragmentFD {
   static readonly AVAILABLE_OPT: string = "--version";
   static readonly EXE_NAME: string | null = null;
-  static readonly SUPPORTED_PROTOCOLS = new Set(["http", "https", "ftp", "ftps"]);
+  static readonly SUPPORTED_PROTOCOLS = new Set([
+    "http",
+    "https",
+    "ftp",
+    "ftps",
+  ]);
   static readonly SUPPORTED_FEATURES = new Set<ExternalFeature>();
   #cookiesTempfile: string | null = null;
 
@@ -62,45 +83,66 @@ export class ExternalFD extends FragmentFD {
   }
 
   static available(path?: string | null): boolean {
-    const exe = path && path !== ExternalFD.basename ? path : ExternalFD.exeName;
+    const exe =
+      path && path !== ExternalFD.basename ? path : ExternalFD.exeName;
     return Boolean(Bun.which(exe));
   }
 
   static supports(info: DownloadInfo): boolean {
-    const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
-    return !(info.to_stdout && !ExternalFD.SUPPORTED_FEATURES.has("to_stdout"))
-      && !(protocol.includes("+") && !ExternalFD.SUPPORTED_FEATURES.has("multiple_formats"))
-      && !hasExternalFragmentModifiers(info)
-      && protocol.split("+").every((item) => ExternalFD.SUPPORTED_PROTOCOLS.has(item));
+    const protocol =
+      typeof info.protocol === "string"
+        ? info.protocol
+        : new URL(info.url).protocol.replace(/:$/, "");
+    return (
+      !(info.to_stdout && !ExternalFD.SUPPORTED_FEATURES.has("to_stdout")) &&
+      !(
+        protocol.includes("+") &&
+        !ExternalFD.SUPPORTED_FEATURES.has("multiple_formats")
+      ) &&
+      !hasExternalFragmentModifiers(info) &&
+      protocol
+        .split("+")
+        .every((item) => ExternalFD.SUPPORTED_PROTOCOLS.has(item))
+    );
   }
 
   static canDownload(info: DownloadInfo, path?: string): boolean {
     return ExternalFD.available(path) && ExternalFD.supports(info);
   }
 
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const tmpfilename = this.tempName(filename);
-    const fragments = Array.isArray(info.fragments) ? info.fragments.filter(isExternalFragment) : null;
+    const fragments = Array.isArray(info.fragments)
+      ? info.fragments.filter(isExternalFragment)
+      : null;
     const cmd = await this.makeCmd(tmpfilename, info);
     this.writeDebug(`${this.fdName} command: ${cmd.join(" ")}`);
     const started = performance.now() / 1000;
     try {
       const { stdout, stderr, exitCode } = await runShellCommand(cmd);
       if (exitCode !== 0) {
-        throw new Error(`${cmd[0]} exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
+        throw new Error(
+          `${cmd[0]} exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`,
+        );
       }
       if (fragments) {
         await this.concatFragmentFiles(tmpfilename, info, fragments);
       }
       await this.tryRename(tmpfilename, filename);
       const size = await this.filesizeOrZero(filename);
-      await this.hookProgress({
-        status: "finished",
-        filename,
-        downloaded_bytes: size,
-        total_bytes: size,
-        elapsed: performance.now() / 1000 - started,
-      }, info);
+      await this.hookProgress(
+        {
+          status: "finished",
+          filename,
+          downloaded_bytes: size,
+          total_bytes: size,
+          elapsed: performance.now() / 1000 - started,
+        },
+        info,
+      );
       return true;
     } finally {
       await this.cleanup(tmpfilename, info);
@@ -108,29 +150,50 @@ export class ExternalFD extends FragmentFD {
     }
   }
 
-  protected async makeCmd(_tmpfilename: string, _info: DownloadInfo): Promise<string[]> {
+  protected async makeCmd(
+    _tmpfilename: string,
+    _info: DownloadInfo,
+  ): Promise<string[]> {
     throw new NotImplementedError(`${this.fdName} command builder`);
   }
 
-  protected async cleanup(_tmpfilename: string, _info: DownloadInfo): Promise<void> {
+  protected async cleanup(
+    _tmpfilename: string,
+    _info: DownloadInfo,
+  ): Promise<void> {
     return;
   }
 
-  protected async concatFragmentFiles(tmpfilename: string, info: DownloadInfo, fragments: readonly FragmentInfo[]): Promise<void> {
-    const writer = Bun.file(tmpfilename).writer({ highWaterMark: Number(this.params.buffersize ?? 64 * 1024) });
+  protected async concatFragmentFiles(
+    tmpfilename: string,
+    info: DownloadInfo,
+    fragments: readonly FragmentInfo[],
+  ): Promise<void> {
+    const writer = Bun.file(tmpfilename).writer({
+      highWaterMark: Number(this.params.buffersize ?? 64 * 1024),
+    });
     const skipUnavailable = this.params.skip_unavailable_fragments !== false;
     try {
       for (const [index, fragment] of fragments.entries()) {
         const fragmentFilename = `${tmpfilename}-Frag${index}`;
         const file = Bun.file(fragmentFilename);
-        if (!await file.exists()) {
+        if (!(await file.exists())) {
           if (skipUnavailable && index > 1) {
-            this.reportSkipFragment(index, `fragment file ${fragmentFilename} was not created`);
+            this.reportSkipFragment(
+              index,
+              `fragment file ${fragmentFilename} was not created`,
+            );
             continue;
           }
-          throw new Error(`Unable to open fragment ${index}: ${fragmentFilename}`);
+          throw new Error(
+            `Unable to open fragment ${index}: ${fragmentFilename}`,
+          );
         }
-        const bytes = await this.decryptFragment(fragment, await file.bytes(), info);
+        const bytes = await this.decryptFragment(
+          fragment,
+          await file.bytes(),
+          info,
+        );
         writer.write(bytes);
         if (!this.params.keep_fragments) {
           await rm(fragmentFilename, { force: true });
@@ -154,17 +217,38 @@ export class ExternalFD extends FragmentFD {
     return cliOption(this.params, commandOption, param);
   }
 
-  protected boolOption(commandOption: string, param: string, trueValue = "true", falseValue = "false", separator?: string): string[] {
-    return cliBoolOption(this.params, commandOption, param, trueValue, falseValue, separator);
+  protected boolOption(
+    commandOption: string,
+    param: string,
+    trueValue = "true",
+    falseValue = "false",
+    separator?: string,
+  ): string[] {
+    return cliBoolOption(
+      this.params,
+      commandOption,
+      param,
+      trueValue,
+      falseValue,
+      separator,
+    );
   }
 
-  protected valuelessOption(commandOption: string, param: string, expectedValue: unknown = true): string[] {
+  protected valuelessOption(
+    commandOption: string,
+    param: string,
+    expectedValue: unknown = true,
+  ): string[] {
     return cliValuelessOption(this.params, commandOption, param, expectedValue);
   }
 
   protected configurationArgs(): string[] {
     const ctor = this.constructor as typeof ExternalFD;
-    return configurationArgs(ctor.basename, this.params.external_downloader_args, ctor.exeName);
+    return configurationArgs(
+      ctor.basename,
+      this.params.external_downloader_args,
+      ctor.exeName,
+    );
   }
 
   protected cookieHeader(url: string): string | undefined {
@@ -184,7 +268,9 @@ export class ExternalFD extends FragmentFD {
     }
     const dir = await mkdtemp(join(tmpdir(), "ytdlb-cookies-"));
     this.#cookiesTempfile = join(dir, "cookies.txt");
-    this.toScreen(`[download] Writing temporary cookies file to "${this.#cookiesTempfile}"`);
+    this.toScreen(
+      `[download] Writing temporary cookies file to "${this.#cookiesTempfile}"`,
+    );
     await cookies.save(this.#cookiesTempfile);
     return this.#cookiesTempfile;
   }
@@ -201,7 +287,10 @@ export class ExternalFD extends FragmentFD {
 export class CurlFD extends ExternalFD {
   static override readonly AVAILABLE_OPT = "-V";
 
-  protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
+  protected override async makeCmd(
+    tmpfilename: string,
+    info: DownloadInfo,
+  ): Promise<string[]> {
     const cmd = [this.exe(), "--location", "-o", tmpfilename, "--compressed"];
     const cookieHeader = this.cookieHeader(info.url);
     if (cookieHeader) {
@@ -229,7 +318,10 @@ export class CurlFD extends ExternalFD {
 export class AxelFD extends ExternalFD {
   static override readonly AVAILABLE_OPT = "-V";
 
-  protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
+  protected override async makeCmd(
+    tmpfilename: string,
+    info: DownloadInfo,
+  ): Promise<string[]> {
     const cmd = [this.exe(), "-o", tmpfilename];
     pushHeaders(cmd, "-H", info.http_headers);
     const cookieHeader = this.cookieHeader(info.url);
@@ -242,7 +334,10 @@ export class AxelFD extends ExternalFD {
 }
 
 export class WgetFD extends ExternalFD {
-  protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
+  protected override async makeCmd(
+    tmpfilename: string,
+    info: DownloadInfo,
+  ): Promise<string[]> {
     const cmd = [this.exe(), "-O", tmpfilename, "-nv", "--compression=auto"];
     const cookieFile = await this.cookieFile(info.url);
     if (cookieFile) {
@@ -257,9 +352,16 @@ export class WgetFD extends ExternalFD {
     cmd.push(...retry);
     cmd.push(...this.option("--bind-address", "source_address"));
     if (typeof this.params.proxy === "string") {
-      cmd.push("--execute", `http_proxy=${this.params.proxy}`, "--execute", `https_proxy=${this.params.proxy}`);
+      cmd.push(
+        "--execute",
+        `http_proxy=${this.params.proxy}`,
+        "--execute",
+        `https_proxy=${this.params.proxy}`,
+      );
     }
-    cmd.push(...this.valuelessOption("--no-check-certificate", "nocheckcertificate"));
+    cmd.push(
+      ...this.valuelessOption("--no-check-certificate", "nocheckcertificate"),
+    );
     cmd.push(...this.configurationArgs(), "--", info.url);
     return cmd;
   }
@@ -267,13 +369,23 @@ export class WgetFD extends ExternalFD {
 
 export class Aria2cFD extends ExternalFD {
   static override readonly AVAILABLE_OPT = "-v";
-  static override readonly SUPPORTED_PROTOCOLS = new Set(["http", "https", "ftp", "ftps", "dash_frag_urls", "m3u8_frag_urls"]);
+  static override readonly SUPPORTED_PROTOCOLS = new Set([
+    "http",
+    "https",
+    "ftp",
+    "ftps",
+    "dash_frag_urls",
+    "m3u8_frag_urls",
+  ]);
 
   static supportsManifest(manifest: string): boolean {
     return !/#EXT-X-BYTERANGE/m.test(manifest);
   }
 
-  protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
+  protected override async makeCmd(
+    tmpfilename: string,
+    info: DownloadInfo,
+  ): Promise<string[]> {
     const cmd = [
       this.exe(),
       "-c",
@@ -287,7 +399,9 @@ export class Aria2cFD extends ExternalFD {
       "-j16",
       "-s16",
     ];
-    const fragments = Array.isArray(info.fragments) ? info.fragments as Array<{ url?: string }> : null;
+    const fragments = Array.isArray(info.fragments)
+      ? (info.fragments as Array<{ url?: string }>)
+      : null;
     if (fragments) {
       cmd.push("--allow-overwrite=true", "--allow-piece-length-change=true");
     } else {
@@ -301,39 +415,75 @@ export class Aria2cFD extends ExternalFD {
     cmd.push(...this.option("--max-overall-download-limit", "ratelimit"));
     cmd.push(...this.option("--interface", "source_address"));
     cmd.push(...this.option("--all-proxy", "proxy"));
-    cmd.push(...this.boolOption("--check-certificate", "nocheckcertificate", "false", "true", "="));
-    cmd.push(...this.boolOption("--remote-time", "updatetime", "true", "false", "="));
-    cmd.push(...this.boolOption("--show-console-readout", "noprogress", "false", "true", "="));
+    cmd.push(
+      ...this.boolOption(
+        "--check-certificate",
+        "nocheckcertificate",
+        "false",
+        "true",
+        "=",
+      ),
+    );
+    cmd.push(
+      ...this.boolOption("--remote-time", "updatetime", "true", "false", "="),
+    );
+    cmd.push(
+      ...this.boolOption(
+        "--show-console-readout",
+        "noprogress",
+        "false",
+        "true",
+        "=",
+      ),
+    );
     cmd.push(...this.configurationArgs());
     const dn = dirname(tmpfilename);
     if (dn && dn !== ".") {
       cmd.push("--dir", `${aria2cFilename(dn)}/`);
     }
     if (!fragments) {
-      cmd.push("--out", aria2cFilename(basename(tmpfilename)), "--auto-file-renaming=false", "--", info.url);
+      cmd.push(
+        "--out",
+        aria2cFilename(basename(tmpfilename)),
+        "--auto-file-renaming=false",
+        "--",
+        info.url,
+      );
       return cmd;
     }
     const urlListFile = `${tmpfilename}.frag.urls`;
-    const urlList = fragments.map((fragment, index) => {
-      if (!fragment.url) {
-        throw new Error(`aria2c fragment ${index + 1} has no URL`);
-      }
-      return `${fragment.url}\n\tout=${aria2cFilename(`${basename(tmpfilename)}-Frag${index}`)}`;
-    }).join("\n");
+    const urlList = fragments
+      .map((fragment, index) => {
+        if (!fragment.url) {
+          throw new Error(`aria2c fragment ${index + 1} has no URL`);
+        }
+        return `${fragment.url}\n\tout=${aria2cFilename(`${basename(tmpfilename)}-Frag${index}`)}`;
+      })
+      .join("\n");
     await Bun.write(urlListFile, urlList);
-    cmd.push("--auto-file-renaming=false", "--uri-selector=inorder", "-i", aria2cFilename(urlListFile));
+    cmd.push(
+      "--auto-file-renaming=false",
+      "--uri-selector=inorder",
+      "-i",
+      aria2cFilename(urlListFile),
+    );
     return cmd;
   }
 
   protected override async cleanup(tmpfilename: string): Promise<void> {
-    await Bun.file(`${tmpfilename}.frag.urls`).delete().catch(() => undefined);
+    await Bun.file(`${tmpfilename}.frag.urls`)
+      .delete()
+      .catch(() => undefined);
   }
 }
 
 export class HttpieFD extends ExternalFD {
   static override readonly EXE_NAME = "http";
 
-  protected override async makeCmd(tmpfilename: string, info: DownloadInfo): Promise<string[]> {
+  protected override async makeCmd(
+    tmpfilename: string,
+    info: DownloadInfo,
+  ): Promise<string[]> {
     const cmd = [this.exe(), "--download", "--output", tmpfilename, info.url];
     if (info.http_headers) {
       for (const [key, value] of Object.entries(info.http_headers)) {
@@ -349,26 +499,60 @@ export class HttpieFD extends ExternalFD {
 }
 
 export class FFmpegFD extends FileDownloader {
-  static readonly SUPPORTED_PROTOCOLS = new Set(["http", "https", "ftp", "ftps", "m3u8", "m3u8_native", "rtsp", "rtmp", "rtmp_ffmpeg", "mms", "http_dash_segments"]);
+  static readonly SUPPORTED_PROTOCOLS = new Set([
+    "http",
+    "https",
+    "ftp",
+    "ftps",
+    "m3u8",
+    "m3u8_native",
+    "rtsp",
+    "rtmp",
+    "rtmp_ffmpeg",
+    "mms",
+    "http_dash_segments",
+  ]);
 
   static available(): boolean {
     return Boolean(Bun.which("ffmpeg"));
   }
 
-  static canDownload(info: DownloadInfo, _externalDownloader?: string): boolean {
-    const protocol = typeof info.protocol === "string" ? info.protocol : new URL(info.url).protocol.replace(/:$/, "");
-    return FFmpegFD.available() && protocol.split("+").every((item) => FFmpegFD.SUPPORTED_PROTOCOLS.has(item));
+  static canDownload(
+    info: DownloadInfo,
+    _externalDownloader?: string,
+  ): boolean {
+    const protocol =
+      typeof info.protocol === "string"
+        ? info.protocol
+        : new URL(info.url).protocol.replace(/:$/, "");
+    return (
+      FFmpegFD.available() &&
+      protocol
+        .split("+")
+        .every((item) => FFmpegFD.SUPPORTED_PROTOCOLS.has(item))
+    );
   }
 
-  static canMergeFormats(_info: DownloadInfo, _params: Record<string, unknown> = {}): boolean {
-    return Boolean(_info.requested_formats)
-      && typeof _info.protocol === "string"
-      && !_params.allow_unplayable_formats
-      && !(Array.isArray(_params.compat_opts) && _params.compat_opts.includes("no-direct-merge"))
-      && FFmpegFD.canDownload(_info);
+  static canMergeFormats(
+    _info: DownloadInfo,
+    _params: Record<string, unknown> = {},
+  ): boolean {
+    return (
+      Boolean(_info.requested_formats) &&
+      typeof _info.protocol === "string" &&
+      !_params.allow_unplayable_formats &&
+      !(
+        Array.isArray(_params.compat_opts) &&
+        _params.compat_opts.includes("no-direct-merge")
+      ) &&
+      FFmpegFD.canDownload(_info)
+    );
   }
 
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const ffpp = new FFmpegPostProcessor(this.ydl);
     ffpp.checkVersion();
     const exe = ffpp.executable;
@@ -378,31 +562,46 @@ export class FFmpegFD extends FileDownloader {
     const tmpfilename = this.tempName(filename);
     const cmd = this.makeCmd(exe, tmpfilename, info, filename);
     this.writeDebug(`ffmpeg command: ${cmd.join(" ")}`);
-    const proxy = typeof this.params.proxy === "string" ? this.params.proxy : null;
+    const proxy =
+      typeof this.params.proxy === "string" ? this.params.proxy : null;
     if (proxy?.startsWith("socks")) {
-      this.ydl.reportWarning?.("ffmpeg does not support SOCKS proxies. Downloading is likely to fail.");
+      this.ydl.reportWarning?.(
+        "ffmpeg does not support SOCKS proxies. Downloading is likely to fail.",
+      );
     }
     const env = proxy ? ffmpegProxyEnv(proxy) : undefined;
     const started = performance.now() / 1000;
     const { stdout, stderr, exitCode } = await runShellCommand(cmd, env);
     if (exitCode !== 0) {
-      throw new Error(`ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`);
+      throw new Error(
+        `ffmpeg exited with code ${exitCode}${stderr ? `: ${stderr.trim()}` : ""}${stdout ? `\n${stdout.trim()}` : ""}`,
+      );
     }
     await this.tryRename(tmpfilename, filename);
     const size = await this.filesizeOrZero(filename);
-    await this.hookProgress({
-      status: "finished",
-      filename,
-      downloaded_bytes: size,
-      total_bytes: size,
-      elapsed: performance.now() / 1000 - started,
-    }, info);
+    await this.hookProgress(
+      {
+        status: "finished",
+        filename,
+        downloaded_bytes: size,
+        total_bytes: size,
+        elapsed: performance.now() / 1000 - started,
+      },
+      info,
+    );
     return true;
   }
 
-  protected makeCmd(exe: string, tmpfilename: string, info: DownloadInfo, outputFilename = tmpfilename): string[] {
+  protected makeCmd(
+    exe: string,
+    tmpfilename: string,
+    info: DownloadInfo,
+    outputFilename = tmpfilename,
+  ): string[] {
     const selectedFormats = selectedFfmpegFormats(info);
-    const cookieGetter = (this.ydl as CookieHost).cookies?.getCookiesForUrl?.bind((this.ydl as CookieHost).cookies);
+    const cookieGetter = (
+      this.ydl as CookieHost
+    ).cookies?.getCookiesForUrl?.bind((this.ydl as CookieHost).cookies);
     return [
       exe,
       "-hide_banner",
@@ -421,9 +620,22 @@ export class FFmpegFD extends FileDownloader {
   }
 }
 
-export function getExternalDownloader(_externalDownloader: string): ExternalDownloaderConstructor | null {
-  const name = _externalDownloader.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
-  return EXTERNAL_BY_NAME[name] ?? Object.values(EXTERNAL_BY_NAME).find((ctor) => ctor === FFmpegFD && name.includes("ffmpeg")) ?? null;
+export function getExternalDownloader(
+  _externalDownloader: string,
+): ExternalDownloaderConstructor | null {
+  const name =
+    _externalDownloader
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.[^.]+$/, "")
+      .toLowerCase() ?? "";
+  return (
+    EXTERNAL_BY_NAME[name] ??
+    Object.values(EXTERNAL_BY_NAME).find(
+      (ctor) => ctor === FFmpegFD && name.includes("ffmpeg"),
+    ) ??
+    null
+  );
 }
 
 export const get_external_downloader = getExternalDownloader;
@@ -440,7 +652,10 @@ export function getExternalFragmentDownloader(
   info: DownloadInfo,
   manifest?: string,
 ): ExternalDownloaderConstructor | null {
-  const selected = selectedExternalDownloader(params.external_downloader, protocolKey);
+  const selected = selectedExternalDownloader(
+    params.external_downloader,
+    protocolKey,
+  );
   if (!selected || selected.toLowerCase() === "native") {
     return null;
   }
@@ -448,17 +663,28 @@ export function getExternalFragmentDownloader(
   if (!ExternalDownloader?.canDownload?.(info, selected)) {
     return null;
   }
-  if (manifest && ExternalDownloader.supportsManifest && !ExternalDownloader.supportsManifest(manifest)) {
+  if (
+    manifest &&
+    ExternalDownloader.supportsManifest &&
+    !ExternalDownloader.supportsManifest(manifest)
+  ) {
     return null;
   }
   return ExternalDownloader;
 }
 
-export function headersToFfmpegArgs(headers: Record<string, string> | undefined): string[] {
+export function headersToFfmpegArgs(
+  headers: Record<string, string> | undefined,
+): string[] {
   if (!headers || !Object.keys(headers).length) {
     return [];
   }
-  return ["-headers", Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join("\r\n") + "\r\n"];
+  return [
+    "-headers",
+    Object.entries(headers)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("\r\n") + "\r\n",
+  ];
 }
 
 export function outputFormat(filename: string): string {
@@ -475,12 +701,18 @@ export function outputFormat(filename: string): string {
   if (ext === "ts") {
     return "mpegts";
   }
-  return ext ? EXT_TO_OUT_FORMATS[ext] ?? ext : "mp4";
+  return ext ? (EXT_TO_OUT_FORMATS[ext] ?? ext) : "mp4";
 }
 
-export function outputFormatForInfo(filename: string, info: DownloadInfo): string {
+export function outputFormatForInfo(
+  filename: string,
+  info: DownloadInfo,
+): string {
   const protocol = typeof info.protocol === "string" ? info.protocol : "";
-  if ((protocol === "m3u8" || protocol === "m3u8_native") && (info.is_live || info.hls_use_mpegts)) {
+  if (
+    (protocol === "m3u8" || protocol === "m3u8_native") &&
+    (info.is_live || info.hls_use_mpegts)
+  ) {
     return "mpegts";
   }
   if (protocol === "rtmp") {
@@ -511,7 +743,11 @@ function inputArgs(
   const args: string[] = [];
   const sectionStart = numberOrNull(info.section_start);
   const sectionEnd = numberOrNull(info.section_end);
-  const fallbackInputArgs = stringListFromPath(info, "downloader_options", "ffmpeg_args");
+  const fallbackInputArgs = stringListFromPath(
+    info,
+    "downloader_options",
+    "ffmpeg_args",
+  );
   for (const format of formats) {
     if (sectionStart !== null) {
       args.push("-ss", String(sectionStart));
@@ -524,7 +760,15 @@ function inputArgs(
     if (isHttp && cookieGetter) {
       const cookies = cookieGetter(inputUrl);
       if (cookies.length) {
-        args.push("-cookies", cookies.map((cookie) => `${cookie.name}=${cookie.value}; path=${cookie.path}; domain=${cookie.domain};\r\n`).join(""));
+        args.push(
+          "-cookies",
+          cookies
+            .map(
+              (cookie) =>
+                `${cookie.name}=${cookie.value}; path=${cookie.path}; domain=${cookie.domain};\r\n`,
+            )
+            .join(""),
+        );
       }
     }
     args.push(...headersToFfmpegArgs(format.http_headers ?? info.http_headers));
@@ -534,20 +778,38 @@ function inputArgs(
     }
     if (params.enable_file_urls && inputUrl.startsWith("file:")) {
       args.push("-protocol_whitelist", "file,crypto,data,http,https,tcp,tls");
-      inputUrl = inputUrl.replace(/^file:\/\/(?:localhost)?\//, process.platform === "win32" ? "file:" : "file:/");
+      inputUrl = inputUrl.replace(
+        /^file:\/\/(?:localhost)?\//,
+        process.platform === "win32" ? "file:" : "file:/",
+      );
     }
-    args.push(...stringListFromPath(format, "downloader_options", "ffmpeg_args", fallbackInputArgs), "-i", inputUrl);
+    args.push(
+      ...stringListFromPath(
+        format,
+        "downloader_options",
+        "ffmpeg_args",
+        fallbackInputArgs,
+      ),
+      "-i",
+      inputUrl,
+    );
   }
   return args;
 }
 
-function mapArgs(formats: readonly DownloadInfo[], info: DownloadInfo): string[] {
+function mapArgs(
+  formats: readonly DownloadInfo[],
+  info: DownloadInfo,
+): string[] {
   if (formats.length <= 1 && info.protocol !== "http_dash_segments") {
     return [];
   }
   const args: string[] = [];
   formats.forEach((format, index) => {
-    const streamNumber = typeof format.manifest_stream_number === "number" ? format.manifest_stream_number : 0;
+    const streamNumber =
+      typeof format.manifest_stream_number === "number"
+        ? format.manifest_stream_number
+        : 0;
     args.push("-map", `${index}:${streamNumber}`);
   });
   return args;
@@ -609,7 +871,11 @@ const EXTERNAL_BY_NAME: Record<string, ExternalDownloaderConstructor> = {
   ffmpeg: FFmpegFD,
 };
 
-function pushHeaders(cmd: string[], option: string, headers: Record<string, string> | undefined): void {
+function pushHeaders(
+  cmd: string[],
+  option: string,
+  headers: Record<string, string> | undefined,
+): void {
   if (!headers) {
     return;
   }
@@ -622,7 +888,12 @@ function aria2cFilename(filename: string): string {
   return isAbsolute(filename) ? filename : `./${filename}`;
 }
 
-function stringListFromPath(record: Record<string, unknown>, key: string, childKey: string, fallback: readonly string[] = []): string[] {
+function stringListFromPath(
+  record: Record<string, unknown>,
+  key: string,
+  childKey: string,
+  fallback: readonly string[] = [],
+): string[] {
   const child = record[key];
   if (!child || typeof child !== "object") {
     return [...fallback];
@@ -632,12 +903,17 @@ function stringListFromPath(record: Record<string, unknown>, key: string, childK
 }
 
 function hasExternalFragmentModifiers(info: DownloadInfo): boolean {
-  return Boolean(info.hls_aes)
-    || typeof info.extra_param_to_segment_url === "string"
-    || typeof info.extra_param_to_key_url === "string";
+  return (
+    Boolean(info.hls_aes) ||
+    typeof info.extra_param_to_segment_url === "string" ||
+    typeof info.extra_param_to_key_url === "string"
+  );
 }
 
-function selectedExternalDownloader(value: unknown, protocolKey: string): string | null {
+function selectedExternalDownloader(
+  value: unknown,
+  protocolKey: string,
+): string | null {
   if (typeof value === "string") {
     return value;
   }

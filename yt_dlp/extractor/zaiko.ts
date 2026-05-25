@@ -11,7 +11,10 @@ import {
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 abstract class ZaikoBaseIE extends InfoExtractor {
-  protected async downloadRealWebpage(url: string, videoId: string): Promise<string> {
+  protected async downloadRealWebpage(
+    url: string,
+    videoId: string,
+  ): Promise<string> {
     const result = await this.downloadWebpageHandle(url, videoId);
     if (result === false) {
       throw new ExtractorError("Unable to download Zaiko webpage", { videoId });
@@ -21,12 +24,19 @@ abstract class ZaikoBaseIE extends InfoExtractor {
     if (finalUrl.includes("zaiko.io/login")) {
       this.raiseLoginRequired();
     } else if (finalUrl.includes("/_buy/")) {
-      throw new ExtractorError("Your account does not have tickets to this event", { expected: true, videoId });
+      throw new ExtractorError(
+        "Your account does not have tickets to this event",
+        { expected: true, videoId },
+      );
     }
     return webpage;
   }
 
-  protected parseVueElementAttr(name: string, html: string, videoId: string): Record<string, unknown> {
+  protected parseVueElementAttr(
+    name: string,
+    html: string,
+    videoId: string,
+  ): Record<string, unknown> {
     const attrs: Record<string, unknown> = {};
     let found = false;
     new HTMLRewriter()
@@ -40,7 +50,11 @@ abstract class ZaikoBaseIE extends InfoExtractor {
             if (!key.startsWith(":") || value === null) {
               continue;
             }
-            attrs[key.slice(1)] = this.parseJson(unescapeHTML(value) ?? value, videoId, { fatal: false });
+            attrs[key.slice(1)] = this.parseJson(
+              unescapeHTML(value) ?? value,
+              videoId,
+              { fatal: false },
+            );
           }
         },
       })
@@ -53,17 +67,24 @@ abstract class ZaikoBaseIE extends InfoExtractor {
 }
 
 export class ZaikoIE extends ZaikoBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://(?:[\w-]+\.)?zaiko\.io/event/(?<id>\d+)/stream(?:/\d+)+`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:[\w-]+\.)?zaiko\.io/event/(?<id>\d+)/stream(?:/\d+)+`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
     const webpage = await this.downloadRealWebpage(url, videoId);
-    const streamMeta = this.parseVueElementAttr("stream-page", webpage, videoId);
+    const streamMeta = this.parseVueElementAttr(
+      "stream-page",
+      webpage,
+      videoId,
+    );
 
     const streamAccess = getRecord(streamMeta["stream-access"]);
     const videoSource = stringValue(streamAccess.video_source);
     if (!videoSource) {
-      throw new ExtractorError("Unable to extract player page URL", { videoId });
+      throw new ExtractorError("Unable to extract player page URL", {
+        videoId,
+      });
     }
     const playerPage = await this.downloadWebpage(videoSource, videoId, {
       note: "Downloading player page",
@@ -81,22 +102,34 @@ export class ZaikoIE extends ZaikoBaseIE {
     if (initialEventInfo.is_jwt_protected === true) {
       const jwtUrl = stringValue(initialEventInfo.jwt_token_url);
       if (jwtUrl) {
-        const jwtData = await this.downloadJson<{ playback_url?: string }>(jwtUrl, videoId, {
-          note: "Downloading JWT-protected stream URL",
-          errnote: "Failed to download JWT-protected stream URL",
-        });
-        streamUrl = jwtData ? jwtData.playback_url ?? null : null;
+        const jwtData = await this.downloadJson<{ playback_url?: string }>(
+          jwtUrl,
+          videoId,
+          {
+            note: "Downloading JWT-protected stream URL",
+            errnote: "Failed to download JWT-protected stream URL",
+          },
+        );
+        streamUrl = jwtData ? (jwtData.playback_url ?? null) : null;
       }
     } else {
       streamUrl = urlOrNone(initialEventInfo.endpoint);
     }
 
-    const formats = streamUrl ? this.extractM3u8Formats(streamUrl, videoId, "mp4", { entryProtocol: "m3u8_native" }) : [];
+    const formats = streamUrl
+      ? this.extractM3u8Formats(streamUrl, videoId, "mp4", {
+          entryProtocol: "m3u8_native",
+        })
+      : [];
     if (!formats.length) {
       this.raiseNoFormats(msg, { expected, videoId });
     }
 
-    const eventPage = await this.downloadWebpage(`https://zaiko.io/event/${videoId}`, videoId, { note: "Downloading event page", fatal: false });
+    const eventPage = await this.downloadWebpage(
+      `https://zaiko.io/event/${videoId}`,
+      videoId,
+      { note: "Downloading event page", fatal: false },
+    );
     const thumbnailUrls = [
       urlOrNone(initialEventInfo.poster_url),
       eventPage ? this.ogSearchThumbnail(eventPage) : null,
@@ -114,15 +147,21 @@ export class ZaikoIE extends ZaikoBaseIE {
       uploader: stringValue(profile.name),
       uploader_id: strOrNone(profile.id) ?? undefined,
       release_timestamp: intOrNone(start.timestamp) ?? undefined,
-      categories: Array.isArray(event.genres) ? event.genres.filter((item) => typeof item === "string") : undefined,
+      categories: Array.isArray(event.genres)
+        ? event.genres.filter((item) => typeof item === "string")
+        : undefined,
       alt_title: stringValue(initialEventInfo.title),
-      thumbnails: thumbnailUrls.map((thumbnail) => ({ url: thumbnail, id: urlBasename(thumbnail) })),
+      thumbnails: thumbnailUrls.map((thumbnail) => ({
+        url: thumbnail,
+        id: urlBasename(thumbnail),
+      })),
     };
   }
 }
 
 export class ZaikoETicketIE extends ZaikoBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?zaiko\.io/account/eticket/(?<id>[\w=-]{49})`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?zaiko\.io/account/eticket/(?<id>[\w=-]{49})`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const rawTicketId = this.matchId(url);
@@ -132,7 +171,11 @@ export class ZaikoETicketIE extends ZaikoBaseIE {
     const streams = Array.isArray(eticket.streams) ? eticket.streams : [];
     const ticketDetails = getRecord(eticket["ticket-details"]);
     return this.playlistResult(
-      streams.flatMap((stream) => typeof getRecord(stream).url === "string" ? [this.urlResult(getRecord(stream).url as string, ZaikoIE)] : []),
+      streams.flatMap((stream) =>
+        typeof getRecord(stream).url === "string"
+          ? [this.urlResult(getRecord(stream).url as string, ZaikoIE)]
+          : [],
+      ),
       ticketId,
       stringValue(ticketDetails.event_name) ?? null,
       null,
@@ -154,19 +197,25 @@ function statusInfo(status: string | undefined): [string, string, boolean] {
     waiting: ["is_upcoming", "Live event has not yet started", true],
     cancelled: ["not_live", "Event has been cancelled", true],
   };
-  return status && map[status] ? map[status] : ["not_live", `Unknown event status "${status}"`, false];
+  return status && map[status]
+    ? map[status]
+    : ["not_live", `Unknown event status "${status}"`, false];
 }
 
 function decodeTicketId(ticketId: string): string | null {
   try {
-    return Buffer.from(ticketId.slice(1), "base64url").toString("utf8").replaceAll("|", "-");
+    return Buffer.from(ticketId.slice(1), "base64url")
+      .toString("utf8")
+      .replaceAll("|", "-");
   } catch {
     return null;
   }
 }
 
 function getRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function stringValue(value: unknown): string | undefined {

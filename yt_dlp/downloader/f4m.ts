@@ -4,7 +4,12 @@
 import { Buffer } from "node:buffer";
 
 import { compatEtreeFromstring, type XmlElement } from "../compat/index.ts";
-import { fixXmlAmpersands, xmlFind, xmlFindAll, xpathText } from "../utils/xml.ts";
+import {
+  fixXmlAmpersands,
+  xmlFind,
+  xmlFindAll,
+  xpathText,
+} from "../utils/xml.ts";
 import { FragmentFD, type FragmentInfo } from "./fragment.ts";
 import type { DownloadInfo } from "./common.ts";
 
@@ -25,29 +30,51 @@ interface BootstrapInfo {
 }
 
 export class F4mFD extends FragmentFD {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     this.toScreen("[f4m] Downloading f4m manifest");
-    const manifestResponse = await this.ydl.urlopen(this.prepareUrl(info, info.url));
+    const manifestResponse = await this.ydl.urlopen(
+      this.prepareUrl(info, info.url),
+    );
     const manifestUrl = manifestResponse.url;
     const manifest = fixXmlAmpersands(await manifestResponse.text()).trim();
     const doc = parseManifest(manifest);
-    const media = chooseMedia(doc.media, typeof info.tbr === "number" ? info.tbr : null, Boolean(this.params.allow_unplayable_formats));
-    const manifestBaseUrl = doc.baseUrl ? new URL(doc.baseUrl, manifestUrl).toString() : manifestUrl;
-    const mediaBaseUrl = new URL(requiredAttr(media, "url"), manifestBaseUrl).toString();
-    const bootstrapInfo = await this.parseBootstrap(doc.bootstrap, manifestBaseUrl);
+    const media = chooseMedia(
+      doc.media,
+      typeof info.tbr === "number" ? info.tbr : null,
+      Boolean(this.params.allow_unplayable_formats),
+    );
+    const manifestBaseUrl = doc.baseUrl
+      ? new URL(doc.baseUrl, manifestUrl).toString()
+      : manifestUrl;
+    const mediaBaseUrl = new URL(
+      requiredAttr(media, "url"),
+      manifestBaseUrl,
+    ).toString();
+    const bootstrapInfo = await this.parseBootstrap(
+      doc.bootstrap,
+      manifestBaseUrl,
+    );
     const fragmentsList = buildFragmentsList(bootstrapInfo);
     const baseUrl = new URL(mediaBaseUrl);
     const queryParts = [
       baseUrl.search.replace(/^\?/, ""),
       doc.akamaiPv?.replace(/;$/, ""),
-      typeof info.extra_param_to_segment_url === "string" ? info.extra_param_to_segment_url : "",
+      typeof info.extra_param_to_segment_url === "string"
+        ? info.extra_param_to_segment_url
+        : "",
     ].filter(Boolean);
     const prefix = concatBytes([
       writeFlvHeader(),
       media.metadata ? writeMetadataTag(media.metadata) : new Uint8Array(),
     ]);
     let wroteHeader = false;
-    const makeFragment = ([segment, fragment]: [number, number], index: number): FragmentInfo => {
+    const makeFragment = (
+      [segment, fragment]: [number, number],
+      index: number,
+    ): FragmentInfo => {
       const url = new URL(baseUrl.toString());
       url.pathname += `Seg${segment}-Frag${fragment}`;
       url.search = queryParts.join("&");
@@ -64,17 +91,33 @@ export class F4mFD extends FragmentFD {
         },
       };
     };
-    const fragments = bootstrapInfo.live && doc.bootstrap.url && !this.params.test
-      ? this.liveFragments(doc.bootstrap.url, manifestBaseUrl, fragmentsList, makeFragment)
-      : (this.params.test ? fragmentsList.slice(0, 1) : fragmentsList).map(makeFragment);
-    this.toScreen("[f4m] Total fragments: " + (bootstrapInfo.live ? "unknown (live)" : fragmentsList.length));
+    const fragments =
+      bootstrapInfo.live && doc.bootstrap.url && !this.params.test
+        ? this.liveFragments(
+            doc.bootstrap.url,
+            manifestBaseUrl,
+            fragmentsList,
+            makeFragment,
+          )
+        : (this.params.test ? fragmentsList.slice(0, 1) : fragmentsList).map(
+            makeFragment,
+          );
+    this.toScreen(
+      "[f4m] Total fragments: " +
+        (bootstrapInfo.live ? "unknown (live)" : fragmentsList.length),
+    );
     return await this.downloadFragments(filename, info, fragments);
   }
 
-  private async parseBootstrap(node: BootstrapNode, baseUrl: string): Promise<BootstrapInfo> {
+  private async parseBootstrap(
+    node: BootstrapNode,
+    baseUrl: string,
+  ): Promise<BootstrapInfo> {
     if (node.url) {
       const url = new URL(node.url, baseUrl).toString();
-      const data = new Uint8Array(await (await this.ydl.urlopen(url)).arrayBuffer());
+      const data = new Uint8Array(
+        await (await this.ydl.urlopen(url)).arrayBuffer(),
+      );
       return readBootstrapInfo(data);
     }
     return readBootstrapInfo(Buffer.from(node.text.trim(), "base64"));
@@ -99,18 +142,30 @@ export class F4mFD extends FragmentFD {
         index += 1;
         yield makeFragment(pair, index);
       }
-      queue = await this.updateLiveFragments(new URL(bootstrapUrl, manifestBaseUrl).toString(), latestFragment);
+      queue = await this.updateLiveFragments(
+        new URL(bootstrapUrl, manifestBaseUrl).toString(),
+        latestFragment,
+      );
       const nextFragment = queue[0]?.[1];
       if (nextFragment !== undefined && nextFragment > latestFragment + 1) {
-        this.ydl.reportWarning?.(`Missed ${nextFragment - (latestFragment + 1)} fragments`);
+        this.ydl.reportWarning?.(
+          `Missed ${nextFragment - (latestFragment + 1)} fragments`,
+        );
       }
     }
   }
 
-  private async updateLiveFragments(bootstrapUrl: string, latestFragment: number): Promise<[number, number][]> {
+  private async updateLiveFragments(
+    bootstrapUrl: string,
+    latestFragment: number,
+  ): Promise<[number, number][]> {
     for (let retries = 30; retries > 0; retries -= 1) {
-      const fragments = buildFragmentsList(await this.parseBootstrap({ url: bootstrapUrl, text: "" }, bootstrapUrl))
-        .filter((fragment) => fragment[1] > latestFragment);
+      const fragments = buildFragmentsList(
+        await this.parseBootstrap(
+          { url: bootstrapUrl, text: "" },
+          bootstrapUrl,
+        ),
+      ).filter((fragment) => fragment[1] > latestFragment);
       if (fragments.length) {
         return fragments;
       }
@@ -120,7 +175,12 @@ export class F4mFD extends FragmentFD {
   }
 }
 
-function parseManifest(xml: string): { baseUrl: string | null; media: MediaNode[]; bootstrap: BootstrapNode; akamaiPv: string | null } {
+function parseManifest(xml: string): {
+  baseUrl: string | null;
+  media: MediaNode[];
+  bootstrap: BootstrapNode;
+  akamaiPv: string | null;
+} {
   const root = compatEtreeFromstring(xml);
   const baseUrl = xpathText(root, [addNs("baseURL"), addNs("baseURL", 2)]);
   const akamaiPv = xpathText(root, addNs("pv-2.0"));
@@ -128,10 +188,12 @@ function parseManifest(xml: string): { baseUrl: string | null; media: MediaNode[
   if (!bootstrapElement) {
     throw new Error("F4M manifest has no bootstrapInfo");
   }
-  const media = xmlFindAll(root, addNs("media")).map((element): MediaNode => ({
-    attributes: element.attrib,
-    metadata: metadataOf(element),
-  }));
+  const media = xmlFindAll(root, addNs("media")).map(
+    (element): MediaNode => ({
+      attributes: element.attrib,
+      metadata: metadataOf(element),
+    }),
+  );
   if (!media.length) {
     throw new Error("F4M manifest has no media");
   }
@@ -155,20 +217,36 @@ function addNs(prop: string, version = 1): string {
   return `{http://ns.adobe.com/f4m/${version}.0}${prop}`;
 }
 
-function chooseMedia(media: MediaNode[], requestedBitrate: number | null, allowUnplayable: boolean): MediaNode {
+function chooseMedia(
+  media: MediaNode[],
+  requestedBitrate: number | null,
+  allowUnplayable: boolean,
+): MediaNode {
   const playable = allowUnplayable
     ? media
-    : media.filter((node) => !("drmAdditionalHeaderId" in node.attributes) && !("drmAdditionalHeaderSetId" in node.attributes));
+    : media.filter(
+        (node) =>
+          !("drmAdditionalHeaderId" in node.attributes) &&
+          !("drmAdditionalHeaderSetId" in node.attributes),
+      );
   if (!playable.length) {
     throw new Error("Unsupported F4M DRM");
   }
   if (requestedBitrate !== null) {
-    const exact = playable.find((node) => Number(node.attributes.bitrate ?? -1) === requestedBitrate);
+    const exact = playable.find(
+      (node) => Number(node.attributes.bitrate ?? -1) === requestedBitrate,
+    );
     if (exact) {
       return exact;
     }
   }
-  const best = [...playable].sort((left, right) => Number(left.attributes.bitrate ?? -1) - Number(right.attributes.bitrate ?? -1)).at(-1);
+  const best = [...playable]
+    .sort(
+      (left, right) =>
+        Number(left.attributes.bitrate ?? -1) -
+        Number(right.attributes.bitrate ?? -1),
+    )
+    .at(-1);
   if (!best) {
     throw new Error("F4M manifest has no playable media");
   }
@@ -226,7 +304,7 @@ class FlvReader {
     this.readString();
     this.readString();
     const segments: BootstrapInfo["segments"] = [];
-    for (const count = this.readUint8(); segments.length < count;) {
+    for (const count = this.readUint8(); segments.length < count; ) {
       const box = this.readBoxInfo();
       if (box.type !== "asrt") {
         throw new Error(`Unexpected F4M segment box ${box.type}`);
@@ -234,7 +312,7 @@ class FlvReader {
       segments.push(new FlvReader(box.data).readAsrt());
     }
     const fragments: BootstrapInfo["fragments"] = [];
-    for (const count = this.readUint8(); fragments.length < count;) {
+    for (const count = this.readUint8(); fragments.length < count; ) {
       const box = this.readBoxInfo();
       if (box.type !== "afrt") {
         throw new Error(`Unexpected F4M fragment box ${box.type}`);
@@ -249,7 +327,7 @@ class FlvReader {
     this.readBytes(3);
     this.#skipStrings(this.readUint8());
     const segments: [number, number][] = [];
-    for (const count = this.readUint32(); segments.length < count;) {
+    for (const count = this.readUint32(); segments.length < count; ) {
       segments.push([this.readUint32(), this.readUint32()]);
     }
     return { segment_run: segments };
@@ -261,7 +339,7 @@ class FlvReader {
     this.readUint32();
     this.#skipStrings(this.readUint8());
     const fragments: BootstrapInfo["fragments"][number]["fragments"] = [];
-    for (const count = this.readUint32(); fragments.length < count;) {
+    for (const count = this.readUint32(); fragments.length < count; ) {
       const first = this.readUint32();
       this.readUint64();
       const duration = this.readUint32();
@@ -278,7 +356,11 @@ class FlvReader {
     const type = new TextDecoder().decode(this.readBytes(4));
     const realSize = size === 1 ? Number(this.readUint64()) : size;
     const headerSize = size === 1 ? 16 : 8;
-    return { size: realSize, type, data: this.readBytes(realSize - headerSize) };
+    return {
+      size: realSize,
+      type,
+      data: this.readBytes(realSize - headerSize),
+    };
   }
 
   readUint8(): number {
@@ -299,7 +381,10 @@ class FlvReader {
 
   readString(): string {
     const start = this.#offset;
-    while (this.#offset < this.data.byteLength && this.data[this.#offset] !== 0) {
+    while (
+      this.#offset < this.data.byteLength &&
+      this.data[this.#offset] !== 0
+    ) {
       this.#offset += 1;
     }
     const text = new TextDecoder().decode(this.data.slice(start, this.#offset));
@@ -323,7 +408,10 @@ class FlvReader {
   }
 }
 
-function extractMdatPayload(data: Uint8Array, allowTruncated: boolean): Uint8Array {
+function extractMdatPayload(
+  data: Uint8Array,
+  allowTruncated: boolean,
+): Uint8Array {
   const reader = new FlvReader(data);
   while (true) {
     try {
@@ -341,7 +429,10 @@ function extractMdatPayload(data: Uint8Array, allowTruncated: boolean): Uint8Arr
 }
 
 function writeFlvHeader(): Uint8Array {
-  return new Uint8Array([0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00]);
+  return new Uint8Array([
+    0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
+    0x00,
+  ]);
 }
 
 function writeMetadataTag(metadata: Uint8Array): Uint8Array {
@@ -363,7 +454,9 @@ function requiredAttr(media: MediaNode, name: string): string {
 }
 
 function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
-  const out = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0));
+  const out = new Uint8Array(
+    parts.reduce((total, part) => total + part.byteLength, 0),
+  );
   let offset = 0;
   for (const part of parts) {
     out.set(part, offset);

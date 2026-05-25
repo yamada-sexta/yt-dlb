@@ -2,11 +2,7 @@
 
 import { NotImplementedError } from "../errors.ts";
 import { BunnyCdnFD } from "./bunnycdn.ts";
-import type {
-  FileDownloader,
-  DownloadInfo,
-  DownloaderHost,
-} from "./common.ts";
+import type { FileDownloader, DownloadInfo, DownloaderHost } from "./common.ts";
 import { DashSegmentsFD } from "./dash.ts";
 import { FFmpegFD, getExternalDownloader } from "./external.ts";
 import { F4mFD } from "./f4m.ts";
@@ -24,7 +20,11 @@ import { YoutubeLiveChatFD } from "./youtube-live-chat.ts";
 
 export { FileDownloader } from "./common.ts";
 export { DashSegmentsFD } from "./dash.ts";
-export { FFmpegFD, getExternalDownloader, listExternalDownloaders } from "./external.ts";
+export {
+  FFmpegFD,
+  getExternalDownloader,
+  listExternalDownloaders,
+} from "./external.ts";
 export { FragmentFD } from "./fragment.ts";
 export { HlsFD } from "./hls.ts";
 export { HttpFD } from "./http.ts";
@@ -67,18 +67,32 @@ export function getSuitableDownloader(
   protocol?: string,
   toStdout = false,
 ): DownloaderConstructor {
-  const normalizedInfo = { ...info, protocol: determineProtocol(info), to_stdout: toStdout };
+  const normalizedInfo = {
+    ...info,
+    protocol: determineProtocol(info),
+    to_stdout: toStdout,
+  };
   const protocols = (protocol ?? normalizedInfo.protocol).split("+");
-  const downloaders = protocols.map((item) => getSuitableDownloaderForProtocol(normalizedInfo, item, params, defaultDownloader));
+  const downloaders = protocols.map((item) =>
+    getSuitableDownloaderForProtocol(
+      normalizedInfo,
+      item,
+      params,
+      defaultDownloader,
+    ),
+  );
 
-  if (downloaders.every((downloader) => downloader === FFmpegFD) && FFmpegFD.canMergeFormats(normalizedInfo, params)) {
+  if (
+    downloaders.every((downloader) => downloader === FFmpegFD) &&
+    FFmpegFD.canMergeFormats(normalizedInfo, params)
+  ) {
     return FFmpegFD;
   }
   if (
-    downloaders.every((downloader) => downloader === DashSegmentsFD)
-    && !(toStdout && protocols.length > 1)
-    && new Set(protocols).size === 1
-    && protocols[0] === "http_dash_segments_generator"
+    downloaders.every((downloader) => downloader === DashSegmentsFD) &&
+    !(toStdout && protocols.length > 1) &&
+    new Set(protocols).size === 1 &&
+    protocols[0] === "http_dash_segments_generator"
   ) {
     return DashSegmentsFD;
   }
@@ -89,7 +103,9 @@ export function getSuitableDownloader(
       return downloader;
     }
   }
-  throw new NotImplementedError(`merged downloader for protocols ${protocols.join("+")}`);
+  throw new NotImplementedError(
+    `merged downloader for protocols ${protocols.join("+")}`,
+  );
 }
 
 export function shortenProtocolName(proto: string, simplify = false): string {
@@ -138,19 +154,32 @@ function getSuitableDownloaderForProtocol(
   }
 
   const protocolInfo: DownloadInfo = { ...info, protocol };
-  const externalDownloader = externalDownloaderForProtocol(params.external_downloader, protocol);
+  const externalDownloader = externalDownloaderForProtocol(
+    params.external_downloader,
+    protocol,
+  );
   if (externalDownloader === null) {
-    if (protocolInfo.to_stdout && FFmpegFD.canMergeFormats(protocolInfo, params)) {
+    if (
+      protocolInfo.to_stdout &&
+      FFmpegFD.canMergeFormats(protocolInfo, params)
+    ) {
       return FFmpegFD;
     }
-  } else if (externalDownloader.toLowerCase() !== "native" && protocolInfo.impersonate == null) {
+  } else if (
+    externalDownloader.toLowerCase() !== "native" &&
+    protocolInfo.impersonate == null
+  ) {
     const ExternalDownloader = getExternalDownloader(externalDownloader);
     if (ExternalDownloader?.canDownload?.(protocolInfo, externalDownloader)) {
       return ExternalDownloader;
     }
   }
 
-  if (protocol === "http_dash_segments" && protocolInfo.is_live && externalDownloader?.toLowerCase() !== "native") {
+  if (
+    protocol === "http_dash_segments" &&
+    protocolInfo.is_live &&
+    externalDownloader?.toLowerCase() !== "native"
+  ) {
     return FFmpegFD;
   }
 
@@ -161,7 +190,15 @@ function getSuitableDownloaderForProtocol(
     if (externalDownloader?.toLowerCase() === "native") {
       return HlsFD;
     }
-    if (protocol === "m3u8_native" && getSuitableDownloaderForProtocol(protocolInfo, "m3u8_frag_urls", params, null)) {
+    if (
+      protocol === "m3u8_native" &&
+      getSuitableDownloaderForProtocol(
+        protocolInfo,
+        "m3u8_frag_urls",
+        params,
+        null,
+      )
+    ) {
       return HlsFD;
     }
     if (params.hls_prefer_native === true) {
@@ -175,7 +212,10 @@ function getSuitableDownloaderForProtocol(
   return PROTOCOL_MAP[protocol] ?? defaultDownloader;
 }
 
-function externalDownloaderForProtocol(value: unknown, protocol: string): string | null {
+function externalDownloaderForProtocol(
+  value: unknown,
+  protocol: string,
+): string | null {
   if (typeof value === "string") {
     return value;
   }

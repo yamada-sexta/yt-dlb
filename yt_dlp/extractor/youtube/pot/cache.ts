@@ -59,25 +59,38 @@ export type PoTokenCacheSpecProviderConstructor = {
   ): PoTokenCacheSpecProvider;
 };
 
-export type CacheProviderPreference = (provider: PoTokenCacheProvider, request: PoTokenRequest) => number;
+export type CacheProviderPreference = (
+  provider: PoTokenCacheProvider,
+  request: PoTokenRequest,
+) => number;
 
-export function registerProvider<T extends PoTokenCacheProviderConstructor>(provider: T): T {
+export function registerProvider<T extends PoTokenCacheProviderConstructor>(
+  provider: T,
+): T {
   if (potCacheProviders.has(provider.providerName)) {
-    throw new Error(`PoTokenCacheProvider ${provider.providerName} already registered`);
+    throw new Error(
+      `PoTokenCacheProvider ${provider.providerName} already registered`,
+    );
   }
   potCacheProviders.set(provider.providerName, provider);
   return provider;
 }
 
-export function registerSpec<T extends PoTokenCacheSpecProviderConstructor>(provider: T): T {
+export function registerSpec<T extends PoTokenCacheSpecProviderConstructor>(
+  provider: T,
+): T {
   if (potPcsProviders.has(provider.providerName)) {
-    throw new Error(`PoTokenCacheSpecProvider ${provider.providerName} already registered`);
+    throw new Error(
+      `PoTokenCacheSpecProvider ${provider.providerName} already registered`,
+    );
   }
   potPcsProviders.set(provider.providerName, provider);
   return provider;
 }
 
-export function registerPreference(preference: CacheProviderPreference): CacheProviderPreference {
+export function registerPreference(
+  preference: CacheProviderPreference,
+): CacheProviderPreference {
   potCacheProviderPreferences.add(preference);
   return preference;
 }

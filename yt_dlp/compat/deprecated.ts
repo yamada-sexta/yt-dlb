@@ -9,5 +9,7 @@ export function compat_shlex_quote(value: string): string {
   if (!value) {
     return "''";
   }
-  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\"'\"'")}'`;
+  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value)
+    ? value
+    : `'${value.replaceAll("'", "'\"'\"'")}'`;
 }

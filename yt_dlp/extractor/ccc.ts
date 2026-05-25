@@ -34,7 +34,8 @@ export class CCCIE extends InfoExtractor {
     return "media.ccc.de";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?media\.ccc\.de/v/(?<id>[^/?#&]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?media\.ccc\.de/v/(?<id>[^/?#&]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const displayId = this.matchId(url);
@@ -42,11 +43,19 @@ export class CCCIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download CCC event page");
     }
-    const eventId = this.searchRegex(/data-id=(['"])(?<event_id>\d+)\1/, webpage, "event id", { group: "event_id" });
+    const eventId = this.searchRegex(
+      /data-id=(['"])(?<event_id>\d+)\1/,
+      webpage,
+      "event id",
+      { group: "event_id" },
+    );
     if (typeof eventId !== "string") {
       throw new Error("Unable to extract CCC event id");
     }
-    const eventData = await this.downloadJson<CccEvent>(`https://media.ccc.de/public/events/${eventId}`, eventId);
+    const eventData = await this.downloadJson<CccEvent>(
+      `https://media.ccc.de/public/events/${eventId}`,
+      eventId,
+    );
     if (eventData === false) {
       throw new Error("Unable to download CCC event metadata");
     }
@@ -57,24 +66,34 @@ export class CCCIE extends InfoExtractor {
       }
       const language = recording.language;
       const folder = recording.folder;
-      const formatId = [language, folder].filter(Boolean).join("-") || undefined;
-      const vcodec = folder?.includes("h264") ? "h264" : folder === "mp3" || folder === "opus" ? "none" : undefined;
-      return [{
-        format_id: formatId,
-        url: recording.recording_url,
-        width: intOrNone(recording.width) ?? undefined,
-        height: intOrNone(recording.height) ?? undefined,
-        filesize: intOrNone(recording.size, 1, null, 1024 * 1024) ?? undefined,
-        language,
-        vcodec,
-      }];
+      const formatId =
+        [language, folder].filter(Boolean).join("-") || undefined;
+      const vcodec = folder?.includes("h264")
+        ? "h264"
+        : folder === "mp3" || folder === "opus"
+          ? "none"
+          : undefined;
+      return [
+        {
+          format_id: formatId,
+          url: recording.recording_url,
+          width: intOrNone(recording.width) ?? undefined,
+          height: intOrNone(recording.height) ?? undefined,
+          filesize:
+            intOrNone(recording.size, 1, null, 1024 * 1024) ?? undefined,
+          language,
+          vcodec,
+        },
+      ];
     });
 
     return {
       id: eventId,
       display_id: displayId,
       title: eventData.title,
-      creator: tryGet(eventData, (value) => (value as CccEvent).persons?.join(", ")),
+      creator: tryGet(eventData, (value) =>
+        (value as CccEvent).persons?.join(", "),
+      ),
       description: eventData.description,
       thumbnail: eventData.thumb_url,
       timestamp: parseIso8601(eventData.date) ?? undefined,
@@ -91,11 +110,15 @@ export class CCCPlaylistIE extends InfoExtractor {
     return "media.ccc.de:lists";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?media\.ccc\.de/c/(?<id>[^/?#&]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?media\.ccc\.de/c/(?<id>[^/?#&]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const playlistId = this.matchId(url);
-    const conf = await this.downloadJson<CccConference>(`https://media.ccc.de/public/conferences/${playlistId}`, playlistId);
+    const conf = await this.downloadJson<CccConference>(
+      `https://media.ccc.de/public/conferences/${playlistId}`,
+      playlistId,
+    );
     if (conf === false) {
       throw new Error("Unable to download CCC conference metadata");
     }

@@ -26,11 +26,14 @@ export const REPOSITORY = UPDATE_SOURCES.stable;
 export const API_BASE_URL = "https://api.github.com/repos";
 export const API_URL = `${API_BASE_URL}/${REPOSITORY}/releases`;
 
-const INVERSE_UPDATE_SOURCES = new Map(Object.entries(UPDATE_SOURCES).map(([key, value]) => [value, key]));
+const INVERSE_UPDATE_SOURCES = new Map(
+  Object.entries(UPDATE_SOURCES).map(([key, value]) => [value, key]),
+);
 const VERSION_RE = /^(\d+\.)*\d+$/;
 const VERSION_SEARCH_RE = /\s+(?<version>(?:\d+\.)*\d+)$/;
 const HASH_RE = /^[\da-f]{40}$/;
-const COMMIT_RE = /Generated from: https:\/\/(?:[^/?#]+\/){3}commit\/(?<hash>[\da-f]{40})/;
+const COMMIT_RE =
+  /Generated from: https:\/\/(?:[^/?#]+\/){3}commit\/(?<hash>[\da-f]{40})/;
 
 const FILE_SUFFIXES: Record<string, string> = {
   zip: "",
@@ -46,10 +49,22 @@ const FILE_SUFFIXES: Record<string, string> = {
 
 const NON_UPDATEABLE_REASONS = new Map<string, string | undefined>([
   ...Object.keys(FILE_SUFFIXES).map((key) => [key, undefined] as const),
-  ["source", "You cannot update when running from source code; Use git to pull the latest changes"],
-  ["bun", "Auto-update is not supported for the Bun TypeScript runtime; Use bun install or git to update"],
-  ["unknown", "You installed yt-dlp from a manual build or with a package manager; Use that to update"],
-  ["other", "You are using an unofficial build of yt-dlp; Build the executable again"],
+  [
+    "source",
+    "You cannot update when running from source code; Use git to pull the latest changes",
+  ],
+  [
+    "bun",
+    "Auto-update is not supported for the Bun TypeScript runtime; Use bun install or git to update",
+  ],
+  [
+    "unknown",
+    "You installed yt-dlp from a manual build or with a package manager; Use that to update",
+  ],
+  [
+    "other",
+    "You are using an unofficial build of yt-dlp; Build the executable again",
+  ],
 ]);
 
 export interface UpdateInfoInit {
@@ -114,8 +129,12 @@ export async function currentGitHead(): Promise<string | undefined> {
       cwd: dirname(new URL(import.meta.url).pathname),
       stdio: ["ignore", "pipe", "ignore"],
     });
-    const stdout = await new Response(proc.stdout as unknown as ReadableStream).text();
-    const code = await new Promise<number | null>((resolve) => proc.once("close", resolve));
+    const stdout = await new Response(
+      proc.stdout as unknown as ReadableStream,
+    ).text();
+    const code = await new Promise<number | null>((resolve) =>
+      proc.once("close", resolve),
+    );
     const hash = stdout.trim();
     return code === 0 && /^[0-9a-f]+$/.test(hash) ? hash : undefined;
   } catch {
@@ -127,7 +146,10 @@ export function isNonUpdateable(): string | undefined {
   if (UPDATE_HINT) {
     return UPDATE_HINT;
   }
-  return NON_UPDATEABLE_REASONS.get(detectVariant()) ?? NON_UPDATEABLE_REASONS.get(VARIANT ? "other" : "unknown");
+  return (
+    NON_UPDATEABLE_REASONS.get(detectVariant()) ??
+    NON_UPDATEABLE_REASONS.get(VARIANT ? "other" : "unknown")
+  );
 }
 
 export async function sha256File(path: string): Promise<string> {
@@ -137,9 +159,15 @@ export async function sha256File(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
-export function makeLabel(origin: string, tag: string, buildVersion?: string | null): string {
+export function makeLabel(
+  origin: string,
+  tag: string,
+  buildVersion?: string | null,
+): string {
   if (tag !== buildVersion) {
-    return buildVersion ? `${origin}@${tag} build ${buildVersion}` : `${origin}@${tag}`;
+    return buildVersion
+      ? `${origin}@${tag} build ${buildVersion}`
+      : `${origin}@${tag}`;
   }
   const channel = INVERSE_UPDATE_SOURCES.get(origin);
   return channel ? `${channel}@${tag} from ${origin}` : `${origin}@${tag}`;
@@ -155,20 +183,27 @@ export class Updater {
   readonly #origin = ORIGIN;
   readonly #channel = CHANNEL;
 
-  constructor(readonly ydl: UpdateHost, target?: string | null) {
+  constructor(
+    readonly ydl: UpdateHost,
+    target?: string | null,
+  ) {
     const requested = target ?? this.#channel;
     const at = requested.lastIndexOf("@");
     let requestedChannel = at === -1 ? "" : requested.slice(0, at);
     let requestedTag = at === -1 ? requested : requested.slice(at + 1);
 
-    if (!requestedChannel && (requestedTag.includes("/") || requestedTag in UPDATE_SOURCES)) {
+    if (
+      !requestedChannel &&
+      (requestedTag.includes("/") || requestedTag in UPDATE_SOURCES)
+    ) {
       requestedChannel = requestedTag;
       requestedTag = "";
     } else if (!requestedChannel) {
       requestedChannel = this.#channel.split("@", 1)[0] ?? "stable";
     }
 
-    this.#exact = Boolean(target) && target !== this.#channel && Boolean(requestedTag);
+    this.#exact =
+      Boolean(target) && target !== this.#channel && Boolean(requestedTag);
     if (!requestedTag) {
       requestedTag = "latest";
     }
@@ -180,10 +215,19 @@ export class Updater {
       : UPDATE_SOURCES[requestedChannel as keyof typeof UPDATE_SOURCES];
 
     if (!this.requestedRepo) {
-      this.reportError(`Invalid update channel ${JSON.stringify(requestedChannel)} requested. Valid channels are ${Object.keys(UPDATE_SOURCES).join(", ")}`, true);
+      this.reportError(
+        `Invalid update channel ${JSON.stringify(requestedChannel)} requested. Valid channels are ${Object.keys(UPDATE_SOURCES).join(", ")}`,
+        true,
+      );
     }
-    if (this.requestedRepo && !this.requestedRepo.startsWith("yt-dlp/") && this.requestedRepo !== this.#origin) {
-      this.ydl.reportWarning(`You are switching to an unofficial executable from ${this.requestedRepo}. Run at your own risk`);
+    if (
+      this.requestedRepo &&
+      !this.requestedRepo.startsWith("yt-dlp/") &&
+      this.requestedRepo !== this.#origin
+    ) {
+      this.ydl.reportWarning(
+        `You are switching to an unofficial executable from ${this.requestedRepo}. Run at your own risk`,
+      );
     }
 
     this.#identifier = `${detectVariant()} ${process.platform}_${process.arch}`;
@@ -206,26 +250,46 @@ export class Updater {
     let requestedVersion: string | null;
     let targetCommitish: string | null;
     try {
-      [requestedVersion, targetCommitish] = await this.getVersionInfo(this.requestedTag);
+      [requestedVersion, targetCommitish] = await this.getVersionInfo(
+        this.requestedTag,
+      );
     } catch (error) {
-      this.reportNetworkError(`obtain version info (${error})`, "; Please try again later or");
+      this.reportNetworkError(
+        `obtain version info (${error})`,
+        "; Please try again later or",
+      );
       return null;
     }
 
     const hasUpdate = this.hasUpdate(requestedVersion, targetCommitish);
-    const resolvedTag = this.requestedTag === "latest" ? requestedVersion ?? this.requestedTag : this.requestedTag;
-    const currentLabel = makeLabel(this.#origin, this.#channel.split("@")[1] ?? this.currentVersion, this.currentVersion);
-    const requestedLabel = makeLabel(this.requestedRepo, resolvedTag, requestedVersion);
+    const resolvedTag =
+      this.requestedTag === "latest"
+        ? (requestedVersion ?? this.requestedTag)
+        : this.requestedTag;
+    const currentLabel = makeLabel(
+      this.#origin,
+      this.#channel.split("@")[1] ?? this.currentVersion,
+      this.currentVersion,
+    );
+    const requestedLabel = makeLabel(
+      this.requestedRepo,
+      resolvedTag,
+      requestedVersion,
+    );
     const latestOrRequested = `${this.requestedTag === "latest" ? "Latest" : "Requested"} version: ${requestedLabel}`;
 
     if (!hasUpdate) {
       if (output) {
-        this.ydl.toScreen(`${latestOrRequested}\nyt-dlp is up to date (${currentLabel})`);
+        this.ydl.toScreen(
+          `${latestOrRequested}\nyt-dlp is up to date (${currentLabel})`,
+        );
       }
       return null;
     }
 
-    const updateSpec = await this.downloadUpdateSpec(requestedVersion ? ["latest", ""] : [""]);
+    const updateSpec = await this.downloadUpdateSpec(
+      requestedVersion ? ["latest", ""] : [""],
+    );
     if (!updateSpec) {
       return null;
     }
@@ -233,13 +297,26 @@ export class Updater {
     if (!resultTag || resultTag === this.currentVersion) {
       return null;
     }
-    const resultVersion = resultTag === resolvedTag ? requestedVersion : VERSION_RE.test(resultTag) ? resultTag : null;
+    const resultVersion =
+      resultTag === resolvedTag
+        ? requestedVersion
+        : VERSION_RE.test(resultTag)
+          ? resultTag
+          : null;
 
-    const checksum = isNonUpdateable() ? null : await this.fetchChecksum(resultTag);
+    const checksum = isNonUpdateable()
+      ? null
+      : await this.fetchChecksum(resultTag);
 
     if (output) {
-      const updateLabel = makeLabel(this.requestedRepo, resultTag, resultVersion);
-      this.ydl.toScreen(`Current version: ${currentLabel}\n${latestOrRequested}${updateLabel !== requestedLabel ? `\nUpgradable to: ${updateLabel}` : ""}`);
+      const updateLabel = makeLabel(
+        this.requestedRepo,
+        resultTag,
+        resultVersion,
+      );
+      this.ydl.toScreen(
+        `Current version: ${currentLabel}\n${latestOrRequested}${updateLabel !== requestedLabel ? `\nUpgradable to: ${updateLabel}` : ""}`,
+      );
     }
 
     return new UpdateInfo({
@@ -252,7 +329,8 @@ export class Updater {
   }
 
   async update(updateInfo?: UpdateInfo | null): Promise<boolean> {
-    const info = updateInfo === undefined ? await this.queryUpdate(true) : updateInfo;
+    const info =
+      updateInfo === undefined ? await this.queryUpdate(true) : updateInfo;
     if (!info) {
       return false;
     }
@@ -268,7 +346,11 @@ export class Updater {
 
     const filename = await this.filename();
     this.ydl.toScreen(`Current Build Hash: ${await sha256File(filename)}`);
-    const updateLabel = makeLabel(this.requestedRepo ?? REPOSITORY, info.tag, info.version);
+    const updateLabel = makeLabel(
+      this.requestedRepo ?? REPOSITORY,
+      info.tag,
+      info.version,
+    );
     this.ydl.toScreen(`Updating to ${updateLabel} ...`);
 
     const directory = dirname(filename);
@@ -282,12 +364,17 @@ export class Updater {
     }
 
     const newContent = await this.downloadAsset(info.binaryName, info.tag);
-    if (info.checksum && createHash("sha256").update(newContent).digest("hex") !== info.checksum) {
+    if (
+      info.checksum &&
+      createHash("sha256").update(newContent).digest("hex") !== info.checksum
+    ) {
       this.reportNetworkError("verify the new executable", ";", info.tag);
       return false;
     }
     if (!info.checksum) {
-      this.ydl.reportWarning("No checksum was available for the update; writing unverified builds is disabled");
+      this.ydl.reportWarning(
+        "No checksum was available for the update; writing unverified builds is disabled",
+      );
       return false;
     }
 
@@ -307,14 +394,19 @@ export class Updater {
     const cmd = Bun.argv;
     this.ydl.writeDebug(`Restarting: ${cmd.join(" ")}`);
     const proc = spawn(cmd[0] ?? "bun", cmd.slice(1), { stdio: "inherit" });
-    return await new Promise<number | null>((resolve) => proc.once("close", resolve));
+    return await new Promise<number | null>((resolve) =>
+      proc.once("close", resolve),
+    );
   }
 
   async filename(): Promise<string> {
     return await realpath(Bun.argv[1] ?? Bun.argv[0] ?? process.cwd());
   }
 
-  private async downloadAsset(name: string, tag = this.requestedTag): Promise<Buffer> {
+  private async downloadAsset(
+    name: string,
+    tag = this.requestedTag,
+  ): Promise<Buffer> {
     const path = tag === "latest" ? "latest/download" : `download/${tag}`;
     const url = `https://github.com/${this.requestedRepo}/releases/${path}/${name}`;
     this.ydl.writeDebug(`Downloading ${name} from ${url}`);
@@ -339,32 +431,43 @@ export class Updater {
     if (!response.ok) {
       throw new HTTPError(response.status, response.statusText);
     }
-    return await response.json() as GitHubReleaseInfo;
+    return (await response.json()) as GitHubReleaseInfo;
   }
 
-  private async getVersionInfo(tag: string): Promise<[string | null, string | null]> {
+  private async getVersionInfo(
+    tag: string,
+  ): Promise<[string | null, string | null]> {
     if (VERSION_RE.test(tag)) {
       return [tag, null];
     }
 
     const apiInfo = await this.callApi(tag);
-    const requestedVersion = tag === "latest"
-      ? apiInfo.tag_name ?? null
-      : apiInfo.name?.match(VERSION_SEARCH_RE)?.groups?.version ?? null;
-    const targetCommitish = apiInfo.target_commitish && HASH_RE.test(apiInfo.target_commitish)
-      ? apiInfo.target_commitish
-      : apiInfo.body?.match(COMMIT_RE)?.groups?.hash ?? null;
+    const requestedVersion =
+      tag === "latest"
+        ? (apiInfo.tag_name ?? null)
+        : (apiInfo.name?.match(VERSION_SEARCH_RE)?.groups?.version ?? null);
+    const targetCommitish =
+      apiInfo.target_commitish && HASH_RE.test(apiInfo.target_commitish)
+        ? apiInfo.target_commitish
+        : (apiInfo.body?.match(COMMIT_RE)?.groups?.hash ?? null);
 
     if (!requestedVersion && !targetCommitish) {
-      this.reportError("One of either version or commit hash must be available on the release", true);
+      this.reportError(
+        "One of either version or commit hash must be available on the release",
+        true,
+      );
     }
     return [requestedVersion, targetCommitish];
   }
 
-  private async downloadUpdateSpec(sourceTags: readonly string[]): Promise<string | null> {
+  private async downloadUpdateSpec(
+    sourceTags: readonly string[],
+  ): Promise<string | null> {
     for (const tag of sourceTags) {
       try {
-        return (await this.downloadAsset("_update_spec", tag || undefined)).toString();
+        return (
+          await this.downloadAsset("_update_spec", tag || undefined)
+        ).toString();
       } catch (error) {
         if (error instanceof HTTPError && error.status === 404) {
           continue;
@@ -373,11 +476,17 @@ export class Updater {
         return null;
       }
     }
-    this.reportError(`The requested tag ${this.requestedTag} does not exist for ${this.requestedRepo}`, true);
+    this.reportError(
+      `The requested tag ${this.requestedTag} does not exist for ${this.requestedRepo}`,
+      true,
+    );
     return null;
   }
 
-  private processUpdateSpec(lockfile: string, resolvedTag: string): string | null {
+  private processUpdateSpec(
+    lockfile: string,
+    resolvedTag: string,
+  ): string | null {
     const lines = lockfile.split(/\r?\n/);
     const isVersion2 = lines.some((line) => line.startsWith("lockV2 "));
     for (const line of lines) {
@@ -387,7 +496,12 @@ export class Updater {
         if (!line.startsWith(`lockV2 ${this.requestedRepo} `)) {
           continue;
         }
-        [, , tag, pattern] = line.split(" ", 4) as [string, string, string, string];
+        [, , tag, pattern] = line.split(" ", 4) as [
+          string,
+          string,
+          string,
+          string,
+        ];
       } else {
         if (!line.startsWith("lock ")) {
           continue;
@@ -396,10 +510,17 @@ export class Updater {
       }
       if (new RegExp(pattern).test(this.#identifier)) {
         if (VERSION_RE.test(tag)) {
-          return !this.#exact ? tag : this.versionCompare(tag, resolvedTag) ? resolvedTag : null;
+          return !this.#exact
+            ? tag
+            : this.versionCompare(tag, resolvedTag)
+              ? resolvedTag
+              : null;
         }
         if (tag === resolvedTag) {
-          this.reportError(`yt-dlp cannot be updated to ${resolvedTag} since your operating system is not compatible with the requested build`, true);
+          this.reportError(
+            `yt-dlp cannot be updated to ${resolvedTag} since your operating system is not compatible with the requested build`,
+            true,
+          );
           return null;
         }
       }
@@ -414,23 +535,34 @@ export class Updater {
     return a === b;
   }
 
-  private hasUpdate(requestedVersion: string | null, targetCommitish: string | null): boolean {
+  private hasUpdate(
+    requestedVersion: string | null,
+    targetCommitish: string | null,
+  ): boolean {
     if (this.#exact && this.#origin !== this.requestedRepo) {
       return true;
     }
     if (requestedVersion) {
-      return this.#exact ? this.currentVersion !== requestedVersion : !this.versionCompare(this.currentVersion, requestedVersion);
+      return this.#exact
+        ? this.currentVersion !== requestedVersion
+        : !this.versionCompare(this.currentVersion, requestedVersion);
     }
     return targetCommitish ? targetCommitish !== this.currentCommit : false;
   }
 
   private async fetchChecksum(resultTag: string): Promise<string | null> {
     try {
-      const hashes = (await this.downloadAsset("SHA2-256SUMS", resultTag)).toString();
+      const hashes = (
+        await this.downloadAsset("SHA2-256SUMS", resultTag)
+      ).toString();
       const binaryName = getBinaryName();
-      const line = hashes.split(/\r?\n/).find((candidate) => binaryName && candidate.endsWith(binaryName));
+      const line = hashes
+        .split(/\r?\n/)
+        .find((candidate) => binaryName && candidate.endsWith(binaryName));
       if (!line) {
-        this.ydl.reportWarning("The hash could not be found in the checksum file, skipping verification");
+        this.ydl.reportWarning(
+          "The hash could not be found in the checksum file, skipping verification",
+        );
         return null;
       }
       return line.split(/\s+/)[0] ?? null;
@@ -439,7 +571,9 @@ export class Updater {
         this.reportNetworkError(`fetch checksums: ${error}`);
         return null;
       }
-      this.ydl.reportWarning("No hash information found for the release, skipping verification");
+      this.ydl.reportWarning(
+        "No hash information found for the release, skipping verification",
+      );
       return null;
     }
   }
@@ -450,22 +584,37 @@ export class Updater {
   }
 
   private reportPermissionError(file: string): void {
-    this.reportError(`Unable to write to ${file}; try running as administrator`, true);
+    this.reportError(
+      `Unable to write to ${file}; try running as administrator`,
+      true,
+    );
   }
 
-  private reportNetworkError(action: string, delim = ";", tag = this.requestedTag): void {
+  private reportNetworkError(
+    action: string,
+    delim = ";",
+    tag = this.requestedTag,
+  ): void {
     const path = tag === "latest" ? tag : `tag/${tag}`;
-    this.reportError(`Unable to ${action}${delim} visit https://github.com/${this.requestedRepo}/releases/${path}`, true);
+    this.reportError(
+      `Unable to ${action}${delim} visit https://github.com/${this.requestedRepo}/releases/${path}`,
+      true,
+    );
   }
 }
 
 export async function runUpdate(ydl: UpdateHost): Promise<boolean> {
-  ydl.reportWarning('"yt_dlp.update.run_update(ydl)" is deprecated and may be removed in a future version. Use "yt_dlp.update.Updater(ydl).update()" instead');
+  ydl.reportWarning(
+    '"yt_dlp.update.run_update(ydl)" is deprecated and may be removed in a future version. Use "yt_dlp.update.Updater(ydl).update()" instead',
+  );
   return await new Updater(ydl).update();
 }
 
 export class HTTPError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
     super(message);
   }
 }

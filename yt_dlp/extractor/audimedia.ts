@@ -30,7 +30,8 @@ interface AudiVideoResponse {
 }
 
 export class AudiMediaIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?audi-mediacenter\.com/(?:en|de)/audimediatv/(?:video/)?(?<id>[^/?#]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?audi-mediacenter\.com/(?:en|de)/audimediatv/(?:video/)?(?<id>[^/?#]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const displayId = this.matchId(url);
@@ -38,13 +39,17 @@ export class AudiMediaIE extends InfoExtractor {
     if (webpage === false) {
       throw new Error("Unable to download Audi MediaCenter page");
     }
-    const rawPayload = this.searchRegex([
-      /class="amtv-embed"[^>]+id="([0-9a-z-]+)"/,
-      /id="([0-9a-z-]+)"[^>]+class="amtv-embed"/,
-      /class=\\"amtv-embed\\"[^>]+id=\\"([0-9a-z-]+)\\"/,
-      /id=\\"([0-9a-z-]+)\\"[^>]+class=\\"amtv-embed\\"/,
-      /id=(?:\\)?"(amtve-[a-z]-\d+-[a-z]{2})/,
-    ], webpage, "raw payload");
+    const rawPayload = this.searchRegex(
+      [
+        /class="amtv-embed"[^>]+id="([0-9a-z-]+)"/,
+        /id="([0-9a-z-]+)"[^>]+class="amtv-embed"/,
+        /class=\\"amtv-embed\\"[^>]+id=\\"([0-9a-z-]+)\\"/,
+        /id=\\"([0-9a-z-]+)\\"[^>]+class=\\"amtv-embed\\"/,
+        /id=(?:\\)?"(amtve-[a-z]-\d+-[a-z]{2})/,
+      ],
+      webpage,
+      "raw payload",
+    );
     if (typeof rawPayload !== "string") {
       throw new Error("Unable to extract Audi MediaCenter embed payload");
     }
@@ -68,17 +73,30 @@ export class AudiMediaIE extends InfoExtractor {
 
     const formats: Array<Record<string, unknown>> = [];
     if (videoData.stream_url_hls) {
-      formats.push(...this.extractM3u8Formats(videoData.stream_url_hls, videoId, "mp4", { entryProtocol: "m3u8_native", m3u8Id: "hls" }));
+      formats.push(
+        ...this.extractM3u8Formats(videoData.stream_url_hls, videoId, "mp4", {
+          entryProtocol: "m3u8_native",
+          m3u8Id: "hls",
+        }),
+      );
     }
     if (videoData.stream_url_hds) {
-      formats.push(...this.extractF4mFormats(`${videoData.stream_url_hds}?hdcore=3.4.0`, videoId, { f4mId: "hds", fatal: false }));
+      formats.push(
+        ...this.extractF4mFormats(
+          `${videoData.stream_url_hds}?hdcore=3.4.0`,
+          videoId,
+          { f4mId: "hds", fatal: false },
+        ),
+      );
     }
     for (const version of videoData.video_versions ?? []) {
       const versionUrl = version.download_url ?? version.stream_url;
       if (!versionUrl) {
         continue;
       }
-      const bitrate = this.searchRegex(/(\d+)k/, versionUrl, "bitrate", { defaultValue: null });
+      const bitrate = this.searchRegex(/(\d+)k/, versionUrl, "bitrate", {
+        defaultValue: null,
+      });
       formats.push({
         url: versionUrl,
         width: intOrNone(version.width) ?? undefined,

@@ -19,7 +19,9 @@ const XATTR_MAPPING: Record<string, string> = {
 };
 
 export class XAttrMetadataPP extends PostProcessor {
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
     const filepath = typeof info.filepath === "string" ? info.filepath : null;
     if (!filepath) {
       throw new PostProcessingError("XAttrMetadataPP requires info.filepath");
@@ -31,14 +33,18 @@ export class XAttrMetadataPP extends PostProcessor {
       if (!rawValue) {
         continue;
       }
-      if (xattrName === "com.apple.metadata:kMDItemWhereFroms" && process.platform !== "darwin") {
+      if (
+        xattrName === "com.apple.metadata:kMDItemWhereFroms" &&
+        process.platform !== "darwin"
+      ) {
         continue;
       }
-      const value = xattrName === "com.apple.metadata:kMDItemWhereFroms"
-        ? appleWhereFromsPlist(String(rawValue))
-        : infoName === "upload_date"
-          ? hyphenateDate(String(rawValue))
-          : String(rawValue);
+      const value =
+        xattrName === "com.apple.metadata:kMDItemWhereFroms"
+          ? appleWhereFromsPlist(String(rawValue))
+          : infoName === "upload_date"
+            ? hyphenateDate(String(rawValue))
+            : String(rawValue);
       await writeXattr(filepath, xattrName, value);
     }
     await this.tryUtime(filepath, mtime, mtime);
@@ -46,7 +52,11 @@ export class XAttrMetadataPP extends PostProcessor {
   }
 }
 
-async function writeXattr(filepath: string, name: string, value: string): Promise<void> {
+async function writeXattr(
+  filepath: string,
+  name: string,
+  value: string,
+): Promise<void> {
   const cmd = xattrCommand(filepath, name, value);
   const output = await $`${cmd}`.nothrow().quiet();
   if (output.exitCode === 0) {
@@ -54,31 +64,43 @@ async function writeXattr(filepath: string, name: string, value: string): Promis
   }
   const stderr = output.stderr.toString().trim();
   if (/no space|quota|too large|argument list too long/i.test(stderr)) {
-    throw new PostProcessingError(`Unable to write extended attribute "${name}": ${stderr}`);
+    throw new PostProcessingError(
+      `Unable to write extended attribute "${name}": ${stderr}`,
+    );
   }
-  throw new PostProcessingError(`This filesystem doesn't support extended attributes. ${stderr}`);
+  throw new PostProcessingError(
+    `This filesystem doesn't support extended attributes. ${stderr}`,
+  );
 }
 
 function xattrCommand(filepath: string, name: string, value: string): string[] {
   if (process.platform === "darwin") {
     const exe = Bun.which("xattr");
     if (!exe) {
-      throw new NotImplementedError("xattr command is required for XAttrMetadataPP on macOS");
+      throw new NotImplementedError(
+        "xattr command is required for XAttrMetadataPP on macOS",
+      );
     }
     return [exe, "-w", name, value, filepath];
   }
   if (process.platform === "linux") {
     const exe = Bun.which("setfattr");
     if (!exe) {
-      throw new NotImplementedError("setfattr command is required for XAttrMetadataPP on Linux");
+      throw new NotImplementedError(
+        "setfattr command is required for XAttrMetadataPP on Linux",
+      );
     }
     return [exe, "-n", name, "-v", value, filepath];
   }
-  throw new NotImplementedError(`XAttrMetadataPP is not implemented on ${process.platform}`);
+  throw new NotImplementedError(
+    `XAttrMetadataPP is not implemented on ${process.platform}`,
+  );
 }
 
 function hyphenateDate(value: string): string {
-  return /^(\d{4})(\d{2})(\d{2})$/.test(value) ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3") : value;
+  return /^(\d{4})(\d{2})(\d{2})$/.test(value)
+    ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3")
+    : value;
 }
 
 function appleWhereFromsPlist(value: string): string {

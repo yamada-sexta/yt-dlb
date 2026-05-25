@@ -8,7 +8,10 @@ interface WebSocketSender {
 }
 
 export class FC2LiveFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     const ws = parseWebSocketSender(info.ws);
     let heartbeatId = 1;
     const sendHeartbeat = (): void => {
@@ -16,7 +19,9 @@ export class FC2LiveFD extends FileDownloader {
       try {
         ws.send(`{"name":"heartbeat","arguments":{},"id":${heartbeatId}}`);
       } catch (error) {
-        this.toScreen(`[fc2:live] Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.toScreen(
+          `[fc2:live] Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     };
     sendHeartbeat();
@@ -36,8 +41,15 @@ export class FC2LiveFD extends FileDownloader {
 }
 
 function parseWebSocketSender(value: unknown): WebSocketSender {
-  if (value && typeof value === "object" && "send" in value && typeof value.send === "function") {
+  if (
+    value &&
+    typeof value === "object" &&
+    "send" in value &&
+    typeof value.send === "function"
+  ) {
     return value as WebSocketSender;
   }
-  throw new Error("FC2 live downloader requires an active WebSocket sender in info.ws");
+  throw new Error(
+    "FC2 live downloader requires an active WebSocket sender in info.ws",
+  );
 }

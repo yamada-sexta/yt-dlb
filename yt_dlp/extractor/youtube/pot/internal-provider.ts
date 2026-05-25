@@ -18,7 +18,10 @@ export interface IEContentProviderLogger {
 }
 
 export class ConsoleIEContentProviderLogger implements IEContentProviderLogger {
-  constructor(readonly prefix = "provider", readonly logLevel = LogLevel.INFO) {}
+  constructor(
+    readonly prefix = "provider",
+    readonly logLevel = LogLevel.INFO,
+  ) {}
 
   trace(message: string): void {
     if (this.logLevel <= LogLevel.TRACE) {
@@ -53,7 +56,10 @@ export class ConsoleIEContentProviderLogger implements IEContentProviderLogger {
 }
 
 export class IEContentProviderError extends Error {
-  constructor(message = "content provider error", readonly expected = false) {
+  constructor(
+    message = "content provider error",
+    readonly expected = false,
+  ) {
     super(message);
   }
 }
@@ -66,7 +72,8 @@ export interface IEContentProviderHost {
 
 export abstract class IEContentProvider {
   static readonly providerVersion: string = "0.0.0";
-  static readonly bugReportLocation: string = "(developer has not provided a bug report location)";
+  static readonly bugReportLocation: string =
+    "(developer has not provided a bug report location)";
   static readonly providerName: string;
 
   constructor(
@@ -90,14 +97,19 @@ export abstract class IEContentProvider {
     this.logger.trace(`${this.providerName} closed`);
   }
 
-  configurationArg(key: string, defaultValue: readonly string[] = [], casesense = false): readonly string[] {
+  configurationArg(
+    key: string,
+    defaultValue: readonly string[] = [],
+    casesense = false,
+  ): readonly string[] {
     return configurationArg(this.settings, key, defaultValue, casesense);
   }
 }
 
 export abstract class BuiltinIEContentProvider extends IEContentProvider {
   static override readonly providerVersion: string = "ytdlb";
-  static override readonly bugReportLocation: string = "https://github.com/yt-dlp/yt-dlp";
+  static override readonly bugReportLocation: string =
+    "https://github.com/yt-dlp/yt-dlp";
 }
 
 export function configurationArg(
@@ -127,7 +139,9 @@ export function registerProviderGeneric<T extends IEContentProvider>(
   registry: Map<string, ProviderConstructor<T>>,
 ): ProviderConstructor<T> {
   if (registry.has(provider.providerName)) {
-    throw new Error(`Content provider ${provider.providerName} already registered`);
+    throw new Error(
+      `Content provider ${provider.providerName} already registered`,
+    );
   }
   registry.set(provider.providerName, provider);
   return provider;

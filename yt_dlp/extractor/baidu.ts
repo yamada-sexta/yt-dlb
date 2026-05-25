@@ -13,7 +13,8 @@ interface BaiduEpisodesDetail {
 }
 
 export class BaiduVideoIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://v\.baidu\.com/(?<type>[a-z]+)/(?<id>\d+)\.htm`;
+  static override readonly _VALID_URL =
+    String.raw`https?://v\.baidu\.com/(?<type>[a-z]+)/(?<id>\d+)\.htm`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -29,11 +30,23 @@ export class BaiduVideoIE extends InfoExtractor {
       category = "tvplay";
     }
 
-    const playlistDetail = await this.callApi<BaiduPlaylistDetail>("xqinfo", category, playlistId, "Download playlist JSON metadata");
-    const episodesDetail = await this.callApi<BaiduEpisodesDetail>("xqsingle", category, playlistId, "Download episodes JSON metadata");
+    const playlistDetail = await this.callApi<BaiduPlaylistDetail>(
+      "xqinfo",
+      category,
+      playlistId,
+      "Download playlist JSON metadata",
+    );
+    const episodesDetail = await this.callApi<BaiduEpisodesDetail>(
+      "xqsingle",
+      category,
+      playlistId,
+      "Download episodes JSON metadata",
+    );
     const entries = (episodesDetail.videos ?? [])
       .filter((episode) => episode.url)
-      .map((episode) => this.urlResult(episode.url!, null, null, episode.title ?? null));
+      .map((episode) =>
+        this.urlResult(episode.url!, null, null, episode.title ?? null),
+      );
 
     return this.playlistResult(
       entries,
@@ -43,7 +56,12 @@ export class BaiduVideoIE extends InfoExtractor {
     );
   }
 
-  private async callApi<T>(path: string, category: string, playlistId: string, note: string): Promise<T> {
+  private async callApi<T>(
+    path: string,
+    category: string,
+    playlistId: string,
+    note: string,
+  ): Promise<T> {
     const data = await this.downloadJson<T>(
       `http://app.video.baidu.com/${path}/?worktype=adnative${category}&id=${encodeURIComponent(playlistId)}`,
       playlistId,

@@ -31,13 +31,19 @@ describe("Cache", () => {
   test("disabled cache returns defaults and does not write", async () => {
     const cache = new Cache({ params: { cachedir: false } });
     await cache.store("section", "key", { value: true });
-    expect(await cache.load("section", "key", "json", "default")).toBe("default");
+    expect(await cache.load("section", "key", "json", "default")).toBe(
+      "default",
+    );
     expect(cache.enabled).toBe(false);
   });
 
   test("validates section and dtype", () => {
     const cache = new Cache({ params: { cachedir: testDir } });
-    expect(() => cache.getCacheFile("../bad", "key")).toThrow(/invalid section/);
-    expect(() => cache.getCacheFile("section", "key", "txt")).toThrow(/unsupported cache dtype/);
+    expect(() => cache.getCacheFile("../bad", "key")).toThrow(
+      /invalid section/,
+    );
+    expect(() => cache.getCacheFile("section", "key", "txt")).toThrow(
+      /unsupported cache dtype/,
+    );
   });
 });

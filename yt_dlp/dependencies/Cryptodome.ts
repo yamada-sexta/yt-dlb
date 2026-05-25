@@ -25,9 +25,15 @@ function unsupportedCryptoFeature(feature: string): never {
   throw new NotImplementedError(`Cryptodome.${feature}`);
 }
 
-export const PKCS1_v1_5 = { new: (): never => unsupportedCryptoFeature("PKCS1_v1_5") };
-export const Blowfish = { new: (): never => unsupportedCryptoFeature("Blowfish") };
-export const PKCS1_OAEP = { new: (): never => unsupportedCryptoFeature("PKCS1_OAEP") };
+export const PKCS1_v1_5 = {
+  new: (): never => unsupportedCryptoFeature("PKCS1_v1_5"),
+};
+export const Blowfish = {
+  new: (): never => unsupportedCryptoFeature("Blowfish"),
+};
+export const PKCS1_OAEP = {
+  new: (): never => unsupportedCryptoFeature("PKCS1_OAEP"),
+};
 export const SHA1 = { new: (): never => unsupportedCryptoFeature("SHA1") };
 export const CMAC = { new: (): never => unsupportedCryptoFeature("CMAC") };
 export const RSA = { importKey: (): never => unsupportedCryptoFeature("RSA") };

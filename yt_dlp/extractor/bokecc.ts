@@ -5,7 +5,11 @@ import { xmlFind, xmlFindAll } from "../utils/xml.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 abstract class BokeCCBaseIE extends InfoExtractor {
-  protected async extractBokeccFormats(webpage: string, videoId: string, formatId: string | null = null): Promise<Array<Record<string, unknown>>> {
+  protected async extractBokeccFormats(
+    webpage: string,
+    videoId: string,
+    formatId: string | null = null,
+  ): Promise<Array<Record<string, unknown>>> {
     const playerParamsString = this.htmlSearchRegex(
       /<(?:script|embed)[^>]+src=(?<q>["'])(?:https?:)?\/\/p\.bokecc\.com\/(?:player|flash\/player\.swf)\?(?<query>.+?)\k<q>/,
       webpage,
@@ -19,9 +23,15 @@ abstract class BokeCCBaseIE extends InfoExtractor {
     const siteId = playerParams.get("siteid");
     const vid = playerParams.get("vid");
     if (!siteId || !vid) {
-      throw new ExtractorError("Invalid BokeCC player parameters", { expected: true, videoId });
+      throw new ExtractorError("Invalid BokeCC player parameters", {
+        expected: true,
+        videoId,
+      });
     }
-    const infoXml = await this.downloadXml(`http://p.bokecc.com/servlet/playinfo?uid=${encodeURIComponent(siteId)}&vid=${encodeURIComponent(vid)}&m=1`, videoId);
+    const infoXml = await this.downloadXml(
+      `http://p.bokecc.com/servlet/playinfo?uid=${encodeURIComponent(siteId)}&vid=${encodeURIComponent(vid)}&m=1`,
+      videoId,
+    );
     if (infoXml === false) {
       throw new Error("Unable to download BokeCC playinfo XML");
     }
@@ -32,17 +42,20 @@ abstract class BokeCCBaseIE extends InfoExtractor {
       if (!playUrl) {
         return [];
       }
-      return [{
-        format_id: formatId ?? undefined,
-        url: playUrl,
-        quality: Number(quality.attrib.value),
-      }];
+      return [
+        {
+          format_id: formatId ?? undefined,
+          url: playUrl,
+          quality: Number(quality.attrib.value),
+        },
+      ];
     });
   }
 }
 
 export class BokeCCIE extends BokeCCBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://union\.bokecc\.com/playvideo\.bo\?(?<query>.*)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://union\.bokecc\.com/playvideo\.bo\?(?<query>.*)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const query = this.matchValidUrl(url)?.groups?.query;

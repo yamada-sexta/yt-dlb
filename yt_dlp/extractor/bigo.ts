@@ -1,6 +1,10 @@
 // Source: yt_dlp/extractor/bigo.py
 
-import { ExtractorError, UserNotLive, urlencodePostdata } from "../utils/index.ts";
+import {
+  ExtractorError,
+  UserNotLive,
+  urlencodePostdata,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 interface BigoResponse {
@@ -19,7 +23,8 @@ interface BigoData {
 }
 
 export class BigoIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?bigo\.tv/(?:[a-z]{2,}/)?(?<id>[^/]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?bigo\.tv/(?:[a-z]{2,}/)?(?<id>[^/]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const userId = this.matchId(url);
@@ -31,14 +36,24 @@ export class BigoIE extends InfoExtractor {
         headers: { Accept: "application/json" },
       },
     );
-    if (infoRaw === false || !infoRaw || typeof infoRaw !== "object" || Array.isArray(infoRaw)) {
-      throw new ExtractorError("Received invalid JSON data", { videoId: userId });
-    }
-    if (infoRaw.code) {
-      throw new ExtractorError(`Bigo says: ${infoRaw.msg ?? "unknown error"} (code ${infoRaw.code})`, {
-        expected: true,
+    if (
+      infoRaw === false ||
+      !infoRaw ||
+      typeof infoRaw !== "object" ||
+      Array.isArray(infoRaw)
+    ) {
+      throw new ExtractorError("Received invalid JSON data", {
         videoId: userId,
       });
+    }
+    if (infoRaw.code) {
+      throw new ExtractorError(
+        `Bigo says: ${infoRaw.msg ?? "unknown error"} (code ${infoRaw.code})`,
+        {
+          expected: true,
+          videoId: userId,
+        },
+      );
     }
 
     const info = infoRaw.data ?? {};
@@ -46,7 +61,9 @@ export class BigoIE extends InfoExtractor {
       throw new UserNotLive(undefined, { videoId: userId });
     }
     if (!info.hls_src) {
-      throw new ExtractorError("Unable to extract HLS URL", { videoId: userId });
+      throw new ExtractorError("Unable to extract HLS URL", {
+        videoId: userId,
+      });
     }
 
     const [formats, subtitles] = await this.extractM3u8FormatsAndSubtitles(

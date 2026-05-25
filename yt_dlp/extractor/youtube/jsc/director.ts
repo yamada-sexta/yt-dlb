@@ -54,11 +54,16 @@ export class JsChallengeRequestDirector {
 
   getProviders(requests: readonly JsChallengeRequest[]): JsChallengeProvider[] {
     return [...this.providers.values()]
-      .sort((left, right) => preferenceFor(right, requests) - preferenceFor(left, requests))
+      .sort(
+        (left, right) =>
+          preferenceFor(right, requests) - preferenceFor(left, requests),
+      )
       .filter((provider) => provider.isAvailable());
   }
 
-  async bulkSolve(requests: readonly JsChallengeRequest[]): Promise<Array<[JsChallengeRequest, JsChallengeResponse]>> {
+  async bulkSolve(
+    requests: readonly JsChallengeRequest[],
+  ): Promise<Array<[JsChallengeRequest, JsChallengeResponse]>> {
     const results: Array<[JsChallengeRequest, JsChallengeResponse]> = [];
     const nextRequests = [...requests];
 
@@ -66,9 +71,13 @@ export class JsChallengeRequestDirector {
       if (!nextRequests.length) {
         break;
       }
-      this.logger.trace(`Attempting to solve ${nextRequests.length} challenges using "${provider.providerName}" provider`);
+      this.logger.trace(
+        `Attempting to solve ${nextRequests.length} challenges using "${provider.providerName}" provider`,
+      );
       try {
-        const responses = await provider.bulkSolve(nextRequests.map((request) => ({ ...request })));
+        const responses = await provider.bulkSolve(
+          nextRequests.map((request) => ({ ...request })),
+        );
         for (const response of responses) {
           if (response.error) {
             this.handleError(response.error, provider, [response.request]);
@@ -77,9 +86,14 @@ export class JsChallengeRequestDirector {
           if (!response.response) {
             continue;
           }
-          const validation = validateResponse(response.response, response.request);
+          const validation = validateResponse(
+            response.response,
+            response.request,
+          );
           if (validation !== true) {
-            this.logger.warning(`Invalid JS Challenge response received from "${provider.providerName}" provider: ${validation}`);
+            this.logger.warning(
+              `Invalid JS Challenge response received from "${provider.providerName}" provider: ${validation}`,
+            );
             continue;
           }
           const index = nextRequests.indexOf(response.request);
@@ -90,28 +104,48 @@ export class JsChallengeRequestDirector {
           results.push([response.request, response.response]);
         }
       } catch (error) {
-        this.handleError(error instanceof Error ? error : new Error(String(error)), provider, nextRequests);
+        this.handleError(
+          error instanceof Error ? error : new Error(String(error)),
+          provider,
+          nextRequests,
+        );
       }
     }
 
     if (results.length !== requests.length) {
-      this.logger.trace(`Not all JS Challenges were solved, expected ${requests.length} responses, got ${results.length}`);
+      this.logger.trace(
+        `Not all JS Challenges were solved, expected ${requests.length} responses, got ${results.length}`,
+      );
     }
     return results;
   }
 
-  private handleError(error: Error, provider: JsChallengeProvider, requests: readonly JsChallengeRequest[]): void {
+  private handleError(
+    error: Error,
+    provider: JsChallengeProvider,
+    requests: readonly JsChallengeRequest[],
+  ): void {
     if (error instanceof JsChallengeProviderRejectedRequest) {
-      this.logger.trace(`JS Challenge Provider "${provider.providerName}" rejected ${requests.length} request(s): ${error.message}`);
+      this.logger.trace(
+        `JS Challenge Provider "${provider.providerName}" rejected ${requests.length} request(s): ${error.message}`,
+      );
     } else if (error instanceof JsChallengeProviderError) {
-      this.logger.warning(`Error solving ${requests.length} challenge request(s) using "${provider.providerName}" provider: ${error.message}`);
+      this.logger.warning(
+        `Error solving ${requests.length} challenge request(s) using "${provider.providerName}" provider: ${error.message}`,
+      );
     } else {
-      this.logger.error(`Unexpected error solving ${requests.length} challenge request(s) using "${provider.providerName}" provider`, error);
+      this.logger.error(
+        `Unexpected error solving ${requests.length} challenge request(s) using "${provider.providerName}" provider`,
+        error,
+      );
     }
   }
 }
 
-export function initializeJscDirector(host: JsChallengeProviderHost, logger?: JscLogger): JsChallengeRequestDirector {
+export function initializeJscDirector(
+  host: JsChallengeProviderHost,
+  logger?: JscLogger,
+): JsChallengeRequestDirector {
   const director = new JsChallengeRequestDirector(logger);
   for (const Provider of jscProviders.values()) {
     director.registerProvider(new Provider(host));
@@ -119,15 +153,30 @@ export function initializeJscDirector(host: JsChallengeProviderHost, logger?: Js
   return director;
 }
 
-export function validateResponse(response: JsChallengeResponse, request: JsChallengeRequest): true | string {
+export function validateResponse(
+  response: JsChallengeResponse,
+  request: JsChallengeRequest,
+): true | string {
   return request.type === JsChallengeType.N
-    ? validateNsigChallengeOutput(response.output as NChallengeOutput, request.input as NChallengeInput)
-    : validateSigChallengeOutput(response.output as SigChallengeOutput, request.input as SigChallengeInput);
+    ? validateNsigChallengeOutput(
+        response.output as NChallengeOutput,
+        request.input as NChallengeInput,
+      )
+    : validateSigChallengeOutput(
+        response.output as SigChallengeOutput,
+        request.input as SigChallengeInput,
+      );
 }
 
-export function validateNsigChallengeOutput(output: NChallengeOutput, input: NChallengeInput): true | string {
+export function validateNsigChallengeOutput(
+  output: NChallengeOutput,
+  input: NChallengeInput,
+): true | string {
   const keys = Object.keys(output.results);
-  if (keys.length !== input.challenges.length || !input.challenges.every((challenge) => challenge in output.results)) {
+  if (
+    keys.length !== input.challenges.length ||
+    !input.challenges.every((challenge) => challenge in output.results)
+  ) {
     return "Invalid NChallengeOutput";
   }
   for (const [challenge, result] of Object.entries(output.results)) {
@@ -138,14 +187,21 @@ export function validateNsigChallengeOutput(output: NChallengeOutput, input: NCh
   return true;
 }
 
-export function validateSigChallengeOutput(output: SigChallengeOutput, input: SigChallengeInput): true | string {
+export function validateSigChallengeOutput(
+  output: SigChallengeOutput,
+  input: SigChallengeInput,
+): true | string {
   const keys = Object.keys(output.results);
-  return keys.length === input.challenges.length && input.challenges.every((challenge) => challenge in output.results)
+  return keys.length === input.challenges.length &&
+    input.challenges.every((challenge) => challenge in output.results)
     ? true
     : "Invalid SigChallengeOutput";
 }
 
-function preferenceFor(provider: JsChallengeProvider, requests: readonly JsChallengeRequest[]): number {
+function preferenceFor(
+  provider: JsChallengeProvider,
+  requests: readonly JsChallengeRequest[],
+): number {
   let total = 0;
   for (const preference of jscPreferences) {
     total += preference(provider, requests);

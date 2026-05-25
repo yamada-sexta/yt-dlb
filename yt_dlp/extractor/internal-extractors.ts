@@ -22,18 +22,30 @@ type ExtractorModule = Record<string, unknown>;
 
 let loaded = false;
 
-export async function importExtractors(): Promise<Record<string, InfoExtractorConstructor>> {
+export async function importExtractors(): Promise<
+  Record<string, InfoExtractorConstructor>
+> {
   if (loaded) {
     return extractors.value as Record<string, InfoExtractorConstructor>;
   }
   const registry: Record<string, InfoExtractorConstructor> = {};
   const root = dirname(fileURLToPath(import.meta.url));
   const glob = new Glob("**/*.ts");
-  for await (const file of glob.scan({ cwd: root, dot: false, onlyFiles: true })) {
-    if (file === "common.ts" || file === "index.ts" || file === "internal-extractors.ts") {
+  for await (const file of glob.scan({
+    cwd: root,
+    dot: false,
+    onlyFiles: true,
+  })) {
+    if (
+      file === "common.ts" ||
+      file === "index.ts" ||
+      file === "internal-extractors.ts"
+    ) {
       continue;
     }
-    const module = await import(pathToFileURL(resolve(root, file)).href) as ExtractorModule;
+    const module = (await import(
+      pathToFileURL(resolve(root, file)).href
+    )) as ExtractorModule;
     for (const value of Object.values(module)) {
       if (isInfoExtractorConstructor(value)) {
         registry[value.name] = value;
@@ -45,8 +57,12 @@ export async function importExtractors(): Promise<Record<string, InfoExtractorCo
   return extractors.value as Record<string, InfoExtractorConstructor>;
 }
 
-export function isInfoExtractorConstructor(value: unknown): value is InfoExtractorConstructor {
-  return typeof value === "function"
-    && value.prototype instanceof InfoExtractor
-    && value.name.endsWith("IE");
+export function isInfoExtractorConstructor(
+  value: unknown,
+): value is InfoExtractorConstructor {
+  return (
+    typeof value === "function" &&
+    value.prototype instanceof InfoExtractor &&
+    value.name.endsWith("IE")
+  );
 }

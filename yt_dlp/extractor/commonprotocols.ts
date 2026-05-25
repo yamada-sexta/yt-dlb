@@ -10,11 +10,13 @@ export class RtmpIE extends InfoExtractor {
     return {
       id: this.genericId(url),
       title: this.genericTitle(url),
-      formats: [{
-        url,
-        ext: "flv",
-        format_id: new URL(url).protocol.replace(/:$/, ""),
-      }],
+      formats: [
+        {
+          url,
+          ext: "flv",
+          format_id: new URL(url).protocol.replace(/:$/, ""),
+        },
+      ],
     };
   }
 }

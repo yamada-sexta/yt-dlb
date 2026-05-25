@@ -1,7 +1,11 @@
 // Source: yt_dlp/downloader/soop.py
 // Port note: the AfreecaTV helper is inlined until the extractor layer is migrated.
 
-import { FileDownloader, type DownloadInfo, type DownloaderHost } from "./common.ts";
+import {
+  FileDownloader,
+  type DownloadInfo,
+  type DownloaderHost,
+} from "./common.ts";
 import { HlsFD } from "./hls.ts";
 
 interface SoopRefreshParams {
@@ -23,21 +27,36 @@ interface CookieAwareHost extends DownloaderHost {
 }
 
 export class SoopVodFD extends FileDownloader {
-  override async realDownload(filename: string, info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    filename: string,
+    info: DownloadInfo,
+  ): Promise<boolean> {
     this.toScreen(`[${this.fdName}] Downloading Soop subscription VOD HLS`);
     const refreshParams = parseRefreshParams(info._cookie_refresh_params);
-    const refererUrl = typeof info.webpage_url === "string" ? info.webpage_url : info.url;
+    const refererUrl =
+      typeof info.webpage_url === "string" ? info.webpage_url : info.url;
     const controller = new AbortController();
-    const refreshTask = this.cookieRefreshLoop(controller.signal, refreshParams, refererUrl);
+    const refreshTask = this.cookieRefreshLoop(
+      controller.signal,
+      refreshParams,
+      refererUrl,
+    );
     try {
-      return await new HlsFD(this.ydl, this.params).realDownload(filename, info);
+      return await new HlsFD(this.ydl, this.params).realDownload(
+        filename,
+        info,
+      );
     } finally {
       controller.abort();
       await refreshTask.catch(() => undefined);
     }
   }
 
-  private async cookieRefreshLoop(signal: AbortSignal, params: SoopRefreshParams, refererUrl: string): Promise<void> {
+  private async cookieRefreshLoop(
+    signal: AbortSignal,
+    params: SoopRefreshParams,
+    refererUrl: string,
+  ): Promise<void> {
     while (!signal.aborted) {
       await sleep(5_000, signal);
       if (signal.aborted) {
@@ -46,10 +65,9 @@ export class SoopVodFD extends FileDownloader {
       const currentTime = Date.now() / 1000;
       const expirationTime = this.cloudfrontCookieExpiration(params.m3u8_url);
       const lastRefreshCheck = params._last_refresh ?? 0;
-      const shouldRefresh = (
-        (expirationTime !== 0 && currentTime >= expirationTime - 15)
-        || (expirationTime === 0 && currentTime - lastRefreshCheck >= 75)
-      );
+      const shouldRefresh =
+        (expirationTime !== 0 && currentTime >= expirationTime - 15) ||
+        (expirationTime === 0 && currentTime - lastRefreshCheck >= 75);
       if (!shouldRefresh) {
         continue;
       }
@@ -57,7 +75,9 @@ export class SoopVodFD extends FileDownloader {
         await this.ydl.urlopen(cloudfrontAuthRequest(params, refererUrl));
         params._last_refresh = currentTime;
       } catch (error) {
-        this.toScreen(`[${this.fdName}] Cookie refresh attempt failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.toScreen(
+          `[${this.fdName}] Cookie refresh attempt failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   }
@@ -66,7 +86,10 @@ export class SoopVodFD extends FileDownloader {
     const ydl = this.ydl as CookieAwareHost;
     const cookies = ydl.cookies?.getCookiesForUrl(m3u8Url) ?? [];
     const expirations = cookies
-      .filter((cookie) => cookie.name.includes("CloudFront") && cookie.expires !== null)
+      .filter(
+        (cookie) =>
+          cookie.name.includes("CloudFront") && cookie.expires !== null,
+      )
       .map((cookie) => cookie.expires as number);
     return expirations.length ? Math.min(...expirations) : 0;
   }
@@ -77,18 +100,26 @@ function parseRefreshParams(value: unknown): SoopRefreshParams {
     throw new Error("Soop cookie refresh params are missing");
   }
   const data = value as Record<string, unknown>;
-  if (typeof data.m3u8_url !== "string" || typeof data.strm_id !== "string" || typeof data.video_id !== "string") {
+  if (
+    typeof data.m3u8_url !== "string" ||
+    typeof data.strm_id !== "string" ||
+    typeof data.video_id !== "string"
+  ) {
     throw new Error("Soop cookie refresh params are invalid");
   }
   return {
     m3u8_url: data.m3u8_url,
     strm_id: data.strm_id,
     video_id: data.video_id,
-    _last_refresh: typeof data._last_refresh === "number" ? data._last_refresh : undefined,
+    _last_refresh:
+      typeof data._last_refresh === "number" ? data._last_refresh : undefined,
   };
 }
 
-function cloudfrontAuthRequest(params: SoopRefreshParams, refererUrl: string): Request {
+function cloudfrontAuthRequest(
+  params: SoopRefreshParams,
+  refererUrl: string,
+): Request {
   const body = new URLSearchParams({
     type: "vod",
     strm_id: params.strm_id,
@@ -109,9 +140,13 @@ function cloudfrontAuthRequest(params: SoopRefreshParams, refererUrl: string): R
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer);
-      resolve();
-    }, { once: true });
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
   });
 }

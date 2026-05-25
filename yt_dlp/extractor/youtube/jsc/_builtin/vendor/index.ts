@@ -9,7 +9,10 @@ const AVAILABLE_SCRIPTS = new Set([
   "yt.solver.deno.lib.js",
 ]);
 
-export async function loadScript(filename: string, errorHook?: (error: Error) => void): Promise<string | null> {
+export async function loadScript(
+  filename: string,
+  errorHook?: (error: Error) => void,
+): Promise<string | null> {
   if (!AVAILABLE_SCRIPTS.has(filename)) {
     return null;
   }

@@ -4,23 +4,44 @@
 import { inflateSync } from "node:zlib";
 
 import { NotImplementedError } from "../errors.ts";
-import { escapeRfc3986, normalizeUrl as escapeUrl, randomUserAgent, stdHeaders } from "./networking.ts";
+import {
+  escapeRfc3986,
+  normalizeUrl as escapeUrl,
+  randomUserAgent,
+  stdHeaders,
+} from "./networking.ts";
 import { traverseObj } from "./traversal.ts";
 
-export { escapeRfc3986, escapeUrl, escapeUrl as escape_url, randomUserAgent, stdHeaders };
+export {
+  escapeRfc3986,
+  escapeUrl,
+  escapeUrl as escape_url,
+  randomUserAgent,
+  stdHeaders,
+};
 
 export const hasCertifi = false;
 export const has_certifi = hasCertifi;
 export const hasWebsockets = typeof WebSocket !== "undefined";
 export const has_websockets = hasWebsockets;
 
-export function loadPlugins(_name: string, _suffix: string, _namespace: Record<string, unknown>): never {
-  throw new NotImplementedError("legacy plugin loading shim; use yt_dlp/plugins.ts");
+export function loadPlugins(
+  _name: string,
+  _suffix: string,
+  _namespace: Record<string, unknown>,
+): never {
+  throw new NotImplementedError(
+    "legacy plugin loading shim; use yt_dlp/plugins.ts",
+  );
 }
 
 export const load_plugins = loadPlugins;
 
-export function traverseDict(source: unknown, keys: unknown, casesense = true): unknown {
+export function traverseDict(
+  source: unknown,
+  keys: unknown,
+  casesense = true,
+): unknown {
   return traverseObj(source, keys as Parameters<typeof traverseObj>[1], {
     casesense,
     is_user_input: true,
@@ -35,7 +56,9 @@ export function decodeBase(value: string, digits: string): number {
   for (const char of value) {
     const digit = digits.indexOf(char);
     if (digit < 0) {
-      throw new Error(`Invalid digit ${JSON.stringify(char)} for base ${digits.length}`);
+      throw new Error(
+        `Invalid digit ${JSON.stringify(char)} for base ${digits.length}`,
+      );
     }
     result = result * digits.length + digit;
   }
@@ -61,9 +84,16 @@ interface PngChunk {
   data: Uint8Array;
 }
 
-export function decodePng(pngData: Uint8Array | Buffer): [number, number, number[][]] {
+export function decodePng(
+  pngData: Uint8Array | Buffer,
+): [number, number, number[][]] {
   const data = Buffer.from(pngData);
-  if (data.length < 33 || !data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+  if (
+    data.length < 33 ||
+    !data
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
     throw new Error("Not a valid PNG file.");
   }
 
@@ -93,7 +123,9 @@ export function decodePng(pngData: Uint8Array | Buffer): [number, number, number
     throw new NotImplementedError(`legacy PNG decode color type ${colorType}`);
   }
 
-  const idatParts = chunks.filter((chunk) => chunk.type === "IDAT").map((chunk) => Buffer.from(chunk.data));
+  const idatParts = chunks
+    .filter((chunk) => chunk.type === "IDAT")
+    .map((chunk) => Buffer.from(chunk.data));
   if (!idatParts.length) {
     throw new Error("Unable to read PNG data.");
   }
@@ -153,8 +185,14 @@ function paethPredictor(a: number, b: number, c: number): number {
 export function registerSocksProtocols(): void {}
 export const register_socks_protocols = registerSocksProtocols;
 
-export function handleYoutubedlHeaders(headers: Record<string, string>): Record<string, string> {
-  if (!Object.keys(headers).some((key) => key.toLowerCase() === "youtubedl-no-compression")) {
+export function handleYoutubedlHeaders(
+  headers: Record<string, string>,
+): Record<string, string> {
+  if (
+    !Object.keys(headers).some(
+      (key) => key.toLowerCase() === "youtubedl-no-compression",
+    )
+  ) {
     return headers;
   }
   const filtered: Record<string, string> = {};
@@ -170,13 +208,19 @@ export function handleYoutubedlHeaders(headers: Record<string, string>): Record<
 export const handle_youtubedl_headers = handleYoutubedlHeaders;
 
 export function requestToUrl(request: string | URL | Request): string {
-  return typeof request === "string" ? request : request instanceof URL ? request.toString() : request.url;
+  return typeof request === "string"
+    ? request
+    : request instanceof URL
+      ? request.toString()
+      : request.url;
 }
 
 export const request_to_url = requestToUrl;
 
 export function sanitizedRequest(_url: string, ..._args: unknown[]): never {
-  throw new NotImplementedError("legacy urllib Request construction; use networking/Request");
+  throw new NotImplementedError(
+    "legacy urllib Request construction; use networking/Request",
+  );
 }
 
 export const sanitized_Request = sanitizedRequest;
@@ -191,14 +235,24 @@ export class YoutubeDLCookieProcessor {
   constructor(readonly cookiejar: unknown = null) {}
 }
 
-export function makeHTTPSHandler(_params: Record<string, unknown>, ..._args: unknown[]): never {
-  throw new NotImplementedError("legacy HTTPS handler construction; use RequestDirector");
+export function makeHTTPSHandler(
+  _params: Record<string, unknown>,
+  ..._args: unknown[]
+): never {
+  throw new NotImplementedError(
+    "legacy HTTPS handler construction; use RequestDirector",
+  );
 }
 
 export const make_HTTPS_handler = makeHTTPSHandler;
 
-export function processCommunicateOrKill(_process: unknown, ..._args: unknown[]): never {
-  throw new NotImplementedError("legacy subprocess communication; use Bun Shell");
+export function processCommunicateOrKill(
+  _process: unknown,
+  ..._args: unknown[]
+): never {
+  throw new NotImplementedError(
+    "legacy subprocess communication; use Bun Shell",
+  );
 }
 
 export const process_communicate_or_kill = processCommunicateOrKill;

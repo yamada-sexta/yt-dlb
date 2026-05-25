@@ -4,7 +4,10 @@
 import { extractors, pluginIes } from "../globals.ts";
 import { registerPluginSpec } from "../plugins.ts";
 import { InfoExtractor } from "./common.ts";
-import { importExtractors, type InfoExtractorConstructor } from "./internal-extractors.ts";
+import {
+  importExtractors,
+  type InfoExtractorConstructor,
+} from "./internal-extractors.ts";
 
 registerPluginSpec({
   moduleName: "extractor",
@@ -17,7 +20,9 @@ export { InfoExtractor };
 export * from "./common.ts";
 export * from "./internal-extractors.ts";
 
-export async function genExtractorClasses(): Promise<InfoExtractorConstructor[]> {
+export async function genExtractorClasses(): Promise<
+  InfoExtractorConstructor[]
+> {
   return Object.values(await importExtractors());
 }
 
@@ -25,16 +30,25 @@ export async function genExtractors(): Promise<InfoExtractor[]> {
   return (await genExtractorClasses()).map((Extractor) => new Extractor());
 }
 
-export async function listExtractorClasses(_ageLimit: number | null = null): Promise<InfoExtractorConstructor[]> {
-  return (await genExtractorClasses())
-    .sort((left, right) => left.IE_NAME.localeCompare(right.IE_NAME));
+export async function listExtractorClasses(
+  _ageLimit: number | null = null,
+): Promise<InfoExtractorConstructor[]> {
+  return (await genExtractorClasses()).sort((left, right) =>
+    left.IE_NAME.localeCompare(right.IE_NAME),
+  );
 }
 
-export async function listExtractors(ageLimit: number | null = null): Promise<InfoExtractor[]> {
-  return (await listExtractorClasses(ageLimit)).map((Extractor) => new Extractor());
+export async function listExtractors(
+  ageLimit: number | null = null,
+): Promise<InfoExtractor[]> {
+  return (await listExtractorClasses(ageLimit)).map(
+    (Extractor) => new Extractor(),
+  );
 }
 
-export async function getInfoExtractor(ieName: string): Promise<InfoExtractorConstructor> {
+export async function getInfoExtractor(
+  ieName: string,
+): Promise<InfoExtractorConstructor> {
   const registry = await importExtractors();
   const key = `${ieName}IE`;
   const Extractor = registry[key];

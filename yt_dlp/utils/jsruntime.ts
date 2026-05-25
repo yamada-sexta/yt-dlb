@@ -11,10 +11,15 @@ export interface JsRuntimeInfo {
 
 export function versionTuple(version: string): readonly number[] {
   const match = version.match(/\d+(?:\.\d+)*/);
-  return (match?.[0] ?? "0").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  return (match?.[0] ?? "0")
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
 }
 
-export function isVersionAtLeast(version: readonly number[], minimum: readonly number[]): boolean {
+export function isVersionAtLeast(
+  version: readonly number[],
+  minimum: readonly number[],
+): boolean {
   const length = Math.max(version.length, minimum.length);
   for (let i = 0; i < length; i += 1) {
     const left = version[i] ?? 0;

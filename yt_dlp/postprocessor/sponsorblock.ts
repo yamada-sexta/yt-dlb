@@ -21,18 +21,22 @@ interface SponsorSegment {
   description?: string;
 }
 
-const SponsorSegmentSchema = z.object({
-  segment: z.tuple([z.number(), z.number()]),
-  category: z.string(),
-  actionType: z.string(),
-  videoDuration: z.number().nullable().optional(),
-  description: z.string().optional(),
-}).passthrough();
+const SponsorSegmentSchema = z
+  .object({
+    segment: z.tuple([z.number(), z.number()]),
+    category: z.string(),
+    actionType: z.string(),
+    videoDuration: z.number().nullable().optional(),
+    description: z.string().optional(),
+  })
+  .passthrough();
 
-const SponsorBlockSegmentSchema = z.object({
-  videoID: z.string(),
-  segments: z.array(SponsorSegmentSchema),
-}).passthrough();
+const SponsorBlockSegmentSchema = z
+  .object({
+    videoID: z.string(),
+    segments: z.array(SponsorSegmentSchema),
+  })
+  .passthrough();
 
 const RecordSchema = z.record(z.string(), z.unknown());
 
@@ -72,39 +76,62 @@ export class SponsorBlockPP extends FFmpegPostProcessor {
     api = "https://sponsor.ajay.app",
   ) {
     super(downloader);
-    this.categories = [...(categories ?? Object.keys(SponsorBlockPP.CATEGORIES))];
+    this.categories = [
+      ...(categories ?? Object.keys(SponsorBlockPP.CATEGORIES)),
+    ];
     this.apiUrl = /^https?:\/\//.test(api) ? api : `https://${api}`;
   }
 
-  override async run(info: PostProcessorInfo): Promise<[string[], PostProcessorInfo]> {
-    const extractor = typeof info.extractor_key === "string" ? info.extractor_key : "";
+  override async run(
+    info: PostProcessorInfo,
+  ): Promise<[string[], PostProcessorInfo]> {
+    const extractor =
+      typeof info.extractor_key === "string" ? info.extractor_key : "";
     if (!(extractor in SponsorBlockPP.EXTRACTORS)) {
       this.toScreen(`SponsorBlock is not supported for ${extractor}`);
       return [[], info];
     }
 
     this.toScreen("Fetching SponsorBlock segments");
-    info.sponsorblock_chapters = await this.getSponsorChapters(info, typeof info.duration === "number" ? info.duration : null);
+    info.sponsorblock_chapters = await this.getSponsorChapters(
+      info,
+      typeof info.duration === "number" ? info.duration : null,
+    );
     return [[], info];
   }
 
-  private async getSponsorChapters(info: PostProcessorInfo, duration: number | null): Promise<Array<Record<string, unknown>>> {
+  private async getSponsorChapters(
+    info: PostProcessorInfo,
+    duration: number | null,
+  ): Promise<Array<Record<string, unknown>>> {
     const id = typeof info.id === "string" ? info.id : null;
-    const extractor = typeof info.extractor_key === "string" ? info.extractor_key : null;
+    const extractor =
+      typeof info.extractor_key === "string" ? info.extractor_key : null;
     const service = extractor ? SponsorBlockPP.EXTRACTORS[extractor] : null;
     if (!id || !service) {
-      throw new PostProcessingError("SponsorBlockPP requires info.id and supported info.extractor_key");
+      throw new PostProcessingError(
+        "SponsorBlockPP requires info.id and supported info.extractor_key",
+      );
     }
     const segments = await this.getSponsorSegments(id, service);
-    const durationMatch = segments.filter((segment) => this.durationFilter(segment, duration));
+    const durationMatch = segments.filter((segment) =>
+      this.durationFilter(segment, duration),
+    );
     if (durationMatch.length !== segments.length) {
-      this.reportWarning("Some SponsorBlock segments are from a video of different duration, maybe from an old version of this video");
+      this.reportWarning(
+        "Some SponsorBlock segments are from a video of different duration, maybe from an old version of this video",
+      );
     }
 
     const sponsorChapters = durationMatch.map((segment) => {
       const [start, end] = segment.segment;
       const category = segment.category;
-      const title = category === "chapter" ? segment.description ?? SponsorBlockPP.CATEGORIES[category] ?? category : SponsorBlockPP.CATEGORIES[category] ?? category;
+      const title =
+        category === "chapter"
+          ? (segment.description ??
+            SponsorBlockPP.CATEGORIES[category] ??
+            category)
+          : (SponsorBlockPP.CATEGORIES[category] ?? category);
       return {
         start_time: start,
         end_time: end,
@@ -114,13 +141,18 @@ export class SponsorBlockPP extends FFmpegPostProcessor {
         _categories: [[category, start, end, title]],
       };
     });
-    this.toScreen(sponsorChapters.length
-      ? `Found ${sponsorChapters.length} segments in the SponsorBlock database`
-      : "No matching segments were found in the SponsorBlock database");
+    this.toScreen(
+      sponsorChapters.length
+        ? `Found ${sponsorChapters.length} segments in the SponsorBlock database`
+        : "No matching segments were found in the SponsorBlock database",
+    );
     return sponsorChapters;
   }
 
-  private durationFilter(segment: SponsorSegment, duration: number | null): boolean {
+  private durationFilter(
+    segment: SponsorSegment,
+    duration: number | null,
+  ): boolean {
     const [start, end] = segment.segment;
     if (start === 0 && end === 0) {
       return false;
@@ -135,28 +167,45 @@ export class SponsorBlockPP extends FFmpegPostProcessor {
       segment.segment[1] = duration;
     }
     const videoDuration = segment.videoDuration ?? 0;
-    const diff = duration !== null && videoDuration ? Math.abs(duration - videoDuration) : 0;
+    const diff =
+      duration !== null && videoDuration
+        ? Math.abs(duration - videoDuration)
+        : 0;
     const segmentDuration = segment.segment[1] - segment.segment[0];
-    return diff < 1 || (segmentDuration > 0 && diff < 5 && diff / segmentDuration < 0.05);
+    return (
+      diff < 1 ||
+      (segmentDuration > 0 && diff < 5 && diff / segmentDuration < 0.05)
+    );
   }
 
-  private async getSponsorSegments(videoId: string, service: string): Promise<SponsorSegment[]> {
-    const videoHash = createHash("sha256").update(videoId, "ascii").digest("hex");
+  private async getSponsorSegments(
+    videoId: string,
+    service: string,
+  ): Promise<SponsorSegment[]> {
+    const videoHash = createHash("sha256")
+      .update(videoId, "ascii")
+      .digest("hex");
     const params = new URLSearchParams({
       service,
       categories: JSON.stringify(this.categories),
       actionTypes: JSON.stringify(["skip", "poi", "chapter"]),
     });
     const url = `${this.apiUrl}/api/skipSegments/${videoHash.slice(0, 4)}?${params}`;
-    const response = this.downloader?.urlopen ? await this.downloader.urlopen(url) : await fetch(url);
+    const response = this.downloader?.urlopen
+      ? await this.downloader.urlopen(url)
+      : await fetch(url);
     if (!response.ok) {
       if (response.status === 404) {
         return [];
       }
-      throw new PostProcessingError(`SponsorBlock API returned HTTP ${response.status}`);
+      throw new PostProcessingError(
+        `SponsorBlock API returned HTTP ${response.status}`,
+      );
     }
     const parsed: unknown = await response.json();
-    const rows = Array.isArray(parsed) ? parsed.filter(isSponsorBlockSegment) : [];
+    const rows = Array.isArray(parsed)
+      ? parsed.filter(isSponsorBlockSegment)
+      : [];
     return rows.find((row) => row.videoID === videoId)?.segments ?? [];
   }
 }

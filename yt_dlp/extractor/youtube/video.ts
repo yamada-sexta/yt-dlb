@@ -6,9 +6,19 @@ import { DownloadError, type YoutubeDL } from "../../YoutubeDL.ts";
 import { intOrNone } from "../../utils/index.ts";
 import type { ExtractorInfo } from "../common.ts";
 import { z } from "zod";
-import { initializeJscDirector, JsChallengeType, type JsChallengeRequest, type NChallengeOutput, type SigChallengeOutput } from "./jsc/index.ts";
+import {
+  initializeJscDirector,
+  JsChallengeType,
+  type JsChallengeRequest,
+  type NChallengeOutput,
+  type SigChallengeOutput,
+} from "./jsc/index.ts";
 import { YoutubeBaseInfoExtractor } from "./base.ts";
-import { cleanPot, initializePotDirector, PoTokenContext as ProviderPoTokenContext } from "./pot/index.ts";
+import {
+  cleanPot,
+  initializePotDirector,
+  PoTokenContext as ProviderPoTokenContext,
+} from "./pot/index.ts";
 
 export class YoutubeIE extends YoutubeBaseInfoExtractor {
   static override readonly _VALID_URL = [
@@ -27,7 +37,7 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     if (!isYoutubeDL(this.downloader)) {
       throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
     }
-    return { ...await extractYoutubeVideo(url, this.downloader) };
+    return { ...(await extractYoutubeVideo(url, this.downloader)) };
   }
 
   static getCheckOkParams(): Record<string, true> {
@@ -38,7 +48,11 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     return YoutubeIE.getCheckOkParams();
   }
 
-  static generatePlayerContext(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
+  static generatePlayerContext(
+    sts: number | null = null,
+    useAdPlaybackContext = false,
+    encryptedContext: string | null = null,
+  ): Record<string, unknown> {
     const contentPlaybackContext: Record<string, unknown> = {
       html5Preference: "HTML5_PREF_WANTS",
     };
@@ -58,14 +72,32 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     };
   }
 
-  static _generate_player_context(sts: number | null = null, useAdPlaybackContext = false, encryptedContext: string | null = null): Record<string, unknown> {
-    return YoutubeIE.generatePlayerContext(sts, useAdPlaybackContext, encryptedContext);
+  static _generate_player_context(
+    sts: number | null = null,
+    useAdPlaybackContext = false,
+    encryptedContext: string | null = null,
+  ): Record<string, unknown> {
+    return YoutubeIE.generatePlayerContext(
+      sts,
+      useAdPlaybackContext,
+      encryptedContext,
+    );
   }
 
-  protected async extractSignatureTimestamp(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false): Promise<number | null> {
-    const configuredSts = intOrNone(z.object({ STS: z.union([z.string(), z.number()]).optional() }).passthrough().safeParse(ytcfg).success
-      ? (ytcfg as { STS?: string | number }).STS
-      : null);
+  protected async extractSignatureTimestamp(
+    videoId: string,
+    playerUrl: string | null,
+    ytcfg: unknown = null,
+    fatal = false,
+  ): Promise<number | null> {
+    const configuredSts = intOrNone(
+      z
+        .object({ STS: z.union([z.string(), z.number()]).optional() })
+        .passthrough()
+        .safeParse(ytcfg).success
+        ? (ytcfg as { STS?: string | number }).STS
+        : null,
+    );
     if (configuredSts) {
       return configuredSts;
     }
@@ -85,9 +117,14 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
       throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
     }
     const player = await loadPlayer(playerUrl, this.downloader);
-    const sts = intOrNone(/(?:signatureTimestamp|sts)\s*:\s*(?<sts>[0-9]{5})/.exec(player)?.groups?.sts);
+    const sts = intOrNone(
+      /(?:signatureTimestamp|sts)\s*:\s*(?<sts>[0-9]{5})/.exec(player)?.groups
+        ?.sts,
+    );
     if (!sts && fatal) {
-      throw new DownloadError("Could not extract JS player signature timestamp");
+      throw new DownloadError(
+        "Could not extract JS player signature timestamp",
+      );
     }
     if (sts) {
       stsCache.set(playerUrl, sts);
@@ -95,68 +132,116 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     return sts;
   }
 
-  protected _extract_signature_timestamp(videoId: string, playerUrl: string | null, ytcfg: unknown = null, fatal = false): Promise<number | null> {
+  protected _extract_signature_timestamp(
+    videoId: string,
+    playerUrl: string | null,
+    ytcfg: unknown = null,
+    fatal = false,
+  ): Promise<number | null> {
     return this.extractSignatureTimestamp(videoId, playerUrl, ytcfg, fatal);
   }
 
-  protected getConfigPoToken(client: string, context: ProviderPoTokenContext): string | null {
+  protected getConfigPoToken(
+    client: string,
+    context: ProviderPoTokenContext,
+  ): string | null {
     for (const tokenStr of this.youtubeConfigurationArg("po_token", [])) {
       if (!tokenStr) {
         continue;
       }
       const [metadata, poToken = ""] = tokenStr.split("+", 2);
       if (!metadata) {
-        this.reportWarning("Invalid po_token configuration format.", null, true);
+        this.reportWarning(
+          "Invalid po_token configuration format.",
+          null,
+          true,
+        );
         continue;
       }
-      const [tokenClient, tokenContext = ProviderPoTokenContext.GVS] = metadata.split(".", 2);
-      if (tokenClient?.toLowerCase() !== client.toLowerCase() || tokenContext.toLowerCase() !== context) {
+      const [tokenClient, tokenContext = ProviderPoTokenContext.GVS] =
+        metadata.split(".", 2);
+      if (
+        tokenClient?.toLowerCase() !== client.toLowerCase() ||
+        tokenContext.toLowerCase() !== context
+      ) {
         continue;
       }
       try {
         return cleanPot(poToken);
       } catch {
-        this.reportWarning(`Invalid po_token configuration for ${client} client: ${tokenContext} PO Token should be a base64url-encoded string.`, null, true);
+        this.reportWarning(
+          `Invalid po_token configuration for ${client} client: ${tokenContext} PO Token should be a base64url-encoded string.`,
+          null,
+          true,
+        );
       }
     }
     return null;
   }
 
-  protected _get_config_po_token(client: string, context: ProviderPoTokenContext): string | null {
+  protected _get_config_po_token(
+    client: string,
+    context: ProviderPoTokenContext,
+  ): string | null {
     return this.getConfigPoToken(client, context);
   }
 
-  protected async fetchPoToken(client = "web", context: ProviderPoTokenContext = ProviderPoTokenContext.GVS, options: {
-    ytcfg?: unknown;
-    visitorData?: string | null;
-    dataSyncId?: string | null;
-    videoId?: string | null;
-    playerUrl?: string | null;
-    videoWebpage?: string | null;
-    required?: boolean;
-    bypassCache?: boolean;
-  } = {}): Promise<string | null> {
+  protected async fetchPoToken(
+    client = "web",
+    context: ProviderPoTokenContext = ProviderPoTokenContext.GVS,
+    options: {
+      ytcfg?: unknown;
+      visitorData?: string | null;
+      dataSyncId?: string | null;
+      videoId?: string | null;
+      playerUrl?: string | null;
+      videoWebpage?: string | null;
+      required?: boolean;
+      bypassCache?: boolean;
+    } = {},
+  ): Promise<string | null> {
     const configPoToken = this.getConfigPoToken(client, context);
     if (configPoToken) {
-      this.writeDebug(`${options.videoId ?? "unknown"}: Retrieved a ${context} PO Token for ${client} client from config`);
+      this.writeDebug(
+        `${options.videoId ?? "unknown"}: Retrieved a ${context} PO Token for ${client} client from config`,
+      );
       return configPoToken;
     }
     const fetchPolicy = this.youtubeConfigurationArg("fetch_pot", [""])[0];
-    const policy = fetchPolicy === "never" || fetchPolicy === "always" || fetchPolicy === "auto" ? fetchPolicy : "auto";
+    const policy =
+      fetchPolicy === "never" ||
+      fetchPolicy === "always" ||
+      fetchPolicy === "auto"
+        ? fetchPolicy
+        : "auto";
     if (policy === "never" || (policy === "auto" && !options.required)) {
       return null;
     }
     if (!isYoutubeDL(this.downloader)) {
       throw new DownloadError("YoutubeIE requires a YoutubeDL downloader host");
     }
-    const visitorData = options.visitorData ?? this.extractVisitorData(options.ytcfg);
-    const dataSyncId = options.dataSyncId ?? this.extractDataSyncId(options.ytcfg);
-    if (context === ProviderPoTokenContext.GVS && !this.isAuthenticated && !visitorData) {
-      this.reportWarning(`Unable to fetch GVS PO Token for ${client} client: Missing required Visitor Data.`, options.videoId ?? null, true);
+    const visitorData =
+      options.visitorData ?? this.extractVisitorData(options.ytcfg);
+    const dataSyncId =
+      options.dataSyncId ?? this.extractDataSyncId(options.ytcfg);
+    if (
+      context === ProviderPoTokenContext.GVS &&
+      !this.isAuthenticated &&
+      !visitorData
+    ) {
+      this.reportWarning(
+        `Unable to fetch GVS PO Token for ${client} client: Missing required Visitor Data.`,
+        options.videoId ?? null,
+        true,
+      );
       return null;
     }
     if (context === ProviderPoTokenContext.PLAYER && !options.videoId) {
-      this.reportWarning(`Unable to fetch Player PO Token for ${client} client: Missing required Video ID`, null, true);
+      this.reportWarning(
+        `Unable to fetch Player PO Token for ${client} client: Missing required Video ID`,
+        null,
+        true,
+      );
       return null;
     }
     return await getPotDirector(this.downloader).getPoToken({
@@ -175,7 +260,11 @@ export class YoutubeIE extends YoutubeBaseInfoExtractor {
     });
   }
 
-  protected fetch_po_token(client = "web", context: ProviderPoTokenContext = ProviderPoTokenContext.GVS, options: Parameters<YoutubeIE["fetchPoToken"]>[2] = {}): Promise<string | null> {
+  protected fetch_po_token(
+    client = "web",
+    context: ProviderPoTokenContext = ProviderPoTokenContext.GVS,
+    options: Parameters<YoutubeIE["fetchPoToken"]>[2] = {},
+  ): Promise<string | null> {
     return this.fetchPoToken(client, context, options);
   }
 }
@@ -224,40 +313,57 @@ interface YoutubeFormat {
   contentLength?: string;
 }
 
-const YoutubeFormatSchema = z.object({
-  itag: z.number().optional(),
-  url: z.string().optional(),
-  signatureCipher: z.string().optional(),
-  cipher: z.string().optional(),
-  mimeType: z.string().optional(),
-  bitrate: z.number().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  quality: z.string().optional(),
-  qualityLabel: z.string().optional(),
-  audioQuality: z.string().optional(),
-  contentLength: z.string().optional(),
-}).passthrough();
+const YoutubeFormatSchema = z
+  .object({
+    itag: z.number().optional(),
+    url: z.string().optional(),
+    signatureCipher: z.string().optional(),
+    cipher: z.string().optional(),
+    mimeType: z.string().optional(),
+    bitrate: z.number().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    quality: z.string().optional(),
+    qualityLabel: z.string().optional(),
+    audioQuality: z.string().optional(),
+    contentLength: z.string().optional(),
+  })
+  .passthrough();
 
-const YoutubePlayerResponseSchema = z.object({
-  playabilityStatus: z.object({
-    status: z.string().optional(),
-    reason: z.string().optional(),
-  }).passthrough().optional(),
-  videoDetails: z.object({
-    videoId: z.string().optional(),
-    title: z.string().optional(),
-    lengthSeconds: z.string().optional(),
-  }).passthrough().optional(),
-  streamingData: z.object({
-    formats: z.array(YoutubeFormatSchema).optional(),
-    adaptiveFormats: z.array(YoutubeFormatSchema).optional(),
-  }).passthrough().optional(),
-}).passthrough();
+const YoutubePlayerResponseSchema = z
+  .object({
+    playabilityStatus: z
+      .object({
+        status: z.string().optional(),
+        reason: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    videoDetails: z
+      .object({
+        videoId: z.string().optional(),
+        title: z.string().optional(),
+        lengthSeconds: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    streamingData: z
+      .object({
+        formats: z.array(YoutubeFormatSchema).optional(),
+        adaptiveFormats: z.array(YoutubeFormatSchema).optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
 
 function isYoutubeDL(value: unknown): value is YoutubeDL {
   const candidate = value as Partial<YoutubeDL> | null;
-  return Boolean(candidate && typeof candidate.urlopen === "function" && typeof candidate.prepareFilename === "function");
+  return Boolean(
+    candidate &&
+      typeof candidate.urlopen === "function" &&
+      typeof candidate.prepareFilename === "function",
+  );
 }
 
 export function isYoutubeWatchUrl(url: string): boolean {
@@ -310,7 +416,9 @@ export async function extractYoutubeVideo(
   const resolved = await Promise.all(
     formats.map((format) => resolveFormat(format, playerUrl, ydl)),
   );
-  const playable = resolved.filter((format): format is ResolvedYoutubeFormat => format !== null);
+  const playable = resolved.filter(
+    (format): format is ResolvedYoutubeFormat => format !== null,
+  );
   const selected = selectFormat(playable);
   if (!selected) {
     throw new DownloadError("No playable YouTube HTTP formats found");
@@ -394,8 +502,14 @@ const signatureCache = new Map<string, string>();
 const nCache = new Map<string, string>();
 const playerCache = new Map<string, string>();
 const stsCache = new Map<string, number>();
-const jscDirectorCache = new WeakMap<YoutubeDL, ReturnType<typeof initializeJscDirector>>();
-const potDirectorCache = new WeakMap<YoutubeDL, ReturnType<typeof initializePotDirector>>();
+const jscDirectorCache = new WeakMap<
+  YoutubeDL,
+  ReturnType<typeof initializeJscDirector>
+>();
+const potDirectorCache = new WeakMap<
+  YoutubeDL,
+  ReturnType<typeof initializePotDirector>
+>();
 
 async function decipherSignature(
   signature: string,
@@ -413,11 +527,15 @@ async function decipherSignature(
   } satisfies JsChallengeRequest;
   const response = (await getJscDirector(ydl).bulkSolve([request]))[0]?.[1];
   if (!response || response.type !== JsChallengeType.SIG) {
-    throw new DownloadError("YouTube signature challenge solver did not return a result");
+    throw new DownloadError(
+      "YouTube signature challenge solver did not return a result",
+    );
   }
   const solved = (response.output as SigChallengeOutput).results[signature];
   if (!solved) {
-    throw new DownloadError("YouTube signature challenge solver did not return a signature");
+    throw new DownloadError(
+      "YouTube signature challenge solver did not return a signature",
+    );
   }
   signatureCache.set(cacheKey, solved);
   return solved;
@@ -439,7 +557,9 @@ async function solveNChallenge(
   } satisfies JsChallengeRequest;
   const response = (await getJscDirector(ydl).bulkSolve([request]))[0]?.[1];
   if (!response || response.type !== JsChallengeType.N) {
-    throw new DownloadError("YouTube n challenge solver did not return a result");
+    throw new DownloadError(
+      "YouTube n challenge solver did not return a result",
+    );
   }
   const solved = (response.output as NChallengeOutput).results[challenge];
   if (!solved) {
@@ -462,7 +582,9 @@ async function loadPlayer(playerUrl: string, ydl: YoutubeDL): Promise<string> {
   return player;
 }
 
-function getJscDirector(ydl: YoutubeDL): ReturnType<typeof initializeJscDirector> {
+function getJscDirector(
+  ydl: YoutubeDL,
+): ReturnType<typeof initializeJscDirector> {
   const cached = jscDirectorCache.get(ydl);
   if (cached) {
     return cached;
@@ -479,7 +601,9 @@ function getJscDirector(ydl: YoutubeDL): ReturnType<typeof initializeJscDirector
   return director;
 }
 
-function getPotDirector(ydl: YoutubeDL): ReturnType<typeof initializePotDirector> {
+function getPotDirector(
+  ydl: YoutubeDL,
+): ReturnType<typeof initializePotDirector> {
   const cached = potDirectorCache.get(ydl);
   if (cached) {
     return cached;
@@ -499,7 +623,9 @@ function getPotDirector(ydl: YoutubeDL): ReturnType<typeof initializePotDirector
   return director;
 }
 
-function normalizeExtractorArgs(args: YoutubeDL["params"]["extractor_args"]): Record<string, readonly string[] | undefined> {
+function normalizeExtractorArgs(
+  args: YoutubeDL["params"]["extractor_args"],
+): Record<string, readonly string[] | undefined> {
   return args ? { ...args } : {};
 }
 
@@ -540,7 +666,9 @@ function extractInitialPlayerResponse(webpage: string): YoutubePlayerResponse {
   if (braceIndex === -1) {
     throw new DownloadError("Could not parse ytInitialPlayerResponse");
   }
-  return YoutubePlayerResponseSchema.parse(JSON.parse(readBalanced(webpage, braceIndex)));
+  return YoutubePlayerResponseSchema.parse(
+    JSON.parse(readBalanced(webpage, braceIndex)),
+  );
 }
 
 function extractPlayerUrl(webpage: string): string | null {

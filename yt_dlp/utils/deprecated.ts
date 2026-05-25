@@ -2,7 +2,9 @@
 
 import { createHmac } from "node:crypto";
 
-export function bytesToIntlist(bs: Uint8Array | Buffer | string | null | undefined): number[] {
+export function bytesToIntlist(
+  bs: Uint8Array | Buffer | string | null | undefined,
+): number[] {
   if (!bs) {
     return [];
   }
@@ -14,7 +16,9 @@ export function bytesToIntlist(bs: Uint8Array | Buffer | string | null | undefin
 
 export const bytes_to_intlist = bytesToIntlist;
 
-export function intlistToBytes(xs: Iterable<number> | null | undefined): Uint8Array {
+export function intlistToBytes(
+  xs: Iterable<number> | null | undefined,
+): Uint8Array {
   if (!xs) {
     return new Uint8Array();
   }
@@ -40,7 +44,9 @@ export function jwtEncodeHs256(
   const headerB64 = base64EncodeUrlUnsafe(JSON.stringify(headerData));
   const payloadB64 = base64EncodeUrlUnsafe(JSON.stringify(payloadData));
   const signingInput = `${headerB64}.${payloadB64}`;
-  const signatureB64 = createHmac("sha256", key).update(signingInput).digest("base64");
+  const signatureB64 = createHmac("sha256", key)
+    .update(signingInput)
+    .digest("base64");
   return Buffer.from(`${signingInput}.${signatureB64}`);
 }
 

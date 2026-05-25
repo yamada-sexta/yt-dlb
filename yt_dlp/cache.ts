@@ -57,7 +57,12 @@ export class Cache {
     return join(this.getRootDir(), section, `${encodedKey}.${dtype}`);
   }
 
-  async store(section: string, key: string, data: unknown, dtype = "json"): Promise<void> {
+  async store(
+    section: string,
+    key: string,
+    data: unknown,
+    dtype = "json",
+  ): Promise<void> {
     if (!this.enabled) {
       return;
     }
@@ -65,13 +70,23 @@ export class Cache {
     try {
       await mkdir(dirname(file), { recursive: true });
       this.#host.writeDebug?.(`Saving ${section}.${key} to cache`);
-      await Bun.write(file, JSON.stringify({ "yt-dlp_version": this.#version, data }));
+      await Bun.write(
+        file,
+        JSON.stringify({ "yt-dlp_version": this.#version, data }),
+      );
     } catch (error) {
-      this.#host.reportWarning?.(`Writing cache to ${JSON.stringify(file)} failed: ${error}`);
+      this.#host.reportWarning?.(
+        `Writing cache to ${JSON.stringify(file)} failed: ${error}`,
+      );
     }
   }
 
-  async load(section: string, key: string, dtype = "json", defaultValue: unknown = null): Promise<unknown> {
+  async load(
+    section: string,
+    key: string,
+    dtype = "json",
+    defaultValue: unknown = null,
+  ): Promise<unknown> {
     if (!this.enabled) {
       return defaultValue;
     }
@@ -92,12 +107,16 @@ export class Cache {
 
   async remove(): Promise<void> {
     if (!this.enabled) {
-      this.#host.toScreen?.("Cache is disabled (Did you combine --no-cache-dir and --rm-cache-dir?)");
+      this.#host.toScreen?.(
+        "Cache is disabled (Did you combine --no-cache-dir and --rm-cache-dir?)",
+      );
       return;
     }
     const cacheDir = this.getRootDir();
     if (!cacheDir.includes("cache") && !cacheDir.includes("tmp")) {
-      throw new Error(`Not removing directory ${cacheDir} - this does not look like a cache dir`);
+      throw new Error(
+        `Not removing directory ${cacheDir} - this does not look like a cache dir`,
+      );
     }
     this.#host.toScreen?.(`Removing cache dir ${cacheDir}.`);
     await rm(cacheDir, { recursive: true, force: true });

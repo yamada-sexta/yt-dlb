@@ -4,7 +4,10 @@ import { parseIso8601 } from "../utils.ts";
 
 type Reviver = (value: unknown) => unknown;
 
-const typedArrayConstructors: Record<string, { from(values: number[]): unknown }> = {
+const typedArrayConstructors: Record<
+  string,
+  { from(values: number[]): unknown }
+> = {
   Int8Array,
   Uint8Array,
   Uint8ClampedArray,
@@ -54,7 +57,10 @@ export function* parseIter(
 
 export const parse_iter = parseIter;
 
-export function parse(parsed: unknown, options: { revivers?: Record<string, Reviver> } = {}): unknown {
+export function parse(
+  parsed: unknown,
+  options: { revivers?: Record<string, Reviver> } = {},
+): unknown {
   const generator = parseIter(parsed, options);
   while (true) {
     const result = generator.next();
@@ -65,7 +71,10 @@ export function parse(parsed: unknown, options: { revivers?: Record<string, Revi
   }
 }
 
-function parseInternal(parsed: unknown, revivers: Record<string, Reviver>): unknown {
+function parseInternal(
+  parsed: unknown,
+  revivers: Record<string, Reviver>,
+): unknown {
   if (Number.isInteger(parsed) && typeof parsed === "number") {
     if (!constants.has(parsed) || parsed === -2) {
       throw new Error("invalid integer input");
@@ -112,9 +121,23 @@ function hydrate(
     const value = parsed[source];
     let result: unknown;
     if (Array.isArray(value)) {
-      result = hydrateArrayValue(value, parsed, source, resolved, resolving, revivers);
+      result = hydrateArrayValue(
+        value,
+        parsed,
+        source,
+        resolved,
+        resolving,
+        revivers,
+      );
     } else if (value && typeof value === "object") {
-      result = hydrateObjectValue(value as Record<string, unknown>, parsed, source, resolved, resolving, revivers);
+      result = hydrateObjectValue(
+        value as Record<string, unknown>,
+        parsed,
+        source,
+        resolved,
+        resolving,
+        revivers,
+      );
     } else {
       result = value;
     }
@@ -138,7 +161,13 @@ function hydrateArrayValue(
     const result = new Array<unknown>(value.length);
     resolved.set(source, result);
     value.forEach((newSource, offset) => {
-      result[offset] = hydrate(parsed, newSource, resolved, resolving, revivers);
+      result[offset] = hydrate(
+        parsed,
+        newSource,
+        resolved,
+        resolving,
+        revivers,
+      );
     });
     return result;
   }
@@ -146,7 +175,9 @@ function hydrateArrayValue(
   const reviver = revivers[typeName];
   if (reviver) {
     if (value[1] === source) {
-      throw new RangeError(`${JSON.stringify(typeName)} cannot point to itself (index: ${source})`);
+      throw new RangeError(
+        `${JSON.stringify(typeName)} cannot point to itself (index: ${source})`,
+      );
     }
     return reviver(hydrate(parsed, value[1], resolved, resolving, revivers));
   }
@@ -182,7 +213,10 @@ function hydrateArrayValue(
       return result;
     }
     case "RegExp":
-      return new RegExp(String(value[1]), typeof value[2] === "string" ? value[2] : undefined);
+      return new RegExp(
+        String(value[1]),
+        typeof value[2] === "string" ? value[2] : undefined,
+      );
     case "Object":
       return value[1];
     case "BigInt":
@@ -191,21 +225,35 @@ function hydrateArrayValue(
       if ((value.length - 1) % 2 !== 0) {
         throw new Error("invalid null-prototype object entry list");
       }
-      const result: Record<PropertyKey, unknown> = Object.create(null) as Record<PropertyKey, unknown>;
+      const result: Record<PropertyKey, unknown> = Object.create(
+        null,
+      ) as Record<PropertyKey, unknown>;
       resolved.set(source, result);
       for (let index = 1; index < value.length; index += 2) {
         const key = value[index];
-        if (typeof key !== "string" && typeof key !== "number" && typeof key !== "symbol") {
+        if (
+          typeof key !== "string" &&
+          typeof key !== "number" &&
+          typeof key !== "symbol"
+        ) {
           throw new TypeError(`invalid object key: ${String(key)}`);
         }
-        result[key] = hydrate(parsed, value[index + 1], resolved, resolving, revivers);
+        result[key] = hydrate(
+          parsed,
+          value[index + 1],
+          resolved,
+          resolving,
+          revivers,
+        );
       }
       return result;
     }
     default: {
       const ctor = typedArrayConstructors[typeName];
       if (!ctor) {
-        throw new TypeError(`invalid type at ${source}: ${JSON.stringify(typeName)}`);
+        throw new TypeError(
+          `invalid type at ${source}: ${JSON.stringify(typeName)}`,
+        );
       }
       const encoded = value[1];
       if (typeof encoded !== "string") {

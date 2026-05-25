@@ -27,8 +27,15 @@ const TEXT_STYLES = {
   UNDERLINED: "4",
 } as const;
 
-const ColorSchema = z.enum(Object.keys(COLORS) as [keyof typeof COLORS, ...Array<keyof typeof COLORS>]);
-const TextStyleSchema = z.enum(Object.keys(TEXT_STYLES) as [keyof typeof TEXT_STYLES, ...Array<keyof typeof TEXT_STYLES>]);
+const ColorSchema = z.enum(
+  Object.keys(COLORS) as [keyof typeof COLORS, ...Array<keyof typeof COLORS>],
+);
+const TextStyleSchema = z.enum(
+  Object.keys(TEXT_STYLES) as [
+    keyof typeof TEXT_STYLES,
+    ...Array<keyof typeof TEXT_STYLES>,
+  ],
+);
 
 type WritableStreamLike = {
   write?(text: string): void;
@@ -43,11 +50,15 @@ export function formatText(text: string, format: string): string {
   const onIndex = tokens.indexOf("ON");
   if (onIndex !== -1) {
     if (tokens.at(-1) === "ON") {
-      throw new SyntaxError(`Empty background format specified in ${JSON.stringify(original)}`);
+      throw new SyntaxError(
+        `Empty background format specified in ${JSON.stringify(original)}`,
+      );
     }
     const color = tokens.at(-1);
     if (!isColor(color)) {
-      throw new SyntaxError(`${color ?? ""} in ${JSON.stringify(original)} must be a color`);
+      throw new SyntaxError(
+        `${color ?? ""} in ${JSON.stringify(original)} must be a color`,
+      );
     }
     tokens.pop();
     bgColor = `4${COLORS[color]}`;
@@ -56,7 +67,9 @@ export function formatText(text: string, format: string): string {
       tokens.pop();
     }
     if (tokens.at(-1) !== "ON") {
-      throw new SyntaxError(`Invalid background format in ${JSON.stringify(original)}`);
+      throw new SyntaxError(
+        `Invalid background format in ${JSON.stringify(original)}`,
+      );
     }
     tokens.pop();
     bgColor = `\x1B[${bgColor}m`;
@@ -66,7 +79,9 @@ export function formatText(text: string, format: string): string {
   if (tokens.length) {
     const color = tokens.at(-1);
     if (!isColor(color)) {
-      throw new SyntaxError(`${color ?? ""} in ${JSON.stringify(original)} must be a color`);
+      throw new SyntaxError(
+        `${color ?? ""} in ${JSON.stringify(original)} must be a color`,
+      );
     }
     tokens.pop();
     fgColor = `3${COLORS[color]}`;
@@ -74,10 +89,14 @@ export function formatText(text: string, format: string): string {
       fgColor = `9${fgColor.slice(1)}`;
       tokens.pop();
     }
-    const style: keyof typeof TEXT_STYLES = isTextStyle(tokens.at(-1)) ? tokens.pop() as keyof typeof TEXT_STYLES : "NORMAL";
+    const style: keyof typeof TEXT_STYLES = isTextStyle(tokens.at(-1))
+      ? (tokens.pop() as keyof typeof TEXT_STYLES)
+      : "NORMAL";
     fgColor = `\x1B[${TEXT_STYLES[style]};${fgColor}m`;
     if (tokens.length) {
-      throw new SyntaxError(`Invalid format ${JSON.stringify(tokens.join(" "))} in ${JSON.stringify(original)}`);
+      throw new SyntaxError(
+        `Invalid format ${JSON.stringify(tokens.join(" "))} in ${JSON.stringify(original)}`,
+      );
     }
   }
 
@@ -92,7 +111,10 @@ export class MultilinePrinterBase {
   readonly maximum: number;
   protected readonly haveFullcap: boolean;
 
-  constructor(protected readonly stream: WritableStreamLike = process.stderr, lines = 1) {
+  constructor(
+    protected readonly stream: WritableStreamLike = process.stderr,
+    lines = 1,
+  ) {
     this.maximum = lines - 1;
     this.haveFullcap = Boolean(process.stderr.isTTY && process.env.TERM);
   }
@@ -149,7 +171,11 @@ export class MultilinePrinter extends MultilinePrinterBase {
   #lastLine = 0;
   #lastLength = 0;
 
-  constructor(stream: WritableStreamLike = process.stderr, lines = 1, readonly preserveOutput = true) {
+  constructor(
+    stream: WritableStreamLike = process.stderr,
+    lines = 1,
+    readonly preserveOutput = true,
+  ) {
     super(stream, lines);
   }
 
@@ -180,7 +206,13 @@ export class MultilinePrinter extends MultilinePrinterBase {
       return;
     }
     if (this.haveFullcap) {
-      this.write(...text, CONTROL_SEQUENCES.ERASE_LINE, `${CONTROL_SEQUENCES.UP}${CONTROL_SEQUENCES.ERASE_LINE}`.repeat(this.maximum));
+      this.write(
+        ...text,
+        CONTROL_SEQUENCES.ERASE_LINE,
+        `${CONTROL_SEQUENCES.UP}${CONTROL_SEQUENCES.ERASE_LINE}`.repeat(
+          this.maximum,
+        ),
+      );
     } else {
       this.write("\r", " ".repeat(this.#lastLength), "\r");
     }
@@ -204,6 +236,8 @@ function isColor(value: string | undefined): value is keyof typeof COLORS {
   return ColorSchema.safeParse(value).success;
 }
 
-function isTextStyle(value: string | undefined): value is keyof typeof TEXT_STYLES {
+function isTextStyle(
+  value: string | undefined,
+): value is keyof typeof TEXT_STYLES {
   return TextStyleSchema.safeParse(value).success;
 }

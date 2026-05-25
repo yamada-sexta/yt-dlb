@@ -1,6 +1,12 @@
 // Source: yt_dlp/extractor/camdemy.py
 
-import { cleanHtml, parseDuration, strToInt, unifiedStrdate, urljoin } from "../utils/index.ts";
+import {
+  cleanHtml,
+  parseDuration,
+  strToInt,
+  unifiedStrdate,
+  urljoin,
+} from "../utils/index.ts";
 import { xmlFind, xpathText } from "../utils/xml.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
@@ -13,7 +19,8 @@ interface CamdemyOEmbed {
 }
 
 export class CamdemyIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?camdemy\.com/media/(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?camdemy\.com/media/(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -32,7 +39,10 @@ export class CamdemyIE extends InfoExtractor {
       return this.urlResult(srcFrom);
     }
 
-    const oembed = await this.downloadJson<CamdemyOEmbed>(`http://www.camdemy.com/oembed/?format=json&url=${encodeURIComponent(url)}`, videoId);
+    const oembed = await this.downloadJson<CamdemyOEmbed>(
+      `http://www.camdemy.com/oembed/?format=json&url=${encodeURIComponent(url)}`,
+      videoId,
+    );
     if (oembed === false) {
       throw new Error("Unable to download Camdemy oEmbed JSON");
     }
@@ -45,12 +55,18 @@ export class CamdemyIE extends InfoExtractor {
     if (!videoFolder) {
       throw new Error("Unable to build Camdemy video folder URL");
     }
-    const fileList = await this.downloadXml(urljoin(videoFolder, "fileList.xml") ?? "", videoId, { note: "Downloading filelist XML" });
+    const fileList = await this.downloadXml(
+      urljoin(videoFolder, "fileList.xml") ?? "",
+      videoId,
+      { note: "Downloading filelist XML" },
+    );
     if (fileList === false) {
       throw new Error("Unable to download Camdemy file list XML");
     }
     const videoItem = xmlFind(xmlFind(fileList, "video") ?? fileList, "item");
-    const fileName = videoItem ? xpathText(videoItem, "fileName", "file name", { fatal: true }) : null;
+    const fileName = videoItem
+      ? xpathText(videoItem, "fileName", "file name", { fatal: true })
+      : null;
     if (!fileName) {
       throw new Error("Unable to extract Camdemy file name");
     }
@@ -60,17 +76,34 @@ export class CamdemyIE extends InfoExtractor {
       url: urljoin(videoFolder, fileName) ?? undefined,
       title,
       thumbnail: thumbUrl,
-      description: this.htmlSearchMeta("description", webpage) ?? cleanHtml(oembed.description) ?? undefined,
+      description:
+        this.htmlSearchMeta("description", webpage) ??
+        cleanHtml(oembed.description) ??
+        undefined,
       creator: oembed.author_name,
       duration: parseDuration(oembed.duration) ?? undefined,
-      upload_date: unifiedStrdate(this.searchRegex(/>published on ([^<]+)</, webpage, "upload date", { defaultValue: null }) as string | null) ?? undefined,
-      view_count: strToInt(this.searchRegex(/role=["']viewCnt["'][^>]*>([\d,.]+) views/, webpage, "view count", { defaultValue: null }) as string | null) ?? undefined,
+      upload_date:
+        unifiedStrdate(
+          this.searchRegex(/>published on ([^<]+)</, webpage, "upload date", {
+            defaultValue: null,
+          }) as string | null,
+        ) ?? undefined,
+      view_count:
+        strToInt(
+          this.searchRegex(
+            /role=["']viewCnt["'][^>]*>([\d,.]+) views/,
+            webpage,
+            "view count",
+            { defaultValue: null },
+          ) as string | null,
+        ) ?? undefined,
     };
   }
 }
 
 export class CamdemyFolderIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?camdemy\.com/folder/(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?camdemy\.com/folder/(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const folderId = this.matchId(url);
@@ -80,8 +113,13 @@ export class CamdemyFolderIE extends InfoExtractor {
     if (page === false) {
       throw new Error("Unable to download Camdemy folder page");
     }
-    const entries = [...page.matchAll(/href='(\/media\/\d+\/?)'/g)]
-      .map((match) => this.urlResult(`http://www.camdemy.com${match[1]}`));
-    return this.playlistResult(entries, folderId, this.htmlSearchMeta("keywords", page));
+    const entries = [...page.matchAll(/href='(\/media\/\d+\/?)'/g)].map(
+      (match) => this.urlResult(`http://www.camdemy.com${match[1]}`),
+    );
+    return this.playlistResult(
+      entries,
+      folderId,
+      this.htmlSearchMeta("keywords", page),
+    );
   }
 }

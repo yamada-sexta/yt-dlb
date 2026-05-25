@@ -10,7 +10,8 @@ import {
 } from "../utils/index.ts";
 
 export class AbcNewsVideoIE extends AMPIE {
-  static override readonly _VALID_URL = String.raw`https?://(?:abcnews\.go\.com/(?:(?:[^/]+/)*video/(?<display_id>[0-9a-z-]+)-|video/(?:embed|itemfeed)\?.*?\bid=)|fivethirtyeight\.abcnews\.go\.com/video/embed/\d+/)(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:abcnews\.go\.com/(?:(?:[^/]+/)*video/(?<display_id>[0-9a-z-]+)-|video/(?:embed|itemfeed)\?.*?\bid=)|fivethirtyeight\.abcnews\.go\.com/video/embed/\d+/)(?<id>\d+)`;
 
   static override get IE_NAME(): string {
     return "abcnews:video";
@@ -24,7 +25,9 @@ export class AbcNewsVideoIE extends AMPIE {
       throw new Error("Unable to extract ABC News video ID");
     }
 
-    const infoDict = await this.extractFeedInfo(`http://abcnews.go.com/video/itemfeed?id=${videoId}`);
+    const infoDict = await this.extractFeedInfo(
+      `http://abcnews.go.com/video/itemfeed?id=${videoId}`,
+    );
     return {
       ...infoDict,
       id: videoId,
@@ -34,7 +37,8 @@ export class AbcNewsVideoIE extends AMPIE {
 }
 
 export class AbcNewsIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://abcnews\.go\.com/(?:[^/]+/)+(?<display_id>[0-9a-z-]+)/story\?id=(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://abcnews\.go\.com/(?:[^/]+/)+(?<display_id>[0-9a-z-]+)/story\?id=(?<id>\d+)`;
 
   static override get IE_NAME(): string {
     return "abcnews";
@@ -50,7 +54,7 @@ export class AbcNewsIE extends InfoExtractor {
     const rawData = this.searchRegex(
       /window\['__abcnews__'\]\s*=\s*({.+?});/,
       webpage,
-      "data"
+      "data",
     );
     if (typeof rawData !== "string") {
       throw new Error("Unable to locate page data");
@@ -70,8 +74,12 @@ export class AbcNewsIE extends InfoExtractor {
         id: String(featuredVideo.id ?? ""),
         title: String(featuredVideo.name ?? ""),
         url: String(feed),
-        thumbnail: featuredVideo.images ? String(featuredVideo.images) : undefined,
-        description: featuredVideo.description ? String(featuredVideo.description) : undefined,
+        thumbnail: featuredVideo.images
+          ? String(featuredVideo.images)
+          : undefined,
+        description: featuredVideo.description
+          ? String(featuredVideo.description)
+          : undefined,
         timestamp: parseIso8601(featuredVideo.uploadDate) ?? undefined,
         duration: parseDuration(featuredVideo.duration) ?? undefined,
         ie_key: "AbcNewsVideo",
@@ -106,7 +114,7 @@ export class AbcNewsIE extends InfoExtractor {
       entriesList,
       storyId,
       articleContents.headline || undefined,
-      articleContents.subHead || undefined
+      articleContents.subHead || undefined,
     );
   }
 }

@@ -23,7 +23,7 @@ export abstract class AGalegaBaseIE extends InfoExtractor {
   }
 
   protected async refreshAccessToken(videoId: string): Promise<void> {
-    const data = await this.downloadJson(
+    const data = (await this.downloadJson(
       "https://www.agalega.gal/api/fetch-api/jwt/token",
       videoId,
       {
@@ -34,8 +34,8 @@ export abstract class AGalegaBaseIE extends InfoExtractor {
           client: "crtvg",
           checkExistsCookies: false,
         }),
-      }
-    ) as any;
+      },
+    )) as any;
     AGalegaBaseIE.accessToken = data?.access || null;
   }
 
@@ -44,14 +44,19 @@ export abstract class AGalegaBaseIE extends InfoExtractor {
     displayId: string,
     note: string,
     fatal = true,
-    query?: Record<string, string>
+    query?: Record<string, string>,
   ): Promise<any> {
-    if (!AGalegaBaseIE.accessToken || AGalegaBaseIE.jwtIsExpired(AGalegaBaseIE.accessToken)) {
+    if (
+      !AGalegaBaseIE.accessToken ||
+      AGalegaBaseIE.jwtIsExpired(AGalegaBaseIE.accessToken)
+    ) {
       await this.refreshAccessToken(endpoint);
     }
     if (!AGalegaBaseIE.accessToken) {
       if (fatal) {
-        throw new ExtractorError("Failed to obtain access token", { expected: true });
+        throw new ExtractorError("Failed to obtain access token", {
+          expected: true,
+        });
       }
       return null;
     }
@@ -63,13 +68,14 @@ export abstract class AGalegaBaseIE extends InfoExtractor {
         fatal,
         query,
         headers: { Authorization: `jwtok ${AGalegaBaseIE.accessToken}` },
-      }
+      },
     );
   }
 }
 
 export class AGalegaIE extends AGalegaBaseIE {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?agalega\.gal/videos/(?:detail/)?(?<id>[0-9]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?agalega\.gal/videos/(?:detail/)?(?<id>[0-9]+)`;
 
   static override get IE_NAME(): string {
     return "agalega:videos";
@@ -84,7 +90,7 @@ export class AGalegaIE extends AGalegaBaseIE {
       false,
       {
         optional_fields: "image,is_premium,short_description,has_subtitle",
-      }
+      },
     );
     const resourceData = await this.callApi(
       `content_resources/${videoId}/`,
@@ -93,14 +99,22 @@ export class AGalegaIE extends AGalegaBaseIE {
       true,
       {
         optional_fields: "media_url",
-      }
+      },
     );
 
     const formats: any[] = [];
     const subtitles: Record<string, any[]> = {};
 
-    const mediaUrls = traverseObj(resourceData, ["results", Ellipsis, "media_url"]) as string[];
-    const urlsList = Array.isArray(mediaUrls) ? mediaUrls : mediaUrls ? [mediaUrls] : [];
+    const mediaUrls = traverseObj(resourceData, [
+      "results",
+      Ellipsis,
+      "media_url",
+    ]) as string[];
+    const urlsList = Array.isArray(mediaUrls)
+      ? mediaUrls
+      : mediaUrls
+        ? [mediaUrls]
+        : [];
 
     for (const m3u8Url of urlsList) {
       const cleanUrl = urlOrNone(m3u8Url);
@@ -111,15 +125,20 @@ export class AGalegaIE extends AGalegaBaseIE {
         cleanUrl,
         videoId,
         "mp4",
-        { m3u8Id: "hls" }
+        { m3u8Id: "hls" },
       );
       formats.push(...fmts);
       this.mergeSubtitles(subs, subtitles);
     }
 
-    const title = traverseObj(contentData, ["name"]) as string | null ?? "";
-    const description = (traverseObj(contentData, ["description"]) ?? traverseObj(contentData, ["short_description"])) as string | null ?? undefined;
-    const thumbnail = urlOrNone(traverseObj(contentData, ["image"]) as string | null);
+    const title = (traverseObj(contentData, ["name"]) as string | null) ?? "";
+    const description =
+      ((traverseObj(contentData, ["description"]) ??
+        traverseObj(contentData, ["short_description"])) as string | null) ??
+      undefined;
+    const thumbnail = urlOrNone(
+      traverseObj(contentData, ["image"]) as string | null,
+    );
 
     return {
       id: videoId,

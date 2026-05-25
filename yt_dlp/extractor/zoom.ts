@@ -36,7 +36,8 @@ interface ZoomPlayInfo {
 
 export class ZoomIE extends InfoExtractor {
   static override readonly IE_NAME = "zoom";
-  static override readonly _VALID_URL = String.raw`(?<base_url>https?://(?:[^.]+\.)?zoom\.us/)rec(?:ording)?/(?<type>play|share)/(?<id>[\w.-]+)`;
+  static override readonly _VALID_URL =
+    String.raw`(?<base_url>https?://(?:[^.]+\.)?zoom\.us/)rec(?:ording)?/(?<type>play|share)/(?<id>[\w.-]+)`;
 
   private getPageData(webpage: string, videoId: string): ZoomPageData {
     const json = extractAssignedJson(webpage, "window.__data__");
@@ -46,10 +47,19 @@ export class ZoomIE extends InfoExtractor {
     return JSON.parse(jsToJson(json)) as ZoomPageData;
   }
 
-  private async getRealWebpage(url: string, baseUrl: string, videoId: string, urlType: string): Promise<string> {
-    const webpage = await this.downloadWebpage(url, videoId, { note: `Downloading ${urlType} webpage` });
+  private async getRealWebpage(
+    url: string,
+    baseUrl: string,
+    videoId: string,
+    urlType: string,
+  ): Promise<string> {
+    const webpage = await this.downloadWebpage(url, videoId, {
+      note: `Downloading ${urlType} webpage`,
+    });
     if (webpage === false) {
-      throw new ExtractorError(`Unable to download ${urlType} webpage`, { videoId });
+      throw new ExtractorError(`Unable to download ${urlType} webpage`, {
+        videoId,
+      });
     }
     let form: Record<string, string>;
     try {
@@ -60,28 +70,39 @@ export class ZoomIE extends InfoExtractor {
 
     const password = this.getParam<string | null>("videopassword", null);
     if (!password) {
-      throw new ExtractorError("This video is protected by a passcode, use the --video-password option", { expected: true, videoId });
+      throw new ExtractorError(
+        "This video is protected by a passcode, use the --video-password option",
+        { expected: true, videoId },
+      );
     }
     const isMeeting = form.useWhichPasswd === "meeting";
-    const validation = await this.downloadJson<{ status?: boolean; errorMessage?: string }>(
-      `${baseUrl}rec/validate${isMeeting ? "_meet" : ""}_passwd`,
-      videoId,
-      {
-        note: "Validating passcode",
-        errnote: "Wrong passcode",
-        data: urlencodePostdata({
-          id: form[`${isMeeting ? "meet" : "file"}Id`],
-          passwd: password,
-          action: form.action,
-        }),
-      },
-    );
+    const validation = await this.downloadJson<{
+      status?: boolean;
+      errorMessage?: string;
+    }>(`${baseUrl}rec/validate${isMeeting ? "_meet" : ""}_passwd`, videoId, {
+      note: "Validating passcode",
+      errnote: "Wrong passcode",
+      data: urlencodePostdata({
+        id: form[`${isMeeting ? "meet" : "file"}Id`],
+        passwd: password,
+        action: form.action,
+      }),
+    });
     if (validation === false || !validation.status) {
-      throw new ExtractorError(validation === false ? "Wrong passcode" : validation.errorMessage ?? "Wrong passcode", { expected: true, videoId });
+      throw new ExtractorError(
+        validation === false
+          ? "Wrong passcode"
+          : (validation.errorMessage ?? "Wrong passcode"),
+        { expected: true, videoId },
+      );
     }
-    const redownloaded = await this.downloadWebpage(url, videoId, { note: `Re-downloading ${urlType} webpage` });
+    const redownloaded = await this.downloadWebpage(url, videoId, {
+      note: `Re-downloading ${urlType} webpage`,
+    });
     if (redownloaded === false) {
-      throw new ExtractorError(`Unable to download ${urlType} webpage`, { videoId });
+      throw new ExtractorError(`Unable to download ${urlType} webpage`, {
+        videoId,
+      });
     }
     return redownloaded;
   }
@@ -104,16 +125,19 @@ export class ZoomIE extends InfoExtractor {
       if (!meetingId) {
         throw new ExtractorError("Unable to extract meeting ID", { videoId });
       }
-      const shareInfo = await this.downloadJson<{ result?: { redirectUrl?: string } }>(
-        `${baseUrl}nws/recording/1.0/play/share-info/${meetingId}`,
-        videoId,
-        { note: "Downloading share info JSON" },
-      );
+      const shareInfo = await this.downloadJson<{
+        result?: { redirectUrl?: string };
+      }>(`${baseUrl}nws/recording/1.0/play/share-info/${meetingId}`, videoId, {
+        note: "Downloading share info JSON",
+      });
       const redirectPath = shareInfo ? shareInfo.result?.redirectUrl : null;
       if (!redirectPath) {
         throw new ExtractorError("Unable to extract redirect URL", { videoId });
       }
-      url = updateUrlQuery(urljoin(baseUrl, redirectPath) ?? redirectPath, startParams);
+      url = updateUrlQuery(
+        urljoin(baseUrl, redirectPath) ?? redirectPath,
+        startParams,
+      );
       query.continueMode = "true";
     }
 
@@ -129,13 +153,15 @@ export class ZoomIE extends InfoExtractor {
       videoId,
       { query, note: "Downloading play info JSON" },
     );
-    const data = info ? info.result ?? {} : {};
+    const data = info ? (info.result ?? {}) : {};
 
     const subtitles: Record<string, Array<Record<string, unknown>>> = {};
     for (const type of ["transcript", "cc", "chapter"] as const) {
       const subUrl = data[`${type}Url`];
       if (subUrl) {
-        subtitles[type] = [{ url: urljoin(baseUrl, subUrl) ?? subUrl, ext: "vtt" }];
+        subtitles[type] = [
+          { url: urljoin(baseUrl, subUrl) ?? subUrl, ext: "vtt" },
+        ];
       }
     }
 
@@ -148,7 +174,8 @@ export class ZoomIE extends InfoExtractor {
         height: intOrNone(data.viewResolvtions?.[1]) ?? undefined,
         format_id: "view",
         ext: "mp4",
-        filesize_approx: parseFilesize(strOrNone(data.recording?.fileSizeInMB)) ?? undefined,
+        filesize_approx:
+          parseFilesize(strOrNone(data.recording?.fileSizeInMB)) ?? undefined,
         preference: 0,
       });
     }
@@ -165,7 +192,14 @@ export class ZoomIE extends InfoExtractor {
     }
     if (data.viewMp4WithshareUrl) {
       formats.push({
-        ...parseResolution(this.searchRegex(/_(\d+x\d+)\.mp4/, urlBasename(data.viewMp4WithshareUrl), "resolution", { defaultValue: null }) as string | null),
+        ...parseResolution(
+          this.searchRegex(
+            /_(\d+x\d+)\.mp4/,
+            urlBasename(data.viewMp4WithshareUrl),
+            "resolution",
+            { defaultValue: null },
+          ) as string | null,
+        ),
         format_note: "Screen share with camera",
         url: data.viewMp4WithshareUrl,
         format_id: "view_with_share",
@@ -185,8 +219,13 @@ export class ZoomIE extends InfoExtractor {
   }
 }
 
-function extractAssignedJson(webpage: string, variableName: string): string | null {
-  const index = webpage.search(new RegExp(`${variableName.replaceAll(".", String.raw`\.`)}\\s*=`));
+function extractAssignedJson(
+  webpage: string,
+  variableName: string,
+): string | null {
+  const index = webpage.search(
+    new RegExp(`${variableName.replaceAll(".", String.raw`\.`)}\\s*=`),
+  );
   if (index < 0) {
     return null;
   }
@@ -214,7 +253,7 @@ function findMatchingBracket(source: string, openIndex: number): number {
       }
       continue;
     }
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char;
     } else if (char === "{") {
       depth += 1;

@@ -2,7 +2,9 @@
 
 export class ParseError extends Error {
   constructor(parser: MatchParser) {
-    super(`Parse error at position ${parser.position} (near ${JSON.stringify(parser.data.slice(parser.position, parser.position + 100))})`);
+    super(
+      `Parse error at position ${parser.position} (near ${JSON.stringify(parser.data.slice(parser.position, parser.position + 100))})`,
+    );
   }
 }
 
@@ -38,7 +40,10 @@ class MatchParser {
   }
 
   consume(pattern: RegExp | string): RegExpMatchArray | number | null {
-    return this.advance(this.match(pattern)) as RegExpMatchArray | number | null;
+    return this.advance(this.match(pattern)) as
+      | RegExpMatchArray
+      | number
+      | null;
   }
 
   child(): MatchChildParser {
@@ -85,10 +90,13 @@ class StringWriter implements WritableString {
 
 export function parseTs(match: RegExpMatchArray): number {
   const multipliers = [3600_000, 60_000, 1000, 1];
-  return 90 * multipliers.reduce((total, multiplier, index) => {
-    const part = Number.parseInt(match[index + 1] ?? "0", 10) || 0;
-    return total + part * multiplier;
-  }, 0);
+  return (
+    90 *
+    multipliers.reduce((total, multiplier, index) => {
+      const part = Number.parseInt(match[index + 1] ?? "0", 10) || 0;
+      return total + part * multiplier;
+    }, 0)
+  );
 }
 
 export function formatTs(timestamp: number): string {
@@ -122,12 +130,14 @@ export class Block {
 export class HeaderBlock extends Block {}
 
 export class Magic extends HeaderBlock {
-  static override readonly regex = /^\uFEFF?WEBVTT([ \t][^\r\n]*)?(?:\r\n|[\r\n])/;
+  static override readonly regex =
+    /^\uFEFF?WEBVTT([ \t][^\r\n]*)?(?:\r\n|[\r\n])/;
   static readonly regexTsmap = /^X-TIMESTAMP-MAP=/;
   static readonly regexTsmapLocal = /^LOCAL:/;
   static readonly regexTsmapMpegts = /^MPEGTS:([0-9]+)/;
   static readonly regexTsmapSep = /^[ \t]*,[ \t]*/;
-  static readonly regexMeta = /^(?:(?!-->)[^\r\n])+:(?:(?!-->)[^\r\n])+(?:\r\n|[\r\n])/;
+  static readonly regexMeta =
+    /^(?:(?!-->)[^\r\n])+:(?:(?!-->)[^\r\n])+(?:\r\n|[\r\n])/;
 
   constructor(
     readonly extra: string | undefined,
@@ -184,7 +194,9 @@ export class Magic extends HeaderBlock {
     stream.write("\n");
   }
 
-  private static parseTsmap(parser: MatchParser): [number | undefined, number | undefined] {
+  private static parseTsmap(
+    parser: MatchParser,
+  ): [number | undefined, number | undefined] {
     const child = parser.child();
     let local: number | undefined;
     let mpegts: number | undefined;
@@ -221,15 +233,18 @@ export class Magic extends HeaderBlock {
 }
 
 export class StyleBlock extends HeaderBlock {
-  static override readonly regex = /^STYLE[ \t]*(?:\r\n|[\r\n])((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
+  static override readonly regex =
+    /^STYLE[ \t]*(?:\r\n|[\r\n])((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
 }
 
 export class RegionBlock extends HeaderBlock {
-  static override readonly regex = /^REGION[ \t]*((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
+  static override readonly regex =
+    /^REGION[ \t]*((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
 }
 
 export class CommentBlock extends Block {
-  static override readonly regex = /^NOTE(?:\r\n|[ \t\r\n])((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
+  static override readonly regex =
+    /^NOTE(?:\r\n|[ \t\r\n])((?:(?!-->)[^\r\n])+(?:\r\n|[\r\n]))*(?:\r\n|[\r\n])/;
 }
 
 export interface CueJson {
@@ -265,7 +280,11 @@ export class CueBlock extends Block {
     }
 
     const startMatch = child.consume(REGEX_TS);
-    if (!startMatch || typeof startMatch === "number" || !child.consume(CueBlock.regexArrow)) {
+    if (
+      !startMatch ||
+      typeof startMatch === "number" ||
+      !child.consume(CueBlock.regexArrow)
+    ) {
       return null;
     }
     const endMatch = child.consume(REGEX_TS);
@@ -292,7 +311,9 @@ export class CueBlock extends Block {
       id,
       parseTs(startMatch),
       parseTs(endMatch),
-      settingsMatch && typeof settingsMatch !== "number" ? settingsMatch[1] : undefined,
+      settingsMatch && typeof settingsMatch !== "number"
+        ? settingsMatch[1]
+        : undefined,
       writer.toString(),
     );
   }
@@ -325,7 +346,13 @@ export class CueBlock extends Block {
   }
 
   static fromJson(json: CueJson): CueBlock {
-    return new CueBlock(json.id, json.start, json.end, json.settings, json.text);
+    return new CueBlock(
+      json.id,
+      json.start,
+      json.end,
+      json.settings,
+      json.text,
+    );
   }
 
   equals(other: CueBlock): boolean {
@@ -333,16 +360,23 @@ export class CueBlock extends Block {
   }
 
   hinges(other: CueBlock): boolean {
-    return this.text === other.text
-      && this.settings === other.settings
-      && this.start <= this.end
-      && this.end === other.start
-      && other.start <= other.end;
+    return (
+      this.text === other.text &&
+      this.settings === other.settings &&
+      this.start <= this.end &&
+      this.end === other.start &&
+      other.start <= other.end
+    );
   }
 }
 
-export function* parseFragment(fragmentContent: Uint8Array | Buffer | string): Generator<Block> {
-  const content = typeof fragmentContent === "string" ? fragmentContent : Buffer.from(fragmentContent).toString();
+export function* parseFragment(
+  fragmentContent: Uint8Array | Buffer | string,
+): Generator<Block> {
+  const content =
+    typeof fragmentContent === "string"
+      ? fragmentContent
+      : Buffer.from(fragmentContent).toString();
   const parser = new MatchParser(content);
 
   yield Magic.parse(parser);
@@ -351,7 +385,10 @@ export function* parseFragment(fragmentContent: Uint8Array | Buffer | string): G
     if (parser.consume(REGEX_BLANK)) {
       continue;
     }
-    const block = RegionBlock.parse(parser) ?? StyleBlock.parse(parser) ?? CommentBlock.parse(parser);
+    const block =
+      RegionBlock.parse(parser) ??
+      StyleBlock.parse(parser) ??
+      CommentBlock.parse(parser);
     if (block) {
       yield block;
       continue;

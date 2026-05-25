@@ -23,13 +23,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - Unimplemented migrated features must throw an explicit `NotImplementedError` instead of returning blank no-op values, empty arrays, nullable stand-ins, approximate compatibility results, or silent placeholders.
 - Re-audit started downloader ports for dependency-first compliance before marking remaining partials complete (`utils` and XML helpers are known prerequisites).
 
-## Current Test Status
-
-Latest local validation:
-
-- Focused YouTube validation passes: `bun test test/test_downloader_external.test.ts test/test_all_urls.test.ts test/test_youtube_misc.test.ts test/test_youtube_pot.test.ts`.
-- `bun run typecheck`: currently blocked by unrelated in-progress extractor ports under `yt_dlp/extractor/yandex*`, `yapfiles.ts`, `yappy.ts`, `yle-areena.ts`, `youjizz.ts`, `youku.ts`, `younow.ts`, plus one `yt_dlp/utils/traversal.ts` typing issue.
-- `bun run test:bun`: expected 357 pass, 38 todo after the YouTube notification coverage addition; the current full run did not emit a final summary in this sandbox session.
+## Current Test Coverage
 
 Recently ported Python test coverage:
 
@@ -39,6 +33,7 @@ Recently ported Python test coverage:
 - `test/test_downloader_external.py` -> `test/test_downloader_external.test.ts`: FFmpeg external downloader command assembly.
 - `test/test_aes.py` -> `test/test_aes.test.ts`: AES encrypt/decrypt compatibility wrappers and CTR text decryption.
 - `test/test_networking_utils.py` -> `test/test_networking_utils.test.ts`: SOCKS proxy option parsing and unknown-proxy rejection.
+- `test/test_utils.py` -> `test/test_utils.test.ts`: expanded utility helper coverage for URL parsing/sanitization, codec and mimetype parsing, duration/count/bitrate parsing, shell/path helpers, compatibility extension selection, base-N/rotation helpers, HTML checks, and formatting helpers.
 
 Remaining TypeScript test TODOs should stay local to the matching test file and should only be replaced when the YTDLB feature exists. Current known gaps include Python SSL context construction equivalents, optional networking backend parity, Windows/macOS keychain cookie decryption, full `LenientSimpleCookie` morsel attributes, config file loading, update-spec/query injection behavior, full extractor registry `ie_key` parity, AES `key_expansion`, verbose private option redaction, netrc login hooks, module execution/lazy extractor generation, compat PyCrypto AES behavior, and networked age-restriction/download cases.
 
@@ -70,8 +65,8 @@ Remaining TypeScript test TODOs should stay local to the matching test file and 
 - [x] `yt_dlp/utils/networking.ts`
 - [x] `yt_dlp/utils/progress.ts`
 - [ ] `yt_dlp/utils/xml.ts` shared XML helper subset from `yt_dlp/utils/_utils.py`; not a complete utility-layer port.
-- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion, ACast extractor prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id`; full utility surface still pending.
-- [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; full traversal API still pending.
+- [ ] `yt_dlp/utils/utils.ts` dependency subset from `yt_dlp/utils/_utils.py`; includes TTML/DFXP subtitle conversion, ACast extractor prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, element lookup helpers, codec/mimetype helpers, base URL/basic auth/sanitize URL helpers, month/version/escaping helpers, `get_compatible_ext`, and small encoding primitives; full utility surface still pending.
+- [ ] `yt_dlp/utils/traversal.ts` downloader/extractor traversal subset present; focused typing issue fixed, but full traversal API still pending.
 - [x] `yt_dlp/postprocessor/index.ts`
 - [x] `yt_dlp/postprocessor/common.ts`
 - [ ] `yt_dlp/postprocessor/ffmpeg.ts` large functional subset is present; source still identifies it as the ytdlb-needed subset and full parity is not audited.
@@ -1157,18 +1152,18 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/xstream.py` -> `yt_dlp/extractor/xstream.ts`
 - [ ] `yt_dlp/extractor/xvideos.py` -> `yt_dlp/extractor/xvideos.ts`
 - [ ] `yt_dlp/extractor/xxxymovies.py` -> `yt_dlp/extractor/xxxymovies.ts`
-- [ ] `yt_dlp/extractor/yahoo.py` -> `yt_dlp/extractor/yahoo.ts`
-- [ ] `yt_dlp/extractor/yandexdisk.py` -> `yt_dlp/extractor/yandexdisk.ts`
-- [ ] `yt_dlp/extractor/yandexmusic.py` -> `yt_dlp/extractor/yandexmusic.ts`
-- [ ] `yt_dlp/extractor/yandexvideo.py` -> `yt_dlp/extractor/yandexvideo.ts`
-- [ ] `yt_dlp/extractor/yapfiles.py` -> `yt_dlp/extractor/yapfiles.ts`
-- [ ] `yt_dlp/extractor/yappy.py` -> `yt_dlp/extractor/yappy.ts`
-- [ ] `yt_dlp/extractor/yfanefa.py` -> `yt_dlp/extractor/yfanefa.ts`
-- [ ] `yt_dlp/extractor/yle_areena.py` -> `yt_dlp/extractor/yle-areena.ts`
-- [ ] `yt_dlp/extractor/youjizz.py` -> `yt_dlp/extractor/youjizz.ts`
-- [ ] `yt_dlp/extractor/youku.py` -> `yt_dlp/extractor/youku.ts`
-- [ ] `yt_dlp/extractor/younow.py` -> `yt_dlp/extractor/younow.ts`
-- [ ] `yt_dlp/extractor/youporn.py` -> `yt_dlp/extractor/youporn.ts`
+- [ ] `yt_dlp/extractor/yahoo.py` -> `yt_dlp/extractor/yahoo.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yandexdisk.py` -> `yt_dlp/extractor/yandexdisk.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yandexmusic.py` -> `yt_dlp/extractor/yandexmusic.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yandexvideo.py` -> `yt_dlp/extractor/yandexvideo.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yapfiles.py` -> `yt_dlp/extractor/yapfiles.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yappy.py` -> `yt_dlp/extractor/yappy.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yfanefa.py` -> `yt_dlp/extractor/yfanefa.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/yle_areena.py` -> `yt_dlp/extractor/yle-areena.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/youjizz.py` -> `yt_dlp/extractor/youjizz.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/youku.py` -> `yt_dlp/extractor/youku.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/younow.py` -> `yt_dlp/extractor/younow.ts` (TS port added; full parity remains pending)
+- [ ] `yt_dlp/extractor/youporn.py` -> `yt_dlp/extractor/youporn.ts` (TS port added; full parity remains pending)
 - [ ] `yt_dlp/extractor/youtube/__init__.py` -> `yt_dlp/extractor/youtube/index.ts`
 - [ ] `yt_dlp/extractor/youtube/_base.py` -> `yt_dlp/extractor/youtube/base.ts` (shared Innertube client table, context/API headers, ytcfg/session/visitor helpers, continuations, alerts, badges, text/count, relative-time, and thumbnails are partially ported; full initialization/auth/retry response flow remains pending)
 - [ ] `yt_dlp/extractor/youtube/_clip.py` -> `yt_dlp/extractor/youtube/clip.ts`
@@ -1243,7 +1238,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/utils/_deprecated.py` -> `yt_dlp/utils/deprecated.ts`
 - [x] `yt_dlp/utils/_jsruntime.py` -> `yt_dlp/utils/jsruntime.ts`
 - [x] `yt_dlp/utils/_legacy.py` -> `yt_dlp/utils/legacy.ts`
-- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion, ACast extractor utility prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, and `get_element_by_id` added)
+- [ ] `yt_dlp/utils/_utils.py` -> `yt_dlp/utils/utils.ts` (dependency subset started; TTML/DFXP subtitle conversion, ACast extractor utility prerequisites, `extract_attributes`, `qualities`, `unified_strdate`, `parse_duration`, `str_to_int`, `url_or_none`, `parse_resolution`, `merge_dicts`, element lookup helpers, codec/mimetype helpers, base URL/basic auth/sanitize URL helpers, month/version/escaping helpers, `get_compatible_ext`, and small encoding primitives added)
 - [x] `yt_dlp/utils/jslib/__init__.py` -> `yt_dlp/utils/jslib/index.ts`
 - [x] `yt_dlp/utils/jslib/devalue.py` -> `yt_dlp/utils/jslib/devalue.ts`
 - [x] `yt_dlp/utils/networking.py` -> `yt_dlp/utils/networking.ts`

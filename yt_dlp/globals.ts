@@ -21,7 +21,9 @@ export const pluginIesOverrides = new Indirect(new Map<string, unknown[]>());
 
 export const IN_CLI = new Indirect(false);
 export const LAZY_EXTRACTORS = new Indirect<boolean | null>(null);
-export const WINDOWS_VT_MODE = new Indirect<boolean | null>(process.platform === "win32" ? false : null);
+export const WINDOWS_VT_MODE = new Indirect<boolean | null>(
+  process.platform === "win32" ? false : null,
+);
 
 export const supportedJsRuntimes = new Indirect<Record<string, unknown>>({});
 export const supportedRemoteComponents = new Indirect<string[]>([]);

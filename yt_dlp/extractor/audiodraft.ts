@@ -15,7 +15,9 @@ interface AudiodraftPlayerInfo {
 }
 
 abstract class AudiodraftBaseIE extends InfoExtractor {
-  protected async audiodraftExtractFromId(playerEntryId: string): Promise<ExtractorInfo> {
+  protected async audiodraftExtractFromId(
+    playerEntryId: string,
+  ): Promise<ExtractorInfo> {
     const data = await this.downloadJson<AudiodraftPlayerInfo>(
       "https://www.audiodraft.com/scripts/general/player/getPlayerInfoNew.php",
       playerEntryId,
@@ -50,7 +52,8 @@ export class AudiodraftCustomIE extends AudiodraftBaseIE {
     return "Audiodraft:custom";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://(?:[-\w]+)\.audiodraft\.com/entry/(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:[-\w]+)\.audiodraft\.com/entry/(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
@@ -58,7 +61,11 @@ export class AudiodraftCustomIE extends AudiodraftBaseIE {
     if (webpage === false) {
       throw new Error("Unable to download Audiodraft entry page");
     }
-    const playerEntryId = this.searchRegex(/playAudio\('(player_entry_\d+)'\);/, webpage, "play entry id");
+    const playerEntryId = this.searchRegex(
+      /playAudio\('(player_entry_\d+)'\);/,
+      webpage,
+      "play entry id",
+    );
     if (typeof playerEntryId !== "string") {
       throw new Error("Unable to extract Audiodraft player entry id");
     }
@@ -71,9 +78,12 @@ export class AudiodraftGenericIE extends AudiodraftBaseIE {
     return "Audiodraft:generic";
   }
 
-  static override readonly _VALID_URL = String.raw`https?://www\.audiodraft\.com/contests/[^/#]+#entries&eid=(?<id>\d+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://www\.audiodraft\.com/contests/[^/#]+#entries&eid=(?<id>\d+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
-    return await this.audiodraftExtractFromId(`player_entry_${this.matchId(url)}`);
+    return await this.audiodraftExtractFromId(
+      `player_entry_${this.matchId(url)}`,
+    );
   }
 }

@@ -34,28 +34,38 @@ interface ZhihuZVideo {
 }
 
 export class ZhihuIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:www\.)?zhihu\.com/zvideo/(?<id>[0-9]+)`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:www\.)?zhihu\.com/zvideo/(?<id>[0-9]+)`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const videoId = this.matchId(url);
-    const zvideo = await this.downloadJson<ZhihuZVideo>(`https://www.zhihu.com/api/v4/zvideos/${videoId}`, videoId);
+    const zvideo = await this.downloadJson<ZhihuZVideo>(
+      `https://www.zhihu.com/api/v4/zvideos/${videoId}`,
+      videoId,
+    );
     if (zvideo === false) {
       throw new Error("Unable to download Zhihu video metadata");
     }
 
-    const formats = Object.entries(zvideo.video?.playlist ?? {}).flatMap(([formatId, item]) => {
-      const playUrl = item.url ?? item.play_url;
-      return playUrl ? [{
-        asr: intOrNone(item.sample_rate) ?? undefined,
-        filesize: intOrNone(item.size) ?? undefined,
-        format_id: formatId,
-        fps: intOrNone(item.fps) ?? undefined,
-        height: intOrNone(item.height) ?? undefined,
-        tbr: floatOrNone(item.bitrate) ?? undefined,
-        url: playUrl,
-        width: intOrNone(item.width) ?? undefined,
-      }] : [];
-    });
+    const formats = Object.entries(zvideo.video?.playlist ?? {}).flatMap(
+      ([formatId, item]) => {
+        const playUrl = item.url ?? item.play_url;
+        return playUrl
+          ? [
+              {
+                asr: intOrNone(item.sample_rate) ?? undefined,
+                filesize: intOrNone(item.size) ?? undefined,
+                format_id: formatId,
+                fps: intOrNone(item.fps) ?? undefined,
+                height: intOrNone(item.height) ?? undefined,
+                tbr: floatOrNone(item.bitrate) ?? undefined,
+                url: playUrl,
+                width: intOrNone(item.width) ?? undefined,
+              },
+            ]
+          : [];
+      },
+    );
 
     const author = zvideo.author ?? {};
     return {
@@ -66,7 +76,12 @@ export class ZhihuIE extends InfoExtractor {
       uploader: author.name,
       timestamp: intOrNone(zvideo.published_at) ?? undefined,
       uploader_id: author.id,
-      uploader_url: formatField(author.url_token, null, "https://www.zhihu.com/people/%s") || undefined,
+      uploader_url:
+        formatField(
+          author.url_token,
+          null,
+          "https://www.zhihu.com/people/%s",
+        ) || undefined,
       duration: floatOrNone(zvideo.video?.duration) ?? undefined,
       view_count: intOrNone(zvideo.play_count) ?? undefined,
       like_count: intOrNone(zvideo.liked_count) ?? undefined,

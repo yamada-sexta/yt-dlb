@@ -1,16 +1,25 @@
 // Source: yt_dlp/extractor/arnes.py
 
-import { ExtractorError, floatOrNone, formatField, intOrNone, parseIso8601, removeStart } from "../utils/index.ts";
+import {
+  ExtractorError,
+  floatOrNone,
+  formatField,
+  intOrNone,
+  parseIso8601,
+  removeStart,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 import { z } from "zod";
 
-const ArnesMediaSchema = z.object({
-  url: z.string().optional(),
-  format: z.string().optional(),
-  formatTranslation: z.string().optional(),
-  width: z.unknown().optional(),
-  height: z.unknown().optional(),
-}).passthrough();
+const ArnesMediaSchema = z
+  .object({
+    url: z.string().optional(),
+    format: z.string().optional(),
+    formatTranslation: z.string().optional(),
+    width: z.unknown().optional(),
+    height: z.unknown().optional(),
+  })
+  .passthrough();
 
 type ArnesMedia = z.infer<typeof ArnesMediaSchema>;
 
@@ -34,7 +43,8 @@ interface ArnesVideo {
 }
 
 export class ArnesIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://video\.arnes\.si/(?:[a-z]{2}/)?(?:watch|embed|api/(?:asset|public/video))/(?<id>[0-9a-zA-Z]{12})`;
+  static override readonly _VALID_URL =
+    String.raw`https?://video\.arnes\.si/(?:[a-z]{2}/)?(?:watch|embed|api/(?:asset|public/video))/(?<id>[0-9a-zA-Z]{12})`;
   private static readonly BASE_URL = "https://video.arnes.si";
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
@@ -44,7 +54,9 @@ export class ArnesIE extends InfoExtractor {
       videoId,
     );
     if (response === false) {
-      throw new ExtractorError("Unable to download video metadata", { videoId });
+      throw new ExtractorError("Unable to download video metadata", {
+        videoId,
+      });
     }
     const video = response.data ?? {};
 
@@ -64,8 +76,12 @@ export class ArnesIE extends InfoExtractor {
 
     const channel = video.channel ?? {};
     const channelId = channel.url ?? null;
-    const thumbnail = video.thumbnailUrl ? `${ArnesIE.BASE_URL}${video.thumbnailUrl}` : undefined;
-    const startTime = URL.canParse(url) ? new URL(url).searchParams.get("t") : null;
+    const thumbnail = video.thumbnailUrl
+      ? `${ArnesIE.BASE_URL}${video.thumbnailUrl}`
+      : undefined;
+    const startTime = URL.canParse(url)
+      ? new URL(url).searchParams.get("t")
+      : null;
 
     return {
       id: videoId,
@@ -78,7 +94,11 @@ export class ArnesIE extends InfoExtractor {
       timestamp: parseIso8601(video.creationTime),
       channel: channel.name,
       channel_id: channelId,
-      channel_url: formatField(channelId, null, `${ArnesIE.BASE_URL}/?channel=%s`),
+      channel_url: formatField(
+        channelId,
+        null,
+        `${ArnesIE.BASE_URL}/?channel=%s`,
+      ),
       duration: floatOrNone(video.duration, 1000),
       view_count: intOrNone(video.views),
       tags: video.hashtags,

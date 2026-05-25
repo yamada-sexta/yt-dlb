@@ -36,7 +36,10 @@ export interface DownloaderHost {
   cookies?: unknown;
 }
 
-export type ProgressHook = (state: ProgressState, info: DownloadInfo) => void | Promise<void>;
+export type ProgressHook = (
+  state: ProgressState,
+  info: DownloadInfo,
+) => void | Promise<void>;
 
 export class FileDownloader {
   static readonly TEST_FILE_SIZE = 10241;
@@ -44,12 +47,18 @@ export class FileDownloader {
   protected readonly progressHooks: ProgressHook[] = [];
   #lastProgressReport = 0;
 
-  constructor(readonly ydl: DownloaderHost, readonly params: Record<string, unknown> = {}) {
+  constructor(
+    readonly ydl: DownloaderHost,
+    readonly params: Record<string, unknown> = {},
+  ) {
     this.addProgressHook((state) => this.reportProgress(state));
   }
 
   get fdName(): string {
-    return this.constructor.name.replace(/FD$/, "").replaceAll(/(?<=[a-z])(?=[A-Z])/g, "_").toLowerCase();
+    return this.constructor.name
+      .replace(/FD$/, "")
+      .replaceAll(/(?<=[a-z])(?=[A-Z])/g, "_")
+      .toLowerCase();
   }
 
   async download(filename: string, info: DownloadInfo): Promise<boolean> {
@@ -64,7 +73,10 @@ export class FileDownloader {
     this.progressHooks.push(hook);
   }
 
-  protected async hookProgress(state: ProgressState, info: DownloadInfo): Promise<void> {
+  protected async hookProgress(
+    state: ProgressState,
+    info: DownloadInfo,
+  ): Promise<void> {
     for (const hook of this.progressHooks) {
       await hook(state, info);
     }
@@ -75,18 +87,26 @@ export class FileDownloader {
       return;
     }
     if (state.status === "finished") {
-      this.toScreen(`[download] 100% of ${formatBytes(state.downloaded_bytes ?? state.total_bytes ?? 0)} in ${formatSeconds(state.elapsed)}`);
+      this.toScreen(
+        `[download] 100% of ${formatBytes(state.downloaded_bytes ?? state.total_bytes ?? 0)} in ${formatSeconds(state.elapsed)}`,
+      );
       return;
     }
-    if (state.status === "downloading" && state.total_bytes && state.downloaded_bytes != null) {
+    if (
+      state.status === "downloading" &&
+      state.total_bytes &&
+      state.downloaded_bytes != null
+    ) {
       const now = performance.now() / 1000;
       const delta = Number(this.params.progress_delta ?? 0.5);
       if (now - this.#lastProgressReport < delta) {
         return;
       }
       this.#lastProgressReport = now;
-      const percent = state.downloaded_bytes / state.total_bytes * 100;
-      this.toScreen(`[download] ${percent.toFixed(1)}% of ${formatBytes(state.total_bytes)} at ${formatSpeed(state.speed)}`);
+      const percent = (state.downloaded_bytes / state.total_bytes) * 100;
+      this.toScreen(
+        `[download] ${percent.toFixed(1)}% of ${formatBytes(state.total_bytes)} at ${formatSpeed(state.speed)}`,
+      );
     }
   }
 
@@ -99,11 +119,15 @@ export class FileDownloader {
   }
 
   tempName(filename: string): string {
-    return this.params.nopart || filename === "-" ? filename : `${filename}.part`;
+    return this.params.nopart || filename === "-"
+      ? filename
+      : `${filename}.part`;
   }
 
   undoTempName(filename: string): string {
-    return filename.endsWith(".part") ? filename.slice(0, -".part".length) : filename;
+    return filename.endsWith(".part")
+      ? filename.slice(0, -".part".length)
+      : filename;
   }
 
   async filesizeOrZero(filename: string): Promise<number> {
@@ -120,8 +144,11 @@ export class FileDownloader {
     }
   }
 
-  static calcPercent(byteCounter: number, dataLen: number | null | undefined): number | null {
-    return dataLen == null ? null : byteCounter / dataLen * 100;
+  static calcPercent(
+    byteCounter: number,
+    dataLen: number | null | undefined,
+  ): number | null {
+    return dataLen == null ? null : (byteCounter / dataLen) * 100;
   }
 
   static calcSpeed(start: number, now: number, bytes: number): number | null {
@@ -141,7 +168,10 @@ export class FileDownloader {
 }
 
 export class UnsupportedFD extends FileDownloader {
-  override async realDownload(_filename: string, _info: DownloadInfo): Promise<boolean> {
+  override async realDownload(
+    _filename: string,
+    _info: DownloadInfo,
+  ): Promise<boolean> {
     throw new NotImplementedError(`${this.fdName} downloader`);
   }
 }

@@ -1,6 +1,11 @@
 // Source: yt_dlp/extractor/box.py
 
-import { ExtractorError, parseIso8601, updateUrlQuery, urlOrNone } from "../utils/index.ts";
+import {
+  ExtractorError,
+  parseIso8601,
+  updateUrlQuery,
+  urlOrNone,
+} from "../utils/index.ts";
 import { InfoExtractor, type ExtractorInfo } from "./common.ts";
 
 interface BoxSharedItem {
@@ -30,7 +35,8 @@ interface BoxFileInfo {
 }
 
 export class BoxIE extends InfoExtractor {
-  static override readonly _VALID_URL = String.raw`https?://(?:[^.]+\.)?(?<service>app|ent)\.box\.com/s/(?<shared_name>[^/?#]+)(?:/file/(?<id>\d+))?`;
+  static override readonly _VALID_URL =
+    String.raw`https?://(?:[^.]+\.)?(?<service>app|ent)\.box\.com/s/(?<shared_name>[^/?#]+)(?:/file/(?<id>\d+))?`;
 
   protected override async realExtract(url: string): Promise<ExtractorInfo> {
     const match = this.matchValidUrl(url);
@@ -52,14 +58,23 @@ export class BoxIE extends InfoExtractor {
         "Box post-stream data",
         sharedName,
       );
-      const sharedItem = postStreamData?.["/app-api/enduserapp/shared-item"] as BoxSharedItem | undefined;
+      const sharedItem = postStreamData?.["/app-api/enduserapp/shared-item"] as
+        | BoxSharedItem
+        | undefined;
       if (sharedItem?.itemType !== "file" || sharedItem.itemID === undefined) {
-        throw new ExtractorError("The requested resource is not a file", { expected: true });
+        throw new ExtractorError("The requested resource is not a file", {
+          expected: true,
+        });
       }
       fileId = String(sharedItem.itemID);
     }
 
-    const boxConfig = this.searchJson<BoxConfig>(String.raw`Box\.config\s*=`, webpage, "Box config", fileId);
+    const boxConfig = this.searchJson<BoxConfig>(
+      String.raw`Box\.config\s*=`,
+      webpage,
+      "Box config",
+      fileId,
+    );
     const requestToken = boxConfig?.requestToken;
     if (!requestToken) {
       throw new Error("Unable to extract Box request token");
@@ -77,7 +92,8 @@ export class BoxIE extends InfoExtractor {
         },
       },
     );
-    const accessToken = tokenResponse !== false ? tokenResponse[fileId]?.read : null;
+    const accessToken =
+      tokenResponse !== false ? tokenResponse[fileId]?.read : null;
     if (!accessToken) {
       throw new Error("Unable to extract Box access token");
     }
@@ -94,7 +110,8 @@ export class BoxIE extends InfoExtractor {
           "X-Rep-Hints": "[dash]",
         },
         query: {
-          fields: "authenticated_download_url,created_at,created_by,description,extension,is_download_available,name,representations,size",
+          fields:
+            "authenticated_download_url,created_at,created_by,description,extension,is_download_available,name,representations,size",
         },
       },
     );
@@ -115,7 +132,10 @@ export class BoxIE extends InfoExtractor {
       if (!template) {
         continue;
       }
-      const manifestUrl = updateUrlQuery(template.replace("{+asset_path}", "manifest.mpd"), query);
+      const manifestUrl = updateUrlQuery(
+        template.replace("{+asset_path}", "manifest.mpd"),
+        query,
+      );
       const manifestQuery = new URL(manifestUrl).searchParams.toString();
       for (const format of this.extractMpdFormats(manifestUrl, fileId)) {
         formats.push({
