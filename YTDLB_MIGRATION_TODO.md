@@ -98,7 +98,7 @@ Scope: migrate yt-dlp runtime code related to the ytdl download/extraction funct
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/memory-cache.ts`
 - [x] `yt_dlp/extractor/youtube/pot/_builtin/webpo-cachespec.ts`
 - [ ] `yt_dlp/extractor/youtube/video.ts` focused watch URL/progressive format support is working; full `_video.py` migration remains pending.
-- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, minimal JSON-LD parsing, and Next.js data/v13 flight extraction for migrated extractors; full extractor helper surface still pending.
+- [ ] `yt_dlp/extractor/common.ts` async InfoExtractor base/download/regex/result subset present; supports array-valued query params, HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization for ported real-world cases, Next.js data/v13 flight extraction, and Nuxt rich JSON payload extraction for migrated extractors; full extractor helper surface still pending.
 
 ## Complete Runtime Inventory
 
@@ -142,8 +142,8 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [x] `yt_dlp/downloader/youtube_live_chat.py` -> `yt_dlp/downloader/youtube-live-chat.ts`
 - [x] `yt_dlp/extractor/__init__.py` -> `yt_dlp/extractor/index.ts`
 - [x] `yt_dlp/extractor/_extractors.py` -> `yt_dlp/extractor/internal-extractors.ts`
-- [ ] `yt_dlp/extractor/abc.py` -> `yt_dlp/extractor/abc.ts`
-- [ ] `yt_dlp/extractor/abcnews.py` -> `yt_dlp/extractor/abcnews.ts`
+- [x] `yt_dlp/extractor/abc.py` -> `yt_dlp/extractor/abc.ts`
+- [x] `yt_dlp/extractor/abcnews.py` -> `yt_dlp/extractor/abcnews.ts`
 - [x] `yt_dlp/extractor/abcotvs.py` -> `yt_dlp/extractor/abcotvs.ts`
 - [ ] `yt_dlp/extractor/abematv.py` -> `yt_dlp/extractor/abematv.ts`
 - [x] `yt_dlp/extractor/academicearth.py` -> `yt_dlp/extractor/academicearth.ts`
@@ -176,7 +176,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/amazonminitv.py` -> `yt_dlp/extractor/amazonminitv.ts`
 - [ ] `yt_dlp/extractor/amcnetworks.py` -> `yt_dlp/extractor/amcnetworks.ts`
 - [ ] `yt_dlp/extractor/americastestkitchen.py` -> `yt_dlp/extractor/americastestkitchen.ts`
-- [ ] `yt_dlp/extractor/amp.py` -> `yt_dlp/extractor/amp.ts`
+- [x] `yt_dlp/extractor/amp.py` -> `yt_dlp/extractor/amp.ts`
 - [x] `yt_dlp/extractor/anchorfm.py` -> `yt_dlp/extractor/anchorfm.ts`
 - [x] `yt_dlp/extractor/angel.py` -> `yt_dlp/extractor/angel.ts`
 - [ ] `yt_dlp/extractor/antenna.py` -> `yt_dlp/extractor/antenna.ts`
@@ -303,7 +303,7 @@ Each item is `Python source -> TypeScript target`. Mark an item complete only wh
 - [ ] `yt_dlp/extractor/cnbc.py` -> `yt_dlp/extractor/cnbc.ts`
 - [ ] `yt_dlp/extractor/cnn.py` -> `yt_dlp/extractor/cnn.ts`
 - [ ] `yt_dlp/extractor/comedycentral.py` -> `yt_dlp/extractor/comedycentral.ts`
-- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present; HTMLRewriter-backed metadata/script/title/HTML5 media parsing and Next.js v13 flight extraction added)
+- [ ] `yt_dlp/extractor/common.py` -> `yt_dlp/extractor/common.ts` (async InfoExtractor base/download/regex/result subset present; HTMLRewriter-backed metadata/script/title/HTML5 media parsing, schema.org JSON-LD normalization, Next.js v13 flight extraction, and Nuxt rich JSON extraction added)
 - [x] `yt_dlp/extractor/commonmistakes.py` -> `yt_dlp/extractor/commonmistakes.ts`
 - [x] `yt_dlp/extractor/commonprotocols.py` -> `yt_dlp/extractor/commonprotocols.ts`
 - [ ] `yt_dlp/extractor/condenast.py` -> `yt_dlp/extractor/condenast.ts`

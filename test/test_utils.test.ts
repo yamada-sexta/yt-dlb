@@ -181,6 +181,8 @@ describe("general utility helpers", () => {
     expect(unifiedStrdate("2020-02-03")).toBe("20200203");
     expect(parseDuration("1:02:03")).toBe(3723);
     expect(parseDuration("1 hour 2 minutes 3 seconds")).toBe(3723);
+    expect(parseDuration("PT0H12M23S")).toBe(743);
+    expect(parseDuration("PT34M39.23S")).toBe(2079.23);
   });
 
   test("media parsers", () => {

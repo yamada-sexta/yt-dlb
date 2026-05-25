@@ -6,22 +6,35 @@ import type { DownloaderHost } from "../downloader/common.ts";
 import { NotImplementedError } from "../errors.ts";
 import { Request as YtdlRequest } from "../networking/common.ts";
 import {
+  cleanHtml,
   determineExt,
   ExtractorError,
+  floatOrNone,
   GeoRestrictedError,
   intOrNone,
   mimetype2ext,
   NO_DEFAULT,
+  parseDuration,
+  parseIso8601,
   parseResolution,
   RegexNotFoundError,
   stripOrNone,
+  strOrNone,
   UnsupportedError,
   truncateString,
+  urlOrNone,
   urljoin,
+  jsToJson,
+  js_to_json,
+  stripJsonp,
+  strip_jsonp,
+  traverseObj,
+  traverse_obj,
 } from "../utils/index.ts";
 import { z } from "zod";
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
+const JsonArraySchema = z.array(z.unknown());
 
 export interface ExtractorInfo {
   id?: string;
@@ -250,7 +263,9 @@ export abstract class InfoExtractor {
     return result === false ? false : result[0];
   }
 
-  protected async downloadJson<T = unknown>(urlOrRequest: string | URL | Request, videoId: string, options: DownloadOptions = {}): Promise<T | false> {
+  protected async downloadJson<T = unknown>(urlOrRequest: string | URL | Request, videoId: string, options: DownloadOptions & { fatal: false }): Promise<T | false | null>;
+  protected async downloadJson<T = unknown>(urlOrRequest: string | URL | Request, videoId: string, options?: DownloadOptions): Promise<T | false>;
+  protected async downloadJson<T = unknown>(urlOrRequest: string | URL | Request, videoId: string, options: DownloadOptions = {}): Promise<T | false | null> {
     const webpage = await this.downloadWebpage(urlOrRequest, videoId, {
       note: "Downloading JSON metadata",
       errnote: "Unable to download JSON metadata",
@@ -264,7 +279,7 @@ export abstract class InfoExtractor {
     } catch (error) {
       if (options.fatal === false) {
         this.reportWarning(`${videoId}: Failed to parse JSON`);
-        return false;
+        return null;
       }
       throw new ExtractorError("Failed to parse JSON", { cause: error, videoId });
     }
@@ -412,25 +427,50 @@ export abstract class InfoExtractor {
     return null;
   }
 
-  protected searchJsonLd(webpage: string | false, videoId: string, options: { defaultValue?: Record<string, unknown> } = {}): Record<string, unknown> {
+  protected searchJsonLd(
+    webpage: string | false,
+    videoId: string,
+    options: { defaultValue?: Record<string, unknown>; expectedType?: string; expected_type?: string } = {},
+  ): Record<string, unknown> {
     if (webpage === false) {
       return options.defaultValue ?? {};
     }
+    const expectedType = options.expectedType ?? options.expected_type;
     for (const json of collectScriptText(webpage, 'script[type="application/ld+json" i]')) {
       if (!json) {
         continue;
       }
       const parsed = this.parseJson<unknown>(json, videoId, { fatal: false });
-      const candidates = Array.isArray(parsed) ? parsed : [parsed];
-      for (const candidate of candidates) {
-        const checked = JsonObjectSchema.safeParse(candidate);
-        if (checked.success) {
-          return checked.data;
+      for (const candidate of collectJsonLdCandidates(parsed)) {
+        if (expectedType && !jsonLdIsType(candidate, expectedType)) {
+          continue;
         }
+        const normalized = normalizeJsonLdInfo(candidate, expectedType);
+        if (Object.keys(normalized).length) {
+          return normalized;
+        }
+        return candidate;
       }
     }
     return options.defaultValue ?? {};
   }
+
+  protected *yieldJsonLd(webpage: string, videoId: string): Generator<Record<string, unknown>> {
+    for (const json of collectScriptText(webpage, 'script[type="application/ld+json" i]')) {
+      if (!json) {
+        continue;
+      }
+      const parsed = this.parseJson<unknown>(json, videoId, { fatal: false });
+      for (const candidate of collectJsonLdCandidates(parsed)) {
+        yield candidate;
+      }
+    }
+  }
+
+  protected _yield_json_ld(webpage: string, videoId: string): Generator<Record<string, unknown>> {
+    return this.yieldJsonLd(webpage, videoId);
+  }
+
 
   protected searchNextjsData<T = unknown>(webpage: string, videoId: string, options: { defaultValue?: T | null; fatal?: boolean } = {}): T | null {
     const json = collectScriptText(webpage, "script#__NEXT_DATA__").at(0);
@@ -502,6 +542,157 @@ export abstract class InfoExtractor {
     return this.searchNextjsV13Data(webpage, videoId, fatal);
   }
 
+  protected searchNuxtJson<T = unknown>(
+    webpage: string | null | undefined,
+    videoId: string | null,
+    options: { fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT } = {},
+  ): T | Record<string, unknown> {
+    const passedDefault = "defaultValue" in options;
+    const fallback = passedDefault ? options.defaultValue as T : undefined;
+    const fatal = passedDefault ? false : options.fatal ?? true;
+    if (!webpage) {
+      if (passedDefault) {
+        return fallback as T;
+      }
+      if (!fatal) {
+        return {};
+      }
+      throw new RegexNotFoundError("Unable to extract Nuxt JSON data");
+    }
+    const json = collectScriptText(webpage, "script#__NUXT_DATA__").at(0);
+    if (!json) {
+      if (passedDefault) {
+        return fallback as T;
+      }
+      if (!fatal) {
+        return {};
+      }
+      throw new RegexNotFoundError("Unable to extract Nuxt JSON data");
+    }
+    const parsed = this.parseJson<unknown>(json, videoId ?? "", { fatal });
+    const checked = z.array(z.unknown()).safeParse(parsed);
+    if (!checked.success) {
+      return this.nuxtJsonDefault(fatal, passedDefault, fallback as T, videoId);
+    }
+    return this.resolveNuxtArray<T>(checked.data, videoId, { fatal, defaultValue: passedDefault ? fallback as T : NO_DEFAULT });
+  }
+
+  protected _search_nuxt_json<T = unknown>(
+    webpage: string | null | undefined,
+    videoId: string | null,
+    options: { fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT } = {},
+  ): T | Record<string, unknown> {
+    return this.searchNuxtJson<T>(webpage, videoId, options);
+  }
+
+  protected searchNuxtData<T = Record<string, unknown>>(
+    webpage: string,
+    videoId: string,
+    options: { contextName?: string; fatal?: boolean; traverse?: any } = {},
+  ): T {
+    const fatal = options.fatal ?? true;
+    const contextName = options.contextName ?? "__NUXT__";
+    const reCtx = RegExp.escape(contextName);
+    const functionRe = `\\\\(function\\\\((?<arg_keys>.*?)\\\\)\\\\{\\\\s*.*?\\\\breturn\\\\s+(?<js>\\\\{.*?\\\\})\\\\s*;?\\\\s*\\\\}\\\\)\\\\s*\\\\(\\\\s*(?<arg_vals>.*?)\\\\s*\\\\)`;
+    const pattern1 = new RegExp(`<script>\\s*window\\.${reCtx}\\s*=\\s*${functionRe}\\s*;?\\s*</script>`, "s");
+    const pattern2 = new RegExp(`${reCtx}\\(\\s*.*?${functionRe}`, "s");
+
+    const result = this.searchRegex(
+      [pattern1, pattern2],
+      webpage,
+      contextName,
+      {
+        group: ["js", "arg_keys", "arg_vals"],
+        fatal,
+        defaultValue: fatal ? NO_DEFAULT : null,
+      }
+    );
+
+    if (!result || !Array.isArray(result)) {
+      return {} as unknown as T;
+    }
+
+    const [js, argKeys, argVals] = result;
+    if (!js) {
+      return {} as unknown as T;
+    }
+
+    const keys = argKeys ? argKeys.split(",") : [];
+    const valsParsed = this.parseJson<unknown[]>(`[${argVals}]`, videoId, {
+      transform_source: jsToJson,
+      fatal,
+    }) || [];
+
+    const vars: Record<string, string> = {};
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]?.trim();
+      if (key) {
+        vars[key] = JSON.stringify(valsParsed[i]);
+      }
+    }
+
+    const parsedJs = this.parseJson<Record<string, unknown>>(js, videoId, {
+      transform_source: (code) => jsToJson(code, vars),
+      fatal,
+    });
+
+    return (options.traverse ? traverseObj(parsedJs, options.traverse) : parsedJs) as unknown as T;
+  }
+
+  protected _search_nuxt_data<T = Record<string, unknown>>(
+    webpage: string,
+    videoId: string,
+    contextName = "__NUXT__",
+    options: { fatal?: boolean; traverse?: any } = {},
+  ): T {
+    return this.searchNuxtData<T>(webpage, videoId, { contextName, ...options });
+  }
+
+
+  protected resolveNuxtArray<T = unknown>(
+    array: unknown[],
+    videoId: string | null,
+    options: { fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT } = {},
+  ): T | Record<string, unknown> {
+    const passedDefault = options.defaultValue !== undefined && options.defaultValue !== NO_DEFAULT;
+    const fallback = passedDefault ? options.defaultValue as T : undefined;
+    const fatal = passedDefault ? false : options.fatal ?? true;
+    if (!array.length || (Array.isArray(array[0]) && array[0].length === 0)) {
+      return this.nuxtJsonDefault(fatal, passedDefault, fallback as T, videoId);
+    }
+    try {
+      return resolveNuxtValue(array, 0, fatal) as T | Record<string, unknown> || (passedDefault ? fallback as T : {});
+    } catch (error) {
+      if (fatal) {
+        throw new ExtractorError("Unable to resolve Nuxt JSON data", { cause: error, videoId });
+      }
+      if (passedDefault) {
+        return fallback as T;
+      }
+      this.reportWarning(`Error resolving Nuxt JSON: ${error instanceof Error ? error.message : String(error)}`, videoId, true);
+      return {};
+    }
+  }
+
+  protected _resolve_nuxt_array<T = unknown>(
+    array: unknown[],
+    videoId: string | null,
+    options: { fatal?: boolean; defaultValue?: T | typeof NO_DEFAULT } = {},
+  ): T | Record<string, unknown> {
+    return this.resolveNuxtArray<T>(array, videoId, options);
+  }
+
+  private nuxtJsonDefault<T>(fatal: boolean, passedDefault: boolean, fallback: T, videoId: string | null): T | Record<string, unknown> {
+    if (fatal) {
+      throw new ExtractorError("Unable to resolve Nuxt JSON data", { videoId });
+    }
+    if (passedDefault) {
+      return fallback;
+    }
+    this.reportWarning("Unable to resolve Nuxt JSON data: invalid input", videoId, true);
+    return {};
+  }
+
   static urlResult(url: string, ie: string | typeof InfoExtractor | null = null, videoId: string | null = null, videoTitle: string | null = null, options: Record<string, unknown> = {}): ExtractorInfo {
     return {
       ...options,
@@ -531,6 +722,40 @@ export abstract class InfoExtractor {
   protected playlistResult(entries: Iterable<ExtractorInfo> | ExtractorInfo[], playlistId: string | null = null, playlistTitle: string | null = null, playlistDescription: string | null = null, options: Record<string, unknown> = {}): ExtractorInfo {
     return InfoExtractor.playlistResult(entries, playlistId, playlistTitle, playlistDescription, options);
   }
+
+  protected yesPlaylist(
+    playlistId: string | boolean | null | undefined,
+    videoId: string | boolean | null | undefined,
+    options: { smuggledData?: Record<string, unknown> | null; playlistLabel?: string; videoLabel?: string } = {},
+  ): boolean {
+    if (!playlistId || !videoId) {
+      return !videoId;
+    }
+    const noPlaylist = options.smuggledData?.force_noplaylist;
+    if (noPlaylist !== undefined && noPlaylist !== null) {
+      return !noPlaylist;
+    }
+    const videoIdStr = videoId === true ? "" : ` ${videoId}`;
+    const playlistIdStr = playlistId === true ? "" : ` ${playlistId}`;
+    const playlistLabel = options.playlistLabel ?? "playlist";
+    const videoLabel = options.videoLabel ?? "video";
+    
+    if (this.getParam("noplaylist", false)) {
+      this.toScreen(`Downloading just the ${videoLabel}${videoIdStr} because of --no-playlist`);
+      return false;
+    }
+    this.toScreen(`Downloading ${playlistLabel}${playlistIdStr} - add --no-playlist to download just the ${videoLabel}${videoIdStr}`);
+    return true;
+  }
+
+  protected _yes_playlist(
+    playlistId: string | boolean | null | undefined,
+    videoId: string | boolean | null | undefined,
+    options: { smuggledData?: Record<string, unknown> | null; playlistLabel?: string; videoLabel?: string } = {},
+  ): boolean {
+    return this.yesPlaylist(playlistId, videoId, options);
+  }
+
 
   static playlistFromMatches(
     matches: Iterable<string>,
@@ -880,6 +1105,193 @@ export abstract class InfoExtractor {
     }];
   }
 
+  protected findJwplayerData(
+    webpage: string,
+    videoId: string | null = null,
+    transformSource: (source: string) => string | null = jsToJson,
+  ): Record<string, unknown> | null {
+    const setupPattern = /\bjwplayer\s*\(\s*(["'])(?:(?!\1)[\s\S])+?\1\s*\)(?:(?!<\/script>)[\s\S])*?\.\s*(?:setup|load)\s*\(/g;
+    for (const match of webpage.matchAll(setupPattern)) {
+      const openIndex = (match.index ?? 0) + match[0].length - 1;
+      const closeIndex = findMatchingJsBracket(webpage, openIndex);
+      if (closeIndex === -1) {
+        continue;
+      }
+      const source = webpage.slice(openIndex + 1, closeIndex).trim();
+      const transformed = transformSource(source);
+      if (transformed === null) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(transformed) as unknown;
+        const checked = JsonObjectSchema.safeParse(parsed);
+        if (checked.success) {
+          return checked.data;
+        }
+      } catch (error) {
+        this.reportWarning(`Unable to extract JWPlayer data - Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`, videoId ?? "");
+      }
+    }
+    return null;
+  }
+
+  protected _find_jwplayer_data(
+    webpage: string,
+    videoId: string | null = null,
+    transformSource: (source: string) => string | null = jsToJson,
+  ): Record<string, unknown> | null {
+    return this.findJwplayerData(webpage, videoId, transformSource);
+  }
+
+  protected extractJwplayerData(
+    webpage: string,
+    videoId: string | null,
+    options: {
+      requireTitle?: boolean;
+      transformSource?: (source: string) => string | null;
+      m3u8Id?: string;
+      mpdId?: string;
+      rtmpParams?: Record<string, unknown>;
+      baseUrl?: string | null;
+    } = {},
+  ): ExtractorInfo | ExtractorInfo[] {
+    const jwplayerData = this.findJwplayerData(webpage, videoId, options.transformSource ?? jsToJson);
+    return this.parseJwplayerData(jwplayerData, videoId, options);
+  }
+
+  protected _extract_jwplayer_data(...args: Parameters<InfoExtractor["extractJwplayerData"]>): ReturnType<InfoExtractor["extractJwplayerData"]> {
+    return this.extractJwplayerData(...args);
+  }
+
+  protected parseJwplayerData(
+    jwplayerData: Record<string, unknown> | null,
+    videoId: string | null = null,
+    options: { requireTitle?: boolean; m3u8Id?: string; mpdId?: string; rtmpParams?: Record<string, unknown>; baseUrl?: string | null } = {},
+  ): ExtractorInfo | ExtractorInfo[] {
+    if (!jwplayerData) {
+      return [];
+    }
+    const requireTitle = options.requireTitle ?? true;
+    const playlistItems = JsonArraySchema.safeParse(jwplayerData.playlist);
+    const items = playlistItems.success ? playlistItems.data : [jwplayerData.playlist ?? jwplayerData];
+    const entries: ExtractorInfo[] = [];
+    for (const rawItem of items) {
+      const videoData = JsonObjectSchema.safeParse(rawItem);
+      if (!videoData.success) {
+        continue;
+      }
+      const sourceList = JsonArraySchema.safeParse(videoData.data.sources).success ? JsonArraySchema.parse(videoData.data.sources) : [videoData.data];
+      const thisVideoId = videoId ?? strOrNone(videoData.data.mediaid) ?? undefined;
+      const formats = this.parseJwplayerFormats(sourceList, thisVideoId ?? null, {
+        m3u8Id: options.m3u8Id,
+        mpdId: options.mpdId,
+        rtmpParams: options.rtmpParams,
+        baseUrl: options.baseUrl,
+      });
+      const subtitles: Record<string, Array<Record<string, unknown>>> = {};
+      for (const rawTrack of jsonLdArray(videoData.data.tracks)) {
+        const track = JsonObjectSchema.safeParse(rawTrack);
+        const kind = strOrNone(track.success ? track.data.kind : null)?.toLowerCase();
+        if (!track.success || (kind !== "captions" && kind !== "subtitles")) {
+          continue;
+        }
+        const trackUrl = urljoin(options.baseUrl, this.protoRelativeUrl(strOrNone(track.data.file)));
+        if (!trackUrl) {
+          continue;
+        }
+        const language = strOrNone(track.data.label) ?? "en";
+        subtitles[language] ??= [];
+        subtitles[language].push({ url: this.protoRelativeUrl(trackUrl) });
+      }
+      const entry: ExtractorInfo = {
+        id: thisVideoId,
+        title: jsonLdString(requireTitle ? videoData.data.title : videoData.data.title) ?? undefined,
+        description: cleanHtml(strOrNone(videoData.data.description)) ?? undefined,
+        thumbnail: urljoin(options.baseUrl, this.protoRelativeUrl(strOrNone(videoData.data.image))) ?? undefined,
+        timestamp: intOrNone(videoData.data.pubdate) ?? undefined,
+        duration: floatOrNone(jwplayerData.duration ?? videoData.data.duration) ?? undefined,
+        subtitles,
+        alt_title: cleanHtml(strOrNone(videoData.data.subtitle)) ?? undefined,
+        genre: cleanHtml(strOrNone(videoData.data.genre)) ?? undefined,
+        channel: cleanHtml(strOrNone(videoData.data.category ?? videoData.data.channel)) ?? undefined,
+        season_number: intOrNone(videoData.data.season) ?? undefined,
+        episode_number: intOrNone(videoData.data.episode) ?? undefined,
+        release_year: intOrNone(videoData.data.releasedate) ?? undefined,
+        age_limit: intOrNone(videoData.data.age_restriction) ?? undefined,
+      };
+      if (formats.length === 1 && typeof formats[0]?.url === "string" && /^(?:http|\/\/).*(?:youtube\.com|youtu\.be)\/.+/.test(formats[0].url)) {
+        entry._type = "url_transparent";
+        entry.url = formats[0].url;
+      } else {
+        entry.formats = formats;
+      }
+      entries.push(filterUndefined(entry));
+    }
+    return entries.length === 1 ? entries[0]! : this.playlistResult(entries);
+  }
+
+  protected _parse_jwplayer_data(...args: Parameters<InfoExtractor["parseJwplayerData"]>): ReturnType<InfoExtractor["parseJwplayerData"]> {
+    return this.parseJwplayerData(...args);
+  }
+
+  protected parseJwplayerFormats(
+    jwplayerSourcesData: unknown[],
+    videoId: string | null = null,
+    options: { m3u8Id?: string; mpdId?: string; rtmpParams?: Record<string, unknown>; baseUrl?: string | null } = {},
+  ): Array<Record<string, unknown>> {
+    const urls = new Set<string>();
+    const formats: Array<Record<string, unknown>> = [];
+    for (const rawSource of jwplayerSourcesData) {
+      const source = JsonObjectSchema.safeParse(rawSource);
+      if (!source.success) {
+        continue;
+      }
+      const sourceUrl = urljoin(options.baseUrl, this.protoRelativeUrl(strOrNone(source.data.file)));
+      if (!sourceUrl || urls.has(sourceUrl)) {
+        continue;
+      }
+      urls.add(sourceUrl);
+      const sourceType = strOrNone(source.data.type, "") ?? "";
+      const ext = determineExt(sourceUrl, mimetype2ext(sourceType));
+      if (sourceType === "hls" || ext === "m3u8" || sourceUrl.includes("format=m3u8-aapl")) {
+        formats.push(...this.extractM3u8Formats(sourceUrl, videoId ?? "", "mp4", { entryProtocol: "m3u8_native", m3u8Id: options.m3u8Id }));
+      } else if (sourceType === "dash" || ext === "mpd" || sourceUrl.includes("format=mpd-time-csf")) {
+        formats.push(...this.extractMpdFormats(sourceUrl, videoId ?? "", { mpdId: options.mpdId, fatal: false }));
+      } else if (ext === "smil") {
+        formats.push(...this.extractSmilFormats(sourceUrl, videoId ?? "", { fatal: false }));
+      } else if (sourceType.startsWith("audio") || ["oga", "aac", "mp3", "mpeg", "vorbis"].includes(ext)) {
+        formats.push({ url: sourceUrl, vcodec: "none", ext });
+      } else {
+        const formatId = strOrNone(source.data.label);
+        const height = intOrNone(source.data.height) ?? (formatId ? parseResolution(formatId).height : undefined);
+        const format: Record<string, unknown> = {
+          url: sourceUrl,
+          width: intOrNone(source.data.width) ?? undefined,
+          height,
+          tbr: intOrNone(source.data.bitrate, 1000) ?? undefined,
+          filesize: intOrNone(source.data.filesize) ?? undefined,
+          ext,
+          format_id: formatId ?? undefined,
+        };
+        if (sourceUrl.startsWith("rtmp")) {
+          format.ext = "flv";
+          const rtmpParts = /^(?<url>.*?)(?<prefix>(?:mp4|mp3|flv):)(?<playPath>.*)$/.exec(sourceUrl);
+          if (rtmpParts?.groups) {
+            format.url = rtmpParts.groups.url;
+            format.play_path = `${rtmpParts.groups.prefix}${rtmpParts.groups.playPath}`;
+          }
+          Object.assign(format, options.rtmpParams ?? {});
+        }
+        formats.push(filterUndefined(format));
+      }
+    }
+    return formats;
+  }
+
+  protected _parse_jwplayer_formats(...args: Parameters<InfoExtractor["parseJwplayerFormats"]>): ReturnType<InfoExtractor["parseJwplayerFormats"]> {
+    return this.parseJwplayerFormats(...args);
+  }
+
   protected createRequest(urlOrRequest: string | URL | Request, options: DownloadOptions = {}): Request {
     const request = urlOrRequest instanceof Request ? urlOrRequest : new YtdlRequest(String(urlOrRequest));
     const url = new URL(request.url);
@@ -976,6 +1388,283 @@ function collectScriptText(webpage: string, selector: string): string[] {
   return scripts;
 }
 
+function collectJsonLdCandidates(value: unknown): Record<string, unknown>[] {
+  const array = JsonArraySchema.safeParse(value);
+  if (array.success) {
+    return array.data.flatMap((item) => collectJsonLdCandidates(item));
+  }
+  const object = JsonObjectSchema.safeParse(value);
+  if (!object.success) {
+    return [];
+  }
+  const graph = JsonArraySchema.safeParse(object.data["@graph"]);
+  if (graph.success && (Object.keys(object.data).length === 2 || graph.data.some((item) => JsonObjectSchema.safeParse(item).success))) {
+    return graph.data.flatMap((item) => collectJsonLdCandidates(item));
+  }
+  return [object.data];
+}
+
+function normalizeJsonLdInfo(node: Record<string, unknown>, expectedType?: string): Record<string, unknown> {
+  const info: Record<string, unknown> = {};
+  const types = jsonLdTypes(node);
+
+  if (jsonLdHasType(types, "TVEpisode", "Episode", "PodcastEpisode")) {
+    const episodeName = jsonLdString(node.name);
+    setDefined(info, "episode", episodeName);
+    setDefined(info, "episode_number", intOrNone(node.episodeNumber));
+    setDefined(info, "description", jsonLdString(node.description));
+    if (!info.title) {
+      setDefined(info, "title", episodeName);
+    }
+    const season = JsonObjectSchema.safeParse(node.partOfSeason);
+    if (season.success && jsonLdIsType(season.data, "TVSeason", "Season", "CreativeWorkSeason")) {
+      setDefined(info, "season", jsonLdString(season.data.name));
+      setDefined(info, "season_number", intOrNone(season.data.seasonNumber));
+    }
+    const series = JsonObjectSchema.safeParse(node.partOfSeries ?? node.partOfTVSeries);
+    if (series.success && jsonLdIsType(series.data, "TVSeries", "Series", "CreativeWorkSeries")) {
+      setDefined(info, "series", jsonLdString(series.data.name));
+    }
+  } else if (jsonLdHasType(types, "Movie")) {
+    setDefined(info, "title", jsonLdString(node.name));
+    setDefined(info, "description", jsonLdString(node.description));
+    setDefined(info, "duration", parseDuration(jsonLdString(node.duration)));
+    setDefined(info, "timestamp", parseIso8601(jsonLdString(node.dateCreated)));
+  } else if (jsonLdHasType(types, "Article", "NewsArticle")) {
+    setDefined(info, "timestamp", parseIso8601(jsonLdString(node.datePublished)));
+    setDefined(info, "title", jsonLdString(node.headline ?? node.name));
+    setDefined(info, "description", jsonLdString(node.articleBody ?? node.description));
+    for (const key of ["video", "subjectOf"] as const) {
+      const video = jsonLdArray(node[key])
+        .map((item) => JsonObjectSchema.safeParse(item))
+        .find((item) => item.success && jsonLdIsType(item.data, "VideoObject"));
+      if (video?.success) {
+        extractJsonLdVideoObject(video.data, info);
+        break;
+      }
+    }
+  } else if (jsonLdHasType(types, "VideoObject", "AudioObject")) {
+    extractJsonLdVideoObject(node, info);
+  }
+
+  const video = JsonObjectSchema.safeParse(node.video);
+  if (video.success && jsonLdIsType(video.data, "VideoObject")) {
+    extractJsonLdVideoObject(video.data, info);
+  }
+
+  if (expectedType && !jsonLdHasType(types, expectedType) && !Object.keys(info).length) {
+    return {};
+  }
+  return info;
+}
+
+function extractJsonLdVideoObject(node: Record<string, unknown>, info: Record<string, unknown>): void {
+  setDefined(info, "url", urlOrNone(jsonLdString(node.contentUrl)));
+  setDefined(info, "ext", mimetype2ext(jsonLdString(node.encodingFormat), undefined));
+  setDefined(info, "title", jsonLdString(node.name ?? node.headline));
+  setDefined(info, "description", jsonLdString(node.description));
+  const thumbnails = jsonLdThumbnails(node);
+  if (thumbnails.length) {
+    info.thumbnails = thumbnails;
+    setDefined(info, "thumbnail", thumbnails[0]?.url);
+  }
+  setDefined(info, "duration", parseDuration(jsonLdString(node.duration)));
+  setDefined(info, "timestamp", parseIso8601(jsonLdString(node.uploadDate ?? node.datePublished)));
+  setDefined(info, "width", intOrNone(node.width));
+  setDefined(info, "height", intOrNone(node.height));
+  setDefined(info, "view_count", intOrNone(node.interactionCount));
+  extractJsonLdInteractionStatistic(node, info);
+  extractJsonLdChapters(node, info);
+}
+
+function extractJsonLdInteractionStatistic(node: Record<string, unknown>, info: Record<string, unknown>): void {
+  for (const statistic of jsonLdArray(node.interactionStatistic).flatMap((item) => {
+    const parsed = JsonObjectSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  })) {
+    const count = intOrNone(statistic.userInteractionCount);
+    if (count === null) {
+      continue;
+    }
+    const interactionType = JsonObjectSchema.safeParse(statistic.interactionType);
+    const actionType = interactionType.success ? jsonLdTypes(interactionType.data) : jsonLdTypes(statistic);
+    if (!actionType.length || jsonLdHasType(actionType, "WatchAction")) {
+      info.view_count ??= count;
+    } else if (jsonLdHasType(actionType, "LikeAction")) {
+      info.like_count ??= count;
+    } else if (jsonLdHasType(actionType, "DislikeAction")) {
+      info.dislike_count ??= count;
+    } else if (jsonLdHasType(actionType, "CommentAction")) {
+      info.comment_count ??= count;
+    }
+  }
+}
+
+function extractJsonLdChapters(node: Record<string, unknown>, info: Record<string, unknown>): void {
+  const clips = jsonLdArray(node.hasPart).flatMap((item) => {
+    const clip = JsonObjectSchema.safeParse(item);
+    if (!clip.success || !jsonLdIsType(clip.data, "Clip")) {
+      return [];
+    }
+    return [{
+      title: jsonLdString(clip.data.name),
+      start_time: jsonLdNumber(clip.data.startOffset),
+      end_time: jsonLdNumber(clip.data.endOffset),
+    }];
+  });
+  if (!clips.length) {
+    return;
+  }
+  const duration = parseDuration(jsonLdString(node.duration));
+  const chapters = clips.map((clip, index) => ({
+    title: clip.title,
+    start_time: clip.start_time ?? (index === 0 ? 0 : clips[index - 1]?.end_time ?? null),
+    end_time: clip.end_time ?? clips[index + 1]?.start_time ?? (index === clips.length - 1 ? duration : null),
+  }));
+  if (chapters.every((chapter) => chapter.title !== null && chapter.start_time !== null && chapter.end_time !== null)) {
+    info.chapters = chapters;
+  }
+}
+
+function jsonLdThumbnails(node: Record<string, unknown>): Array<{ url: string }> {
+  const thumbnails: Array<{ url: string }> = [];
+  for (const key of ["thumbnailUrl", "thumbnailURL", "thumbnail_url"] as const) {
+    for (const value of jsonLdArray(node[key])) {
+      const url = jsonLdUrl(value);
+      if (url) {
+        thumbnails.push({ url });
+      }
+    }
+    if (thumbnails.length) {
+      return thumbnails;
+    }
+  }
+  return thumbnails;
+}
+
+function jsonLdArray(value: unknown): unknown[] {
+  if (value === null || value === undefined) {
+    return [];
+  }
+  const array = JsonArraySchema.safeParse(value);
+  return array.success ? array.data : [value];
+}
+
+function jsonLdTypes(node: Record<string, unknown>): string[] {
+  return jsonLdArray(node["@type"]).flatMap((value) => {
+    const parsed = z.string().safeParse(value);
+    if (!parsed.success) {
+      return [];
+    }
+    return [parsed.data.replace(/[/#]$/, "").split(/[/#]/).pop() ?? parsed.data];
+  });
+}
+
+function jsonLdIsType(node: Record<string, unknown>, ...types: string[]): boolean {
+  return jsonLdHasType(jsonLdTypes(node), ...types);
+}
+
+function jsonLdHasType(actualTypes: readonly string[], ...types: string[]): boolean {
+  return actualTypes.some((actualType) => types.includes(actualType));
+}
+
+function jsonLdString(value: unknown): string | null {
+  const parsed = z.string().safeParse(value);
+  return parsed.success ? htmlUnescape(parsed.data) : null;
+}
+
+function jsonLdNumber(value: unknown): number | null {
+  const parsed = z.union([z.number(), z.string()]).safeParse(value);
+  if (!parsed.success) {
+    return null;
+  }
+  const number = typeof parsed.data === "number" ? parsed.data : Number.parseFloat(parsed.data);
+  return Number.isFinite(number) ? number : null;
+}
+
+function jsonLdUrl(value: unknown): string | null {
+  const object = JsonObjectSchema.safeParse(value);
+  const url = jsonLdString(object.success ? object.data.url : value);
+  if (!url) {
+    return null;
+  }
+  return urlOrNone(url.startsWith("//") ? `https:${url}` : url);
+}
+
+function setDefined(record: Record<string, unknown>, key: string, value: unknown): void {
+  if (value !== null && value !== undefined) {
+    record[key] = value;
+  }
+}
+
+function filterUndefined<T extends Record<string, unknown>>(record: T): T {
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
+}
+
+function findMatchingJsBracket(source: string, openIndex: number): number {
+  const pairs: Record<string, string> = { "(": ")", "{": "}", "[": "]" };
+  const open = source[openIndex];
+  const close = open ? pairs[open] : undefined;
+  if (!close) {
+    return -1;
+  }
+  let depth = 0;
+  let quote: "'" | "\"" | "`" | null = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = openIndex; index < source.length; index++) {
+    const char = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (char === "\n" || char === "\r") {
+        lineComment = false;
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      lineComment = true;
+      index++;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      blockComment = true;
+      index++;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === open) {
+      depth++;
+    } else if (char === close) {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
 function flattenNextjsFlightData(flightData: unknown, nextjsData: Record<string, unknown>): void {
   if (!Array.isArray(flightData)) {
     return;
@@ -995,6 +1684,90 @@ function flattenNextjsFlightData(flightData: unknown, nextjsData: Record<string,
   }
   for (const item of flightData) {
     flattenNextjsFlightData(item, nextjsData);
+  }
+}
+
+const NuxtConstants = new Map<number, unknown>([
+  [-1, undefined],
+  [-2, null],
+  [-3, Number.NaN],
+  [-4, Number.POSITIVE_INFINITY],
+  [-5, Number.NEGATIVE_INFINITY],
+  [-6, -0],
+]);
+
+function resolveNuxtValue(array: unknown[], source: unknown, fatal: boolean, resolving = new Set<number>()): unknown {
+  if (typeof source !== "number" || !Number.isInteger(source)) {
+    if (fatal) {
+      throw new TypeError(`invalid index: ${String(source)}`);
+    }
+    return null;
+  }
+  if (NuxtConstants.has(source)) {
+    return NuxtConstants.get(source);
+  }
+  if (source < 0 || source >= array.length) {
+    if (fatal) {
+      throw new RangeError(`invalid index: ${source}`);
+    }
+    return null;
+  }
+  if (resolving.has(source)) {
+    if (fatal) {
+      throw new RangeError(`circular reference at index: ${source}`);
+    }
+    return null;
+  }
+  resolving.add(source);
+  try {
+    const value = array[source];
+    if (Array.isArray(value)) {
+      return resolveNuxtArrayValue(array, value, fatal, resolving);
+    }
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, resolveNuxtValue(array, item, fatal, resolving)]),
+      );
+    }
+    return value;
+  } finally {
+    resolving.delete(source);
+  }
+}
+
+function resolveNuxtArrayValue(array: unknown[], value: unknown[], fatal: boolean, resolving: Set<number>): unknown {
+  const typeName = value[0];
+  if (typeof typeName !== "string") {
+    return value.map((item) => resolveNuxtValue(array, item, fatal, resolving));
+  }
+  switch (typeName) {
+    case "NuxtError":
+    case "Reactive":
+    case "Ref":
+    case "ShallowReactive":
+    case "ShallowRef":
+    case "skipHydrate":
+      return resolveNuxtValue(array, value[1], fatal, resolving);
+    case "EmptyRef":
+    case "EmptyShallowRef": {
+      const raw = resolveNuxtValue(array, value[1], fatal, resolving);
+      try {
+        return JSON.parse(String(raw));
+      } catch (error) {
+        if (fatal) {
+          throw error;
+        }
+        return null;
+      }
+    }
+    case "Set":
+    case "Map":
+      return [];
+    default:
+      if (fatal) {
+        throw new TypeError(`invalid Nuxt type: ${typeName}`);
+      }
+      return null;
   }
 }
 

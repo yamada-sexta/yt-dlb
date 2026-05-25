@@ -43,7 +43,7 @@ export class BerufeTVIE extends InfoExtractor {
         fatal: false,
       },
     );
-    const meta = movieMetadata === false
+    const meta = !movieMetadata
       ? {}
       : movieMetadata.metadaten?.find((item) => item.miId === videoId) ?? {};
 

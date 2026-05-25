@@ -2,10 +2,32 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { getInfoExtractor } from "../yt_dlp/extractor/index.ts";
 import { InfoExtractor } from "../yt_dlp/extractor/common.ts";
+import { YoutubeIE } from "../yt_dlp/extractor/youtube/video.ts";
 import { RegexNotFoundError } from "../yt_dlp/utils/index.ts";
 
 class TestInfoExtractor extends InfoExtractor {
+  constructor(private readonly responseOverride: Response | null = null) {
+    super();
+  }
+
+  protected override async urlopen(request: Request): Promise<Response> {
+    return this.responseOverride ?? await fetch(request);
+  }
+
+  downloadJsonPublic<T = unknown>(
+    urlOrRequest: string | URL | Request,
+    videoId: string,
+    options: Parameters<InfoExtractor["downloadJson"]>[2] = {},
+  ): Promise<T | false | null> {
+    return this.downloadJson<T>(urlOrRequest, videoId, options);
+  }
+
+  downloadWebpageHandlePublic(...args: Parameters<InfoExtractor["downloadWebpageHandle"]>): ReturnType<InfoExtractor["downloadWebpageHandle"]> {
+    return this.downloadWebpageHandle(...args);
+  }
+
   searchRegexPublic(...args: Parameters<InfoExtractor["searchRegex"]>): ReturnType<InfoExtractor["searchRegex"]> {
     return this.searchRegex(...args);
   }
@@ -68,6 +90,14 @@ class TestInfoExtractor extends InfoExtractor {
     return this.searchNextjsV13Data(...args);
   }
 
+  searchNuxtJsonPublic<T = unknown>(
+    webpage: string | null | undefined,
+    videoId: string | null,
+    options: { fatal?: boolean; defaultValue?: T | typeof import("../yt_dlp/utils/index.ts").NO_DEFAULT } = {},
+  ): T | Record<string, unknown> {
+    return this.searchNuxtJson<T>(webpage, videoId, options);
+  }
+
   htmlExtractTitlePublic(...args: Parameters<InfoExtractor["htmlExtractTitle"]>): ReturnType<InfoExtractor["htmlExtractTitle"]> {
     return this.htmlExtractTitle(...args);
   }
@@ -94,6 +124,10 @@ class TestInfoExtractor extends InfoExtractor {
 
   parseHtml5MediaEntriesPublic(...args: Parameters<InfoExtractor["parseHtml5MediaEntries"]>): ReturnType<InfoExtractor["parseHtml5MediaEntries"]> {
     return this.parseHtml5MediaEntries(...args);
+  }
+
+  extractJwplayerDataPublic(...args: Parameters<InfoExtractor["extractJwplayerData"]>): ReturnType<InfoExtractor["extractJwplayerData"]> {
+    return this.extractJwplayerData(...args);
   }
 }
 
@@ -166,6 +200,20 @@ describe("InfoExtractor HTML helpers", () => {
     expect(ie.searchJsonPublic<{ foo: string }>("missing\\s*=", text, "missing", "id", { fatal: false })).toBeNull();
   });
 
+  test("downloadJson parses data URLs and handles nonfatal parse errors", async () => {
+    const jsonUrl = `data:application/json,${encodeURIComponent('{"foo":"blah"}')}`;
+    expect(await ie.downloadJsonPublic<{ foo: string }>(jsonUrl, "id")).toEqual({ foo: "blah" });
+
+    const jsonpUrl = `data:application/javascript,${encodeURIComponent('callback({"foo":"blah"})')}`;
+    expect(await ie.downloadJsonPublic<{ foo: string }>(jsonpUrl, "id", {
+      transform_source: (source) => source.slice("callback(".length, -1),
+    })).toEqual({ foo: "blah" });
+
+    const invalidUrl = `data:application/json,${encodeURIComponent('{"foo": invalid}')}`;
+    await expect(ie.downloadJsonPublic(invalidUrl, "id")).rejects.toThrow();
+    expect(await ie.downloadJsonPublic(invalidUrl, "id", { fatal: false })).toBeNull();
+  });
+
   test("searchJsonLd extracts first object candidate", () => {
     const webpage = `
       <script type="application/ld+json">
@@ -175,6 +223,100 @@ describe("InfoExtractor HTML helpers", () => {
     expect(ie.searchJsonLdPublic(webpage, "id")).toEqual({ "@context": "https://schema.org" });
     expect(ie.searchJsonLdPublic(false, "id", { defaultValue: { fallback: true } })).toEqual({ fallback: true });
     expect(ie.searchJsonLdPublic('<script type="application/ld+json">null</script>', "id", { defaultValue: { fallback: true } })).toEqual({ fallback: true });
+  });
+
+  test("searchJsonLd normalizes real-world schema.org objects", () => {
+    const cases: Array<[string, Record<string, unknown>, Parameters<TestInfoExtractor["searchJsonLdPublic"]>[2]?]> = [
+      [`<script type="application/ld+json">{
+        "@context": "http://schema.org/",
+        "@type": "VideoObject",
+        "name": "1 On 1 With Kleio",
+        "duration": "PT0H12M23S",
+        "thumbnailUrl": ["https://static-eu-cdn.eporner.com/thumbs/static4/7/78/780/780814/9_360.jpg", "https://imggen.eporner.com/780814/1920/1080/9.jpg"],
+        "contentUrl": "https://gvideo.eporner.com/xN49A1cT3eB/xN49A1cT3eB.mp4",
+        "width": "1920",
+        "height": "1080",
+        "encodingFormat": "mp4",
+        "description": "Kleio Valentien",
+        "uploadDate": "2015-12-05T21:24:35+01:00",
+        "interactionStatistic": {
+          "@type": "InteractionCounter",
+          "interactionType": { "@type": "http://schema.org/WatchAction" },
+          "userInteractionCount": 1120958
+        }
+      }</script>`, {
+        title: "1 On 1 With Kleio",
+        description: "Kleio Valentien",
+        url: "https://gvideo.eporner.com/xN49A1cT3eB/xN49A1cT3eB.mp4",
+        timestamp: 1449347075,
+        duration: 743,
+        view_count: 1120958,
+        width: 1920,
+        height: 1080,
+      }],
+      [`<script type="application/ld+json">{
+        "@context": "https://schema.org",
+        "@graph": [{
+          "@type": "NewsArticle",
+          "headline": "Συμμορία ανηλίκων – δικηγόρος θυμάτων: ήθελαν να τους αποτελειώσουν",
+          "description": "Τα παιδιά δέχθηκαν την επίθεση επειδή αρνήθηκαν να γίνουν μέλη της συμμορίας, ανέφερε ο Γ. Ζαχαρόπουλος.",
+          "datePublished": "2021-11-10T08:50:00+03:00"
+        }]
+      }</script>`, {
+        timestamp: 1636523400,
+        title: "Συμμορία ανηλίκων – δικηγόρος θυμάτων: ήθελαν να τους αποτελειώσουν",
+      }, { expectedType: "NewsArticle" }],
+      [`<script type="application/ld+json">{
+        "@context": "https://schema.org",
+        "@type": "TVEpisode",
+        "name": "Het journaal 19u",
+        "video": {
+          "@type": "VideoObject",
+          "name": "Het journaal - Aflevering 365 (Seizoen 2021)",
+          "thumbnailUrl": "//images.vrt.be/width1280/2021/12/31/80d5ed00-6a64-11ec-b07d-02b7b76bf47f.jpg",
+          "duration": "PT34M39.23S",
+          "hasPart": [
+            {"name":"Explosie Turnhout","startOffset":70,"@type":"Clip"},
+            {"name":"Jaarwisseling","startOffset":440,"@type":"Clip"},
+            {"name":"Natuurbranden Colorado","startOffset":1179,"@type":"Clip"},
+            {"name":"Klimaatverandering","startOffset":1263,"@type":"Clip"},
+            {"name":"Zacht weer","startOffset":1367,"@type":"Clip"},
+            {"name":"Financiële balans","startOffset":1383,"@type":"Clip"},
+            {"name":"Club Brugge","startOffset":1484,"@type":"Clip"},
+            {"name":"Mentale gezondheid bij topsporters","startOffset":1575,"@type":"Clip"},
+            {"name":"Olympische Winterspelen","startOffset":1728,"@type":"Clip"},
+            {"name":"Sober oudjaar in Nederland","startOffset":1873,"@type":"Clip"}
+          ]
+        }
+      }</script>`, {
+        title: "Het journaal - Aflevering 365 (Seizoen 2021)",
+        chapters: [
+          { title: "Explosie Turnhout", start_time: 70, end_time: 440 },
+          { title: "Jaarwisseling", start_time: 440, end_time: 1179 },
+          { title: "Natuurbranden Colorado", start_time: 1179, end_time: 1263 },
+          { title: "Klimaatverandering", start_time: 1263, end_time: 1367 },
+          { title: "Zacht weer", start_time: 1367, end_time: 1383 },
+          { title: "Financiële balans", start_time: 1383, end_time: 1484 },
+          { title: "Club Brugge", start_time: 1484, end_time: 1575 },
+          { title: "Mentale gezondheid bij topsporters", start_time: 1575, end_time: 1728 },
+          { title: "Olympische Winterspelen", start_time: 1728, end_time: 1873 },
+          { title: "Sober oudjaar in Nederland", start_time: 1873, end_time: 2079.23 },
+        ],
+      }],
+      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":["https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"]}</script>`, {
+        thumbnails: [{ url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg" }],
+      }],
+      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnailUrl":"https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg"}</script>`, {
+        thumbnails: [{ url: "https://www.rainews.it/cropgd/640x360/dl/img/2021/12/30/1640886376927_GettyImages.jpg" }],
+      }],
+      [`<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoObject","thumbnail_url":"//www.nobelprize.org/images/12693-landscape-medium-gallery.jpg"}</script>`, {
+        thumbnails: [{ url: "https://www.nobelprize.org/images/12693-landscape-medium-gallery.jpg" }],
+      }],
+    ];
+
+    for (const [html, expected, options] of cases) {
+      expect(ie.searchJsonLdPublic(html, "id", options)).toMatchObject(expected);
+    }
   });
 
   test("searchNextjsData extracts script body by id", () => {
@@ -206,6 +348,107 @@ describe("InfoExtractor HTML helpers", () => {
     expect(ie.searchNextjsV13DataPublic(null, null, false)).toEqual({});
   });
 
+  test("searchNuxtJson resolves rich payload arrays", () => {
+    const htmlTemplate = (data: string) => `<script data-ssr="true" id="__NUXT_DATA__" type="application/json">[${data}]</script>`;
+    const validData = `
+      ["ShallowReactive",1],
+      {"data":2,"state":21,"once":25,"_errors":28,"_server_errors":30},
+      ["ShallowReactive",3],
+      {"$abcdef123456":4},
+      {"podcast":5,"activeEpisodeData":7},
+      {"podcast":6,"seasons":14},
+      {"title":10,"id":11},
+      ["Reactive",8],
+      {"episode":9,"creators":18,"empty_list":20},
+      {"title":12,"id":13,"refs":34,"empty_refs":35},
+      "Series Title",
+      "podcast-id-01",
+      "Episode Title",
+      "episode-id-99",
+      [15,16,17],
+      1,
+      2,
+      3,
+      [19],
+      "Podcast Creator",
+      [],
+      {"$ssite-config":22},
+      {"env":23,"name":24,"map":26,"numbers":14},
+      "production",
+      "podcast-website",
+      ["Set"],
+      ["Reactive",27],
+      ["Map"],
+      ["ShallowReactive",29],
+      {},
+      ["NuxtError",31],
+      {"status":32,"message":33},
+      503,
+      "Service Unavailable",
+      [36,37],
+      [38,39],
+      ["Ref",40],
+      ["ShallowRef",41],
+      ["EmptyRef",42],
+      ["EmptyShallowRef",43],
+      "ref",
+      "shallow_ref",
+      "{\\"ref\\":1}",
+      "{\\"shallow_ref\\":2}"
+    `;
+    expect(ie.searchNuxtJsonPublic(htmlTemplate(validData), null)).toEqual({
+      data: {
+        "$abcdef123456": {
+          podcast: {
+            podcast: { title: "Series Title", id: "podcast-id-01" },
+            seasons: [1, 2, 3],
+          },
+          activeEpisodeData: {
+            episode: {
+              title: "Episode Title",
+              id: "episode-id-99",
+              refs: ["ref", "shallow_ref"],
+              empty_refs: [{ ref: 1 }, { shallow_ref: 2 }],
+            },
+            creators: ["Podcast Creator"],
+            empty_list: [],
+          },
+        },
+      },
+      state: {
+        "$ssite-config": {
+          env: "production",
+          name: "podcast-website",
+          map: [],
+          numbers: [1, 2, 3],
+        },
+      },
+      once: [],
+      _errors: {},
+      _server_errors: { status: 503, message: "Service Unavailable" },
+    });
+
+    expect(ie.searchNuxtJsonPublic("", null, { fatal: false })).toEqual({});
+    const defaultValue = { fallback: true };
+    expect(ie.searchNuxtJsonPublic("", null, { defaultValue })).toBe(defaultValue);
+    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+      {"data":1},
+      {"invalid_raw_list":2},
+      [15,16,17]
+    `), null, { fatal: false })).toEqual({ data: { invalid_raw_list: [null, null, null] } });
+    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+      {"data":1},
+      ["EmptyRef",2],
+      "not valid JSON"
+    `), null, { fatal: false })).toEqual({ data: null });
+    expect(ie.searchNuxtJsonPublic(htmlTemplate("[]"), null, { defaultValue })).toBe(defaultValue);
+    expect(ie.searchNuxtJsonPublic(htmlTemplate(`
+      ["unsupported",1],
+      {"data":2},
+      {}
+    `), null, { defaultValue })).toBe(defaultValue);
+  });
+
   test("htmlExtractTitle uses parsed title text", () => {
     expect(ie.htmlExtractTitlePublic("<title>Foo &amp; Bar</title>")).toBe("Foo & Bar");
     expect(ie.htmlExtractTitlePublic("<html></html>")).toBeNull();
@@ -214,6 +457,10 @@ describe("InfoExtractor HTML helpers", () => {
 
 describe("InfoExtractor common helpers", () => {
   const ie = new TestInfoExtractor();
+
+  test("ie key registry lookup", async () => {
+    expect(await getInfoExtractor(YoutubeIE.ieKey())).toBe(YoutubeIE);
+  });
 
   test("url and playlist result helpers", () => {
     expect(InfoExtractor.urlResult("https://example.com/v", "Example", "id", "title")).toEqual({
@@ -279,6 +526,74 @@ describe("InfoExtractor common helpers", () => {
     expect(ie.mergeSubtitlesPublic({ en: [{ url: "a" }], fr: [{ url: "b" }] }, { en: [{ url: "base" }] })).toEqual({
       en: [{ url: "base" }, { url: "a" }],
       fr: [{ url: "b" }],
+    });
+  });
+
+  test("expected status returns content", async () => {
+    const teapot = new TestInfoExtractor(new Response("<h1>418 I'm a teapot</h1>", {
+      status: 418,
+      statusText: "I'm a teapot",
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }));
+    const result = await teapot.downloadWebpageHandlePublic("https://example.com/teapot", "id", { expected_status: 418 });
+    expect(result).not.toBe(false);
+    expect(result && result[0]).toBe("<h1>418 I'm a teapot</h1>");
+  });
+
+  test("extractJwplayerData handles real-world setup objects", () => {
+    expect(ie.extractJwplayerDataPublic(`
+      <script type='text/javascript'>
+        jwplayer('my-video').setup({
+          file: 'rtmp://192.138.214.154/live/sjclive',
+          fallback: 'true',
+          width: '95%',
+          aspectratio: '16:9',
+          primary: 'flash',
+          mediaid:'XEgvuql4'
+        });
+      </script>
+    `, null, { requireTitle: false })).toMatchObject({
+      id: "XEgvuql4",
+      formats: [{
+        url: "rtmp://192.138.214.154/live/sjclive",
+        ext: "flv",
+      }],
+    });
+
+    expect(ie.extractJwplayerDataPublic(`
+      <script type="text/javascript">
+        jwplayer("mediaplayer").setup({
+          'videoid': "7564",
+          'file': "https://cdn.pornoxo.com/key=MF+oEbaxqTKb50P-w9G3nA,end=1489689259,ip=104.199.146.27/ip=104.199.146.27/speed=6573765/buffer=3.0/2009-12/4b2157147afe5efa93ce1978e0265289c193874e02597.flv",
+          'image': "https://t03.vipstreamservice.com/thumbs/pxo-full/2009-12/14/a4b2157147afe5efa93ce1978e0265289c193874e02597.flv-full-13.jpg",
+          'provider': 'http'
+        });
+        invideo.setup({ adsUrl: "/banner-iframe/?zoneId=32" });
+      </script>
+    `, "dummy", { requireTitle: false })).toMatchObject({
+      thumbnail: "https://t03.vipstreamservice.com/thumbs/pxo-full/2009-12/14/a4b2157147afe5efa93ce1978e0265289c193874e02597.flv-full-13.jpg",
+      formats: [{
+        url: "https://cdn.pornoxo.com/key=MF+oEbaxqTKb50P-w9G3nA,end=1489689259,ip=104.199.146.27/ip=104.199.146.27/speed=6573765/buffer=3.0/2009-12/4b2157147afe5efa93ce1978e0265289c193874e02597.flv",
+        ext: "flv",
+      }],
+    });
+
+    expect(ie.extractJwplayerDataPublic(String.raw`
+      <script>
+      jwplayer("mediaplayer").setup({"title":"king machine trailer 1","sources":[{"file":"http:\/\/cdn.dbolical.com\/cache\/videos\/games\/1\/50\/49678\/encode_mp4\/king-machine-trailer.mp4","label":"360p SD"},{"file":"http:\/\/cdn.dbolical.com\/cache\/videos\/games\/1\/50\/49678\/encode720p_mp4\/king-machine-trailer.mp4","label":"720p HD"}],"image":"http:\/\/media.indiedb.com\/cache\/images\/games\/1\/50\/49678\/thumb_620x2000\/king-machine-trailer.mp4.jpg","width":620,"height":349}).once("play", function(event) {});
+      </script>
+    `, "dummy")).toMatchObject({
+      title: "king machine trailer 1",
+      thumbnail: "http://media.indiedb.com/cache/images/games/1/50/49678/thumb_620x2000/king-machine-trailer.mp4.jpg",
+      formats: [{
+        url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode_mp4/king-machine-trailer.mp4",
+        height: 360,
+        ext: "mp4",
+      }, {
+        url: "http://cdn.dbolical.com/cache/videos/games/1/50/49678/encode720p_mp4/king-machine-trailer.mp4",
+        height: 720,
+        ext: "mp4",
+      }],
     });
   });
 });
@@ -394,24 +709,12 @@ describe("InfoExtractor HTML5 media entries", () => {
 });
 
 describe("Python test_InfoExtractor.py inventory", () => {
-  test.todo("test_ie_key", () => undefined);
   test.todo("test_get_netrc_login_info", () => undefined);
-  test.todo("test_search_json_ld_realworld: Eporner VideoObject normalization", () => undefined);
-  test.todo("test_search_json_ld_realworld: NewsArticle graph selection", () => undefined);
-  test.todo("test_search_json_ld_realworld: TVEpisode nested VideoObject chapters", () => undefined);
-  test.todo("test_search_json_ld_realworld: multiple thumbnailUrl list normalization", () => undefined);
-  test.todo("test_search_json_ld_realworld: single thumbnailUrl normalization", () => undefined);
-  test.todo("test_search_json_ld_realworld: protocol-relative thumbnail_url normalization", () => undefined);
-  test.todo("test_download_json", () => undefined);
-  test.todo("test_extract_jwplayer_data_realworld: suffolk", () => undefined);
-  test.todo("test_extract_jwplayer_data_realworld: pornoxo", () => undefined);
   test.todo("test_parse_m3u8_formats", () => undefined);
   test.todo("test_parse_mpd_formats", () => undefined);
   test.todo("test_parse_ism_formats", () => undefined);
   test.todo("test_parse_f4m_formats", () => undefined);
   test.todo("test_parse_xspf", () => undefined);
-  test.todo("test_response_with_expected_status_returns_content", () => undefined);
-  test.todo("test_search_nuxt_json", () => undefined);
   test.todo("test_extract_m3u8_formats", () => undefined);
   test.todo("test_extract_m3u8_formats_warning", () => undefined);
 });
